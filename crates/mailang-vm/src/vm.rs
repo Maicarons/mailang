@@ -9,6 +9,18 @@ struct CallFrame {
     chunk_index: usize,
     ip: usize,
     stack_base: usize,
+    upvalues: Vec<usize>,
+}
+
+/// Runtime metadata for a registered class.
+#[derive(Debug, Clone)]
+struct RegisteredClass {
+    name: String,
+    superclass: Option<String>,
+    /// method name -> (chunk_index, arity including `this`)
+    methods: Vec<(String, usize, usize)>,
+    /// (property name, default value)
+    properties: Vec<(String, Value)>,
 }
 
 pub struct Vm {
@@ -19,6 +31,8 @@ pub struct Vm {
     call_stack: Vec<CallFrame>,
     ip: usize,
     chunk_index: usize,
+    class_table: Vec<RegisteredClass>,
+    upvalue_store: Vec<Value>,
 }
 
 impl Vm {
@@ -31,6 +45,8 @@ impl Vm {
             call_stack: Vec::new(),
             ip: 0,
             chunk_index: 0,
+            class_table: Vec::new(),
+            upvalue_store: Vec::new(),
         };
         vm.register_stdlib_builtins();
         vm
@@ -204,12 +220,24 @@ impl Vm {
                     self.globals.insert(name, value);
                 }
                 Opcode::LoadUpvalue => {
-                    let _index = operand.unwrap_or(0) as usize;
-                    self.push(Value::Null)?;
+                    let index = operand.unwrap_or(0) as usize;
+                    let frame = self.current_frame();
+                    let store_idx = frame.upvalues.get(index).copied()
+                        .ok_or_else(|| VmError::Internal(format!("Invalid upvalue index {}", index)))?;
+                    let value = self.upvalue_store.get(store_idx).cloned()
+                        .ok_or_else(|| VmError::Internal(format!("Invalid upvalue store index {}", store_idx)))?;
+                    self.push(value)?;
                 }
                 Opcode::StoreUpvalue => {
-                    let _index = operand.unwrap_or(0) as usize;
-                    let _value = self.pop()?;
+                    let index = operand.unwrap_or(0) as usize;
+                    let value = self.pop()?;
+                    let frame = self.current_frame();
+                    let store_idx = frame.upvalues.get(index).copied()
+                        .ok_or_else(|| VmError::Internal(format!("Invalid upvalue index {}", index)))?;
+                    if store_idx >= self.upvalue_store.len() {
+                        return Err(VmError::Internal(format!("Invalid upvalue store index {}", store_idx)));
+                    }
+                    self.upvalue_store[store_idx] = value;
                 }
                 Opcode::Add => {
                     let right = self.pop()?;
@@ -372,10 +400,78 @@ impl Vm {
                                 chunk_index: self.chunk_index,
                                 ip: self.ip,
                                 stack_base: func_index + 1,
+                                upvalues: Vec::new(),
                             };
                             self.call_stack.push(frame);
                             self.chunk_index = chunk_index;
                             self.ip = 0;
+                        }
+                        Value::Closure { function_index, arity, upvalues } => {
+                            if arity != arg_count {
+                                return Err(VmError::WrongArgumentCount {
+                                    expected: arity,
+                                    found: arg_count,
+                                });
+                            }
+                            let frame = CallFrame {
+                                chunk_index: self.chunk_index,
+                                ip: self.ip,
+                                stack_base: func_index + 1,
+                                upvalues,
+                            };
+                            self.call_stack.push(frame);
+                            self.chunk_index = function_index;
+                            self.ip = 0;
+                        }
+                        Value::Class { name, methods, superclass, properties } => {
+                            // Calling a class = instantiate it
+                            // Register class in class_table if not already there
+                            let class_idx = self.class_table.len();
+                            self.class_table.push(RegisteredClass {
+                                name: name.clone(),
+                                superclass: superclass.clone(),
+                                methods: methods.iter().map(|(n, ci)| (n.clone(), *ci, 0usize)).collect(),
+                                properties: properties.clone(),
+                            });
+
+                            // Create instance with default properties
+                            let mut fields: Vec<(String, Value)> = Vec::new();
+                            for (pname, pdefault) in &properties {
+                                fields.push((pname.clone(), pdefault.clone()));
+                            }
+                            let instance = Value::Instance {
+                                class_index: class_idx,
+                                fields,
+                            };
+
+                            // Replace the class value on the stack with the instance
+                            self.stack[func_index] = instance.clone();
+
+                            // Find init method
+                            let init_chunk = methods.iter()
+                                .find(|(n, _)| n == "init")
+                                .map(|(_, ci)| *ci);
+
+                            if let Some(chunk_index) = init_chunk {
+                                // Insert instance copy so stack layout matches function convention:
+                                // [instance, instance, arg1, arg2, ...]
+                                // stack_base = func_index + 1 (points to second instance = `this`)
+                                // Return handler does stack_base - 1 = func_index, truncating correctly
+                                self.stack.insert(func_index, instance.clone());
+
+                                let frame = CallFrame {
+                                    chunk_index: self.chunk_index,
+                                    ip: self.ip,
+                                    stack_base: func_index + 1,
+                                    upvalues: Vec::new(),
+                                };
+                                self.call_stack.push(frame);
+                                self.chunk_index = chunk_index;
+                                self.ip = 0;
+                            } else {
+                                // No init method, just return the instance
+                                self.stack.truncate(func_index + 1);
+                            }
                         }
                         Value::Builtin { name, .. } => {
                             let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
@@ -431,13 +527,17 @@ impl Vm {
                             }
                         }
                         Value::Instance { fields, .. } => {
+                            let mut found = false;
                             for (name, value) in &fields {
                                 if name == &prop_name {
                                     self.push(value.clone())?;
-                                    continue;
+                                    found = true;
+                                    break;
                                 }
                             }
-                            self.push(Value::Null)?;
+                            if !found {
+                                self.push(Value::Null)?;
+                            }
                         }
                         Value::Array(arr) => {
                             match prop_name.as_str() {
@@ -447,7 +547,7 @@ impl Vm {
                         }
                         Value::Str(s) => {
                             match prop_name.as_str() {
-                                "len" => self.push(Value::Int(s.len() as i64))?,
+                                "len" => self.push(Value::Int(s.chars().count() as i64))?,
                                 _ => return Err(VmError::UndefinedProperty(prop_name)),
                             }
                         }
@@ -492,9 +592,105 @@ impl Vm {
                     }
                 }
                 Opcode::Invoke => {
-                    let _method_index = operand.ok_or_else(|| VmError::Internal("Invoke missing operand".to_string()))? as usize;
-                    let _arg_count = 0;
-                    self.push(Value::Null)?;
+                    let packed = operand.ok_or_else(|| VmError::Internal("Invoke missing operand".to_string()))?;
+                    let arg_count = (packed >> 16) as usize;
+                    let method_const_idx = (packed & 0xFFFF) as usize;
+                    let method_name = match &self.bytecode.chunks[self.chunk_index].constants[method_const_idx] {
+                        Value::Str(s) => s.clone(),
+                        _ => return Err(VmError::Internal("Expected string constant for method name".to_string())),
+                    };
+
+                    // Stack: [object, arg1, arg2, ...]
+                    let obj_index = self.stack.len().checked_sub(arg_count + 1)
+                        .ok_or_else(|| VmError::StackUnderflow)?;
+                    let object = self.stack[obj_index].clone();
+
+                    match &object {
+                        Value::Instance { class_index, .. } => {
+                            let class = self.class_table.get(*class_index)
+                                .ok_or_else(|| VmError::Internal("Invalid class index".to_string()))?;
+                            let method = class.methods.iter()
+                                .find(|(n, _, _)| n == &method_name)
+                                .cloned();
+                            match method {
+                                Some((_, chunk_index, _)) => {
+                                    // Insert instance copy so stack layout matches function convention:
+                                    // [instance, instance, arg1, arg2, ...]
+                                    // stack_base = obj_index + 1 (points to second instance = `this`)
+                                    self.stack.insert(obj_index, object.clone());
+
+                                    let frame = CallFrame {
+                                        chunk_index: self.chunk_index,
+                                        ip: self.ip,
+                                        stack_base: obj_index + 1,
+                                        upvalues: Vec::new(),
+                                    };
+                                    self.call_stack.push(frame);
+                                    self.chunk_index = chunk_index;
+                                    self.ip = 0;
+                                }
+                                None => {
+                                    return Err(VmError::UndefinedFunction(method_name));
+                                }
+                            }
+                        }
+                        Value::Map(entries) => {
+                            // Method call on map - try to find a function value
+                            let mut found = false;
+                            for (k, v) in entries {
+                                if let Value::Str(s) = k {
+                                    if s == &method_name {
+                                        // Replace object with the function value
+                                        self.stack[obj_index] = v.clone();
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if !found {
+                                return Err(VmError::UndefinedFunction(method_name));
+                            }
+                            // Now call the function that's at obj_index
+                            let func = self.stack[obj_index].clone();
+                            match func {
+                                Value::Function { arity, chunk_index, .. } => {
+                                    if arity != arg_count {
+                                        return Err(VmError::WrongArgumentCount {
+                                            expected: arity,
+                                            found: arg_count,
+                                        });
+                                    }
+                                    let frame = CallFrame {
+                                        chunk_index: self.chunk_index,
+                                        ip: self.ip,
+                                        stack_base: obj_index + 1,
+                                        upvalues: Vec::new(),
+                                    };
+                                    self.call_stack.push(frame);
+                                    self.chunk_index = chunk_index;
+                                    self.ip = 0;
+                                }
+                                Value::Builtin { name: bname, .. } => {
+                                    let args: Vec<Value> = self.stack[obj_index + 1..].to_vec();
+                                    self.stack.truncate(obj_index);
+                                    if let Some(builtin_fn) = self.builtins.get(&bname) {
+                                        match builtin_fn(&args) {
+                                            Ok(result) => self.push(result)?,
+                                            Err(e) => return Err(VmError::RuntimeError(e)),
+                                        }
+                                    } else {
+                                        return Err(VmError::UndefinedFunction(bname));
+                                    }
+                                }
+                                _ => {
+                                    return Err(VmError::TypeError("Map value is not callable".to_string()));
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(VmError::TypeError(format!("Cannot invoke method '{}' on non-object", method_name)));
+                        }
+                    }
                 }
                 Opcode::BuildArray => {
                     let count = operand.unwrap_or(0) as usize;
@@ -533,19 +729,24 @@ impl Vm {
                             self.push(arr[*i as usize].clone())?;
                         }
                         (Value::Map(entries), key) => {
+                            let mut found = false;
                             for (k, v) in entries {
                                 if self.values_equal(k, key) {
                                     self.push(v.clone())?;
-                                    continue;
+                                    found = true;
+                                    break;
                                 }
                             }
-                            self.push(Value::Null)?;
+                            if !found {
+                                self.push(Value::Null)?;
+                            }
                         }
                         (Value::Str(s), Value::Int(i)) => {
-                            if *i < 0 || *i >= s.len() as i64 {
+                            let char_count = s.chars().count();
+                            if *i < 0 || *i >= char_count as i64 {
                                 return Err(VmError::IndexOutOfBounds {
                                     index: *i,
-                                    length: s.len(),
+                                    length: char_count,
                                 });
                             }
                             self.push(Value::Char(s.chars().nth(*i as usize).unwrap()))?;
@@ -576,9 +777,28 @@ impl Vm {
                     self.push(object)?;
                 }
                 Opcode::CreateClass => {
-                    let _class_index = operand.unwrap_or(0) as usize;
-                    let class = self.pop()?;
-                    self.push(class)?;
+                    let class_const_idx = operand.ok_or_else(|| VmError::Internal("CreateClass missing operand".to_string()))? as usize;
+                    let class = self.bytecode.chunks[self.chunk_index].constants[class_const_idx].clone();
+                    if let Value::Class { name, methods, superclass, properties } = &class {
+                        let class_idx = self.class_table.len();
+                        let methods_vec: Vec<(String, usize, usize)> = methods.iter()
+                            .map(|(n, ci)| (n.clone(), *ci, 0))
+                            .collect();
+                        self.class_table.push(RegisteredClass {
+                            name: name.clone(),
+                            superclass: superclass.clone(),
+                            methods: methods_vec,
+                            properties: properties.clone(),
+                        });
+                        self.push(Value::Class {
+                            name: name.clone(),
+                            methods: methods.clone(),
+                            superclass: superclass.clone(),
+                            properties: properties.clone(),
+                        })?;
+                    } else {
+                        self.push(class)?;
+                    }
                 }
                 Opcode::CreateInstance => {
                     self.push(Value::Null)?;
@@ -588,6 +808,32 @@ impl Vm {
                 }
                 Opcode::MatchPattern => {
                     self.push(Value::Bool(true))?;
+                }
+                Opcode::MakeClosure => {
+                    let count = operand.unwrap_or(0) as usize;
+                    // Pop upvalue values (in reverse order) and store them
+                    let mut uv_indices = Vec::with_capacity(count);
+                    for _ in 0..count {
+                        let value = self.pop()?;
+                        let idx = self.upvalue_store.len();
+                        self.upvalue_store.push(value);
+                        uv_indices.push(idx);
+                    }
+                    uv_indices.reverse();
+                    // Pop the function value
+                    let func = self.pop()?;
+                    match func {
+                        Value::Function { chunk_index, arity, .. } => {
+                            self.push(Value::Closure {
+                                function_index: chunk_index,
+                                arity,
+                                upvalues: uv_indices,
+                            })?;
+                        }
+                        _ => {
+                            return Err(VmError::TypeError("MakeClosure expects a function".to_string()));
+                        }
+                    }
                 }
                 Opcode::Throw => {
                     let value = self.pop()?;
@@ -627,6 +873,7 @@ impl Vm {
             chunk_index: 0,
             ip: 0,
             stack_base: 0,
+            upvalues: Vec::new(),
         })
     }
 

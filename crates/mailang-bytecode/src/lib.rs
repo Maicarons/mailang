@@ -71,6 +71,9 @@ pub enum Opcode {
     // Pattern matching
     MatchPattern,
 
+    // Closure creation
+    MakeClosure,
+
     // Error handling
     Throw,
     TryBegin,
@@ -99,11 +102,14 @@ pub enum Value {
     },
     Closure {
         function_index: usize,
+        arity: usize,
         upvalues: Vec<usize>,
     },
     Class {
         name: String,
         methods: Vec<(String, usize)>,
+        superclass: Option<String>,
+        properties: Vec<(String, Value)>,
     },
     Instance {
         class_index: usize,

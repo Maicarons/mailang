@@ -146,12 +146,24 @@ impl Parser {
         self.expect(&Token::LeftParen)?;
         let params = self.parse_parameter_list()?;
         self.expect(&Token::RightParen)?;
-        self.expect(&Token::Arrow)?;
-        let body = self.parse_expression()?;
-        Ok(Expr::Lambda {
-            params,
-            body: Box::new(body),
-        })
+        if self.peek() == &Token::Arrow {
+            self.advance();
+            let body = self.parse_expression()?;
+            Ok(Expr::Lambda {
+                params,
+                body: Box::new(body),
+            })
+        } else if self.peek() == &Token::LeftBrace {
+            self.advance();
+            let stmts = self.parse_block()?;
+            self.expect(&Token::RightBrace)?;
+            Ok(Expr::Lambda {
+                params,
+                body: Box::new(Expr::Block(stmts)),
+            })
+        } else {
+            Err(ParseError::ExpectedExpression(format!("{:?}", self.peek())))
+        }
     }
 
     fn parse_if_expression(&mut self) -> Result<Expr, ParseError> {

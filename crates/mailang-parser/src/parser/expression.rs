@@ -341,13 +341,9 @@ impl Parser {
                         self.advance();
                         let args = self.parse_argument_list()?;
                         self.expect(&Token::RightParen)?;
-                        // Parse as Call(PropertyAccess) instead of MethodCall
-                        // so it goes through the normal function call path
-                        expr = Expr::Call {
-                            callee: Box::new(Expr::PropertyAccess {
-                                object: Box::new(expr),
-                                property,
-                            }),
+                        expr = Expr::MethodCall {
+                            object: Box::new(expr),
+                            method: property,
                             args,
                         };
                     } else {

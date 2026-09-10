@@ -30,6 +30,16 @@ struct FunctionCompiler {
     scope_depth: usize,
 }
 
+/// Info about a class already compiled, used for inheritance and super() calls.
+struct CompiledClass {
+    name: String,
+    superclass: Option<String>,
+    /// method name -> (chunk_index, arity including implicit `this`)
+    methods: HashMap<String, (usize, usize)>,
+    /// (property name, default value)
+    properties: Vec<(String, Value)>,
+}
+
 pub struct Compiler {
     bytecode: Bytecode,
     current: FunctionCompiler,
@@ -38,6 +48,8 @@ pub struct Compiler {
     loop_breaks: Vec<Vec<usize>>,
     loop_continues: Vec<Vec<usize>>,
     loop_local_counts: Vec<usize>, // track locals count at loop start for break cleanup
+    class_info: HashMap<String, CompiledClass>,
+    current_class: Option<String>,
 }
 
 impl Compiler {
@@ -57,6 +69,8 @@ impl Compiler {
             loop_breaks: Vec::new(),
             loop_continues: Vec::new(),
             loop_local_counts: Vec::new(),
+            class_info: HashMap::new(),
+            current_class: None,
         }
     }
 
@@ -548,6 +562,12 @@ impl Compiler {
                 self.emit(opcode, None, 0);
             }
             Expr::Call { callee, args } => {
+                // `super(...)` in a method calls the superclass constructor.
+                if let Expr::Identifier(name) = &**callee {
+                    if name == "super" {
+                        return self.compile_super_call(args);
+                    }
+                }
                 self.compile_expression(callee)?;
                 for arg in args {
                     self.compile_expression(arg)?;
@@ -564,7 +584,9 @@ impl Compiler {
                     self.compile_expression(arg)?;
                 }
                 let method_index = self.add_constant(Value::Str(method.clone()))?;
-                self.emit(Opcode::Invoke, Some(method_index), 0);
+                // Pack arg count in upper 16 bits, method-name constant index in lower 16.
+                let packed = ((args.len() as u32) << 16) | (method_index & 0xFFFF);
+                self.emit(Opcode::Invoke, Some(packed), 0);
             }
             Expr::PropertyAccess { object, property } => {
                 self.compile_expression(object)?;
@@ -630,18 +652,41 @@ impl Compiler {
                 self.compile_expression(scrutinee)?;
                 let mut end_jumps = Vec::new();
                 for arm in arms {
-                    self.emit(Opcode::Dup, None, 0);
-                    self.compile_pattern(&arm.pattern)?;
-                    self.emit(Opcode::Eq, None, 0);
-                    let jump = self.emit_jump(Opcode::JumpIfFalse, 0);
+                    // Pattern test: leaves [scrutinee, match_bool] on stack
+                    self.compile_pattern_test(&arm.pattern)?;
+                    let jump_next = self.emit_jump(Opcode::JumpIfFalse, 0);
+                    // Matched the pattern: pop the bool, leaving [scrutinee]
                     self.emit(Opcode::Pop, None, 0);
-                    self.emit(Opcode::Pop, None, 0);
-                    self.compile_expression(&arm.body)?;
-                    let end_jump = self.emit_jump(Opcode::Jump, 0);
-                    end_jumps.push(end_jump);
-                    self.patch_jump(jump)?;
+
+                    // Guard: if present, evaluate and test
+                    if let Some(guard) = &arm.guard {
+                        self.compile_expression(guard)?;
+                        let jump_guard_fail = self.emit_jump(Opcode::JumpIfFalse, 0);
+                        self.emit(Opcode::Pop, None, 0);
+                        // Guard passed — fall through to body
+                        // Compile body with scrutinee popped
+                        self.emit(Opcode::Pop, None, 0);
+                        self.compile_expression(&arm.body)?;
+                        let end_jump = self.emit_jump(Opcode::Jump, 0);
+                        end_jumps.push(end_jump);
+                        // Guard failed path
+                        self.patch_jump(jump_guard_fail)?;
+                        self.emit(Opcode::Pop, None, 0);
+                        // Continue to next arm with [scrutinee]
+                    } else {
+                        // No guard — compile body with scrutinee popped
+                        self.emit(Opcode::Pop, None, 0);
+                        self.compile_expression(&arm.body)?;
+                        let end_jump = self.emit_jump(Opcode::Jump, 0);
+                        end_jumps.push(end_jump);
+                    }
+
+                    // Pattern didn't match: pop the bool, leaving [scrutinee]
+                    self.patch_jump(jump_next)?;
                     self.emit(Opcode::Pop, None, 0);
                 }
+                // No arm matched: pop scrutinee, push null
+                self.emit(Opcode::Pop, None, 0);
                 self.emit_push_constant(Value::Null, 0)?;
                 for jump in end_jumps {
                     self.patch_jump(jump)?;
@@ -655,8 +700,37 @@ impl Compiler {
                 self.end_scope();
             }
             Expr::Assign { target, value } => {
-                self.compile_expression(value)?;
-                self.compile_assignment_target(target)?;
+                match &**target {
+                    Expr::PropertyAccess { object, property } => {
+                        // Stack order for SetProperty: [object, value] (value on top)
+                        self.compile_expression(object)?;
+                        self.compile_expression(value)?;
+                        let prop_index = self.add_constant(Value::Str(property.clone()))?;
+                        self.emit(Opcode::SetProperty, Some(prop_index), 0);
+                        // SetProperty leaves the new object on stack; store it back
+                        if let Expr::Identifier(name) = &**object {
+                            if let Some(local) = self.resolve_local(name) {
+                                self.emit(Opcode::StoreLocal, Some(local), 0);
+                            } else {
+                                let idx = self.add_constant(Value::Str(name.clone()))?;
+                                self.emit(Opcode::StoreGlobal, Some(idx), 0);
+                            }
+                        } else {
+                            self.emit(Opcode::Pop, None, 0);
+                        }
+                    }
+                    Expr::Index { object, index } => {
+                        self.compile_expression(object)?;
+                        self.compile_expression(index)?;
+                        self.compile_expression(value)?;
+                        self.emit(Opcode::IndexSet, None, 0);
+                        self.emit(Opcode::Pop, None, 0);
+                    }
+                    _ => {
+                        self.compile_expression(value)?;
+                        self.compile_assignment_target(target)?;
+                    }
+                }
             }
             Expr::CompoundAssign {
                 op,
@@ -734,6 +808,8 @@ impl Compiler {
             Expr::Identifier(name) => {
                 if let Some(local) = self.resolve_local(name) {
                     self.emit(Opcode::StoreLocal, Some(local), 0);
+                } else if let Some(upvalue) = self.resolve_upvalue(name) {
+                    self.emit(Opcode::StoreUpvalue, Some(upvalue), 0);
                 } else {
                     let index = self.add_constant(Value::Str(name.clone()))?;
                     self.emit(Opcode::StoreGlobal, Some(index), 0);
@@ -743,6 +819,22 @@ impl Compiler {
                 self.compile_expression(object)?;
                 let prop_index = self.add_constant(Value::Str(property.clone()))?;
                 self.emit(Opcode::SetProperty, Some(prop_index), 0);
+                // SetProperty leaves the (possibly new) object on the stack.
+                // Store it back into the binding so mutations stick for locals/globals.
+                match &**object {
+                    Expr::Identifier(name) => {
+                        if let Some(local) = self.resolve_local(name) {
+                            self.emit(Opcode::StoreLocal, Some(local), 0);
+                        } else {
+                            let index = self.add_constant(Value::Str(name.clone()))?;
+                            self.emit(Opcode::StoreGlobal, Some(index), 0);
+                        }
+                    }
+                    _ => {
+                        // Cannot write back through a complex lvalue; drop the result.
+                        self.emit(Opcode::Pop, None, 0);
+                    }
+                }
             }
             Expr::Index { object, index } => {
                 self.compile_expression(object)?;
@@ -754,7 +846,11 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_pattern(&mut self, pattern: &Pattern) -> Result<(), CompilerError> {
+    /// Compile a pattern test.
+    /// Precondition: scrutinee is on top of the stack.
+    /// Postcondition: [scrutinee, match_bool] — the scrutinee is preserved,
+    /// and a boolean indicating whether the pattern matched is pushed on top.
+    fn compile_pattern_test(&mut self, pattern: &Pattern) -> Result<(), CompilerError> {
         match pattern {
             Pattern::Literal(lit) => {
                 let value = match lit {
@@ -765,17 +861,72 @@ impl Compiler {
                     Literal::Char(c) => Value::Char(*c),
                     Literal::Null => Value::Null,
                 };
+                // [s] -> [s, s] -> [s, s, lit] -> [s, bool]
+                self.emit(Opcode::Dup, None, 0);
                 let index = self.add_constant(value)?;
                 self.emit(Opcode::Push, Some(index), 0);
-            }
-            Pattern::Identifier(name) => {
-                self.define_variable(name)?;
-                self.emit_push_constant(Value::Bool(true), 0)?;
+                self.emit(Opcode::Eq, None, 0);
             }
             Pattern::Wildcard => {
+                // Always matches: [s] -> [s, true]
                 self.emit_push_constant(Value::Bool(true), 0)?;
             }
-            _ => {
+            Pattern::Identifier(name) => {
+                // Always matches AND binds the scrutinee to the variable.
+                // Store a copy of the scrutinee as a global, then push true.
+                // [s] -> [s, s] -> [s] (one copy stored) -> [s, true]
+                self.emit(Opcode::Dup, None, 0);
+                let index = self.add_constant(Value::Str(name.clone()))?;
+                self.emit(Opcode::StoreGlobal, Some(index), 0);
+                self.emit_push_constant(Value::Bool(true), 0)?;
+            }
+            Pattern::Or(patterns) => {
+                // Match if ANY sub-pattern matches.
+                // Uses short-circuit: test each pattern, JumpIfTrue to "matched".
+                if patterns.is_empty() {
+                    self.emit_push_constant(Value::Bool(false), 0)?;
+                    return Ok(());
+                }
+                let mut or_true_jumps = Vec::new();
+                let last = patterns.len() - 1;
+                for (i, sub) in patterns.iter().enumerate() {
+                    // [s] -> test sub-pattern -> [s, bool]
+                    self.compile_pattern_test(sub)?;
+                    if i < last {
+                        // If true, jump to or_matched (bool stays on stack via peek)
+                        let j = self.emit_jump(Opcode::JumpIfTrue, 0);
+                        or_true_jumps.push(j);
+                        // Not matched: pop the false, try next sub-pattern
+                        self.emit(Opcode::Pop, None, 0);
+                    }
+                    // Last sub-pattern: leave [s, bool] as the Or result
+                }
+                let jump_end = self.emit_jump(Opcode::Jump, 0);
+                // or_matched: stack is [s, true] (JumpIfTrue peeks)
+                for j in or_true_jumps {
+                    self.patch_jump(j)?;
+                }
+                self.patch_jump(jump_end)?;
+            }
+            Pattern::Guard(inner, guard_expr) => {
+                // Test inner pattern, then evaluate guard as the result.
+                self.compile_pattern_test(inner)?;
+                // [s, inner_bool]
+                let jump_fail = self.emit_jump(Opcode::JumpIfFalse, 0);
+                self.emit(Opcode::Pop, None, 0);
+                // Inner matched — evaluate guard; its result is the overall result.
+                self.compile_expression(guard_expr)?;
+                // [s, guard_bool]
+                let jump_end = self.emit_jump(Opcode::Jump, 0);
+                // Inner didn't match
+                self.patch_jump(jump_fail)?;
+                self.emit(Opcode::Pop, None, 0);
+                self.emit_push_constant(Value::Bool(false), 0)?;
+                self.patch_jump(jump_end)?;
+            }
+            Pattern::Tuple(_) | Pattern::Array(_) | Pattern::Range(_, _) => {
+                // Not yet fully implemented — always match for now
+                // so existing code doesn't break
                 self.emit_push_constant(Value::Bool(true), 0)?;
             }
         }
@@ -864,6 +1015,19 @@ impl Compiler {
             chunk_index,
         })?;
         self.emit(Opcode::Push, Some(func_index), 0);
+
+        // Capture upvalues if the function closes over outer variables
+        if !upvalues.is_empty() {
+            for uv in &upvalues {
+                if uv.is_local {
+                    self.emit(Opcode::LoadLocal, Some(uv.index as u32), 0);
+                } else {
+                    self.emit(Opcode::LoadUpvalue, Some(uv.index as u32), 0);
+                }
+            }
+            self.emit(Opcode::MakeClosure, Some(upvalues.len() as u32), 0);
+        }
+
         self.define_variable(name)?;
 
         Ok(())
@@ -890,9 +1054,21 @@ impl Compiler {
         for param in params {
             self.define_variable(&param.name)?;
         }
-        self.compile_expression(body)?;
+        match body {
+            Expr::Block(stmts) => {
+                for stmt in stmts {
+                    self.compile_statement(stmt)?;
+                }
+                // If no explicit return executed, return null
+                self.emit_push_constant(Value::Null, 0)?;
+            }
+            _ => {
+                self.compile_expression(body)?;
+            }
+        }
         self.emit(Opcode::Return, None, 0);
 
+        let upvalues = self.current.upvalues.clone();
         let old_compiler = self.function_compilers.pop().unwrap();
         self.current = old_compiler;
 
@@ -903,6 +1079,18 @@ impl Compiler {
         })?;
         self.emit(Opcode::Push, Some(func_index), 0);
 
+        // Capture upvalues if the lambda closes over outer variables
+        if !upvalues.is_empty() {
+            for uv in &upvalues {
+                if uv.is_local {
+                    self.emit(Opcode::LoadLocal, Some(uv.index as u32), 0);
+                } else {
+                    self.emit(Opcode::LoadUpvalue, Some(uv.index as u32), 0);
+                }
+            }
+            self.emit(Opcode::MakeClosure, Some(upvalues.len() as u32), 0);
+        }
+
         Ok(())
     }
 
@@ -910,28 +1098,192 @@ impl Compiler {
         &mut self,
         name: &str,
         superclass: &Option<String>,
-        traits: &[String],
+        _traits: &[String],
         members: &[ClassMember],
     ) -> Result<(), CompilerError> {
-        let mut methods = Vec::new();
+        let mut methods: Vec<(String, usize)> = Vec::new();
+        let mut method_info: HashMap<String, (usize, usize)> = HashMap::new();
+        let mut properties: Vec<(String, Value)> = Vec::new();
+
+        // Collect property declarations (with literal defaults when available).
         for member in members {
-            if let ClassMember::Method {
-                name, params, body, ..
+            if let ClassMember::Property {
+                name: prop_name,
+                default,
+                ..
             } = member
             {
-                let chunk_index = self.bytecode.chunks.len();
-                self.bytecode.chunks.push(Chunk::new(format!("{}.{}", name, name)));
-                methods.push((name.clone(), chunk_index));
+                let default_value = match default {
+                    Some(Expr::Literal(lit)) => match lit {
+                        Literal::Int(n) => Value::Int(*n),
+                        Literal::Float(n) => Value::Float(*n),
+                        Literal::Bool(b) => Value::Bool(*b),
+                        Literal::Str(s) => Value::Str(s.clone()),
+                        Literal::Char(c) => Value::Char(*c),
+                        Literal::Null => Value::Null,
+                    },
+                    _ => Value::Null,
+                };
+                properties.push((prop_name.clone(), default_value));
             }
         }
 
-        let class_index = self.add_constant(Value::Class {
+        // Register class info BEFORE compiling methods so `super()` can find the superclass.
+        self.class_info.insert(
+            name.to_string(),
+            CompiledClass {
+                name: name.to_string(),
+                superclass: superclass.clone(),
+                methods: HashMap::new(),
+                properties: properties.clone(),
+            },
+        );
+
+        // Compile each method body into its own chunk. `this` is implicit local 0.
+        let prev_class = self.current_class.replace(name.to_string());
+        for member in members {
+            let (method_name, params, body) = match member {
+                ClassMember::Method {
+                    name: m_name,
+                    params,
+                    body,
+                    ..
+                } => (m_name.clone(), params.clone(), body.clone()),
+                ClassMember::Constructor {
+                    params,
+                    super_args,
+                    body,
+                } => {
+                    let mut full_body = Vec::new();
+                    if let Some(sargs) = super_args {
+                        // Prepend `super(sargs...)` so the parent constructor runs first.
+                        full_body.push(Stmt::Expression(Expr::Call {
+                            callee: Box::new(Expr::Identifier("super".to_string())),
+                            args: sargs.clone(),
+                        }));
+                    }
+                    full_body.extend(body.iter().cloned());
+                    ("init".to_string(), params.clone(), full_body)
+                }
+                ClassMember::Property { .. } => continue,
+            };
+
+            let (chunk_index, arity) =
+                self.compile_method(name, &method_name, &params, &body)?;
+            methods.push((method_name.clone(), chunk_index));
+            method_info.insert(method_name, (chunk_index, arity));
+        }
+        self.current_class = prev_class;
+
+        // Update class metadata with compiled method info.
+        if let Some(ci) = self.class_info.get_mut(name) {
+            ci.methods = method_info;
+        }
+
+        let class_const = self.add_constant(Value::Class {
             name: name.to_string(),
             methods: methods.clone(),
+            superclass: superclass.clone(),
+            properties,
         })?;
-        self.emit(Opcode::CreateClass, Some(class_index), 0);
+        self.emit(Opcode::CreateClass, Some(class_const), 0);
         self.define_variable(name)?;
 
+        Ok(())
+    }
+
+    /// Compile a method body into a fresh chunk. Local 0 is always `this`.
+    /// Returns (chunk_index, arity including `this`).
+    fn compile_method(
+        &mut self,
+        class_name: &str,
+        method_name: &str,
+        params: &[Param],
+        body: &[Stmt],
+    ) -> Result<(usize, usize), CompilerError> {
+        let chunk_name = format!("{}.{}", class_name, method_name);
+        let chunk_index = self.bytecode.chunks.len();
+        self.bytecode.chunks.push(Chunk::new(chunk_name));
+
+        let compiler = FunctionCompiler {
+            chunk_index,
+            locals: Vec::new(),
+            upvalues: Vec::new(),
+            scope_depth: 0,
+        };
+        let old_compiler = std::mem::replace(&mut self.current, compiler);
+        self.function_compilers.push(old_compiler);
+
+        self.begin_scope();
+        // Implicit receiver is always local 0.
+        self.define_variable("this")?;
+        for param in params {
+            self.define_variable(&param.name)?;
+        }
+        for stmt in body {
+            self.compile_statement(stmt)?;
+        }
+
+        // Constructors return `this` so `let x = Foo(...)` yields the instance.
+        if method_name == "init" {
+            self.emit(Opcode::LoadLocal, Some(0), 0);
+        } else {
+            self.emit_push_constant(Value::Null, 0)?;
+        }
+        self.emit(Opcode::Return, None, 0);
+
+        self.current = self.function_compilers.pop().unwrap();
+
+        let arity = params.len() + 1; // + implicit `this`
+        Ok((chunk_index, arity))
+    }
+
+    /// Compile `super(args...)`: call the superclass `init` with the current `this`,
+    /// then store the returned (updated) instance back into local 0.
+    fn compile_super_call(&mut self, args: &[Expr]) -> Result<(), CompilerError> {
+        let current_name = self
+            .current_class
+            .clone()
+            .ok_or_else(|| CompilerError::Internal("`super` used outside of a class".to_string()))?;
+        let parent_name = self
+            .class_info
+            .get(&current_name)
+            .and_then(|c| c.superclass.clone())
+            .ok_or_else(|| {
+                CompilerError::Internal(format!(
+                    "`super` used in class '{}' which has no superclass",
+                    current_name
+                ))
+            })?;
+        let (init_chunk, init_arity) = self
+            .class_info
+            .get(&parent_name)
+            .and_then(|p| p.methods.get("init").copied())
+            .ok_or_else(|| {
+                CompilerError::Internal(format!(
+                    "superclass '{}' has no `init` method",
+                    parent_name
+                ))
+            })?;
+
+        // Push parent init as a Function value, then `this` + user args.
+        self.emit_push_constant(
+            Value::Function {
+                name: format!("{}.init", parent_name),
+                arity: init_arity,
+                chunk_index: init_chunk,
+            },
+            0,
+        )?;
+        self.emit(Opcode::LoadLocal, Some(0), 0);
+        for arg in args {
+            self.compile_expression(arg)?;
+        }
+        self.emit(Opcode::Call, Some((args.len() + 1) as u32), 0);
+        // Parent init returns the updated instance; store it back as `this`.
+        self.emit(Opcode::StoreLocal, Some(0), 0);
+        // Leave a value so an enclosing expression-statement Pop stays balanced.
+        self.emit_push_constant(Value::Null, 0)?;
         Ok(())
     }
 
