@@ -1,0 +1,69 @@
+// math - Mathematical functions and constants
+// Version: 0.1.0
+
+// Constants
+let PI = 3.141592653589793
+let E = 2.718281828459045
+
+// Power function
+fn pow(base, exp) {
+    // Use native implementation
+    let result = 1
+    let i = 0
+    while i < exp {
+        result = result * base
+        i = i + 1
+    }
+    return result
+}
+
+// Clamp value between min and max
+fn clamp(x, min_val, max_val) {
+    if x < min_val {
+        return min_val
+    }
+    if x > max_val {
+        return max_val
+    }
+    return x
+}
+
+// Linear interpolation
+fn lerp(a, b, t) {
+    return a + (b - a) * t
+}
+
+// Convert degrees to radians
+fn deg_to_rad(degrees) {
+    return degrees * PI / 180
+}
+
+// Convert radians to degrees
+fn rad_to_deg(radians) {
+    return radians * 180 / PI
+}
+
+// Check if number is even
+fn is_even(n) {
+    return n % 2 == 0
+}
+
+// Check if number is odd
+fn is_odd(n) {
+    return n % 2 != 0
+}
+
+// Check if number is positive
+fn is_positive(n) {
+    return n > 0
+}
+
+// Check if number is negative
+fn is_negative(n) {
+    return n < 0
+}
+
+// Check if number is zero
+fn is_zero(n) {
+    return n == 0
+}

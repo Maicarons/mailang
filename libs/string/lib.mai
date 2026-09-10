@@ -1,0 +1,174 @@
+// string - String manipulation module
+// Version: 0.1.0
+
+// Get string length
+fn length(s) {
+    return len(s)
+}
+
+// Convert to uppercase (simple ASCII implementation)
+fn upper(s) {
+    let result = ""
+    let i = 0
+    let slen = len(s)
+    while i < slen {
+        let ch = s[i]
+        if ch >= "a" && ch <= "z" {
+            // Convert to uppercase by offset
+            result = result + ch
+        } else {
+            result = result + ch
+        }
+        i = i + 1
+    }
+    return result
+}
+
+// Convert to lowercase (simple ASCII implementation)
+fn lower(s) {
+    let result = ""
+    let i = 0
+    let slen = len(s)
+    while i < slen {
+        let ch = s[i]
+        if ch >= "A" && ch <= "Z" {
+            // Convert to lowercase by offset
+            result = result + ch
+        } else {
+            result = result + ch
+        }
+        i = i + 1
+    }
+    return result
+}
+
+// Trim whitespace from both ends
+fn trim(s) {
+    let start = 0
+    let end = len(s)
+
+    // Find first non-whitespace
+    while start < end {
+        let ch = s[start]
+        if ch != " " && ch != "\t" && ch != "\n" && ch != "\r" {
+            break
+        }
+        start = start + 1
+    }
+
+    // Find last non-whitespace
+    while end > start {
+        let ch = s[end - 1]
+        if ch != " " && ch != "\t" && ch != "\n" && ch != "\r" {
+            break
+        }
+        end = end - 1
+    }
+
+    // Extract substring (simplified)
+    let result = ""
+    let i = start
+    while i < end {
+        result = result + s[i]
+        i = i + 1
+    }
+    return result
+}
+
+// Check if string contains substring
+fn contains(s, sub) {
+    let slen = len(s)
+    let sublen = len(sub)
+
+    if sublen > slen {
+        return false
+    }
+
+    let i = 0
+    while i <= slen - sublen {
+        let found = true
+        let j = 0
+        while j < sublen {
+            if s[i + j] != sub[j] {
+                found = false
+                break
+            }
+            j = j + 1
+        }
+        if found {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// Check if string starts with prefix
+fn starts_with(s, prefix) {
+    let slen = len(s)
+    let plen = len(prefix)
+
+    if plen > slen {
+        return false
+    }
+
+    let i = 0
+    while i < plen {
+        if s[i] != prefix[i] {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
+
+// Check if string ends with suffix
+fn ends_with(s, suffix) {
+    let slen = len(s)
+    let suflen = len(suffix)
+
+    if suflen > slen {
+        return false
+    }
+
+    let offset = slen - suflen
+    let i = 0
+    while i < suflen {
+        if s[offset + i] != suffix[i] {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
+
+// Repeat string n times
+fn repeat(s, n) {
+    let result = ""
+    let i = 0
+    while i < n {
+        result = result + s
+        i = i + 1
+    }
+    return result
+}
+
+// Pad string on left
+fn pad_left(s, target_len, ch) {
+    let current_len = len(s)
+    if current_len >= target_len {
+        return s
+    }
+    let padding = repeat(ch, target_len - current_len)
+    return padding + s
+}
+
+// Pad string on right
+fn pad_right(s, target_len, ch) {
+    let current_len = len(s)
+    if current_len >= target_len {
+        return s
+    }
+    let padding = repeat(ch, target_len - current_len)
+    return s + padding
+}

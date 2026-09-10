@@ -1,0 +1,77 @@
+// json 模块测试
+
+import "json"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+println("=== json 模块测试 ===")
+println("")
+
+// 测试 parse
+println("测试 parse:")
+
+// 简单值
+let r1 = json.parse("null")
+assert(r1.value == null, "parse('null') == null")
+
+let r2 = json.parse("true")
+assert(r2.value == true, "parse('true') == true")
+
+let r3 = json.parse("false")
+assert(r3.value == false, "parse('false') == false")
+
+let r4 = json.parse("42")
+assert(r4.value == 42, "parse('42') == 42")
+
+let r5 = json.parse("\"hello\"")
+assert(r5.value == "hello", "parse('\"hello\"') == 'hello'")
+
+// 数组
+let r6 = json.parse("[1, 2, 3]")
+assert(r6.value[0] == 1, "parse('[1,2,3]')[0] == 1")
+assert(r6.value[1] == 2, "parse('[1,2,3]')[1] == 2")
+assert(r6.value[2] == 3, "parse('[1,2,3]')[2] == 3")
+
+// 对象
+let r7 = json.parse("{\"name\": \"Alice\", \"age\": 30}")
+assert(r7.value.name == "Alice", "parse('{...}').name == 'Alice'")
+assert(r7.value.age == 30, "parse('{...}').age == 30")
+
+// 嵌套
+let r8 = json.parse("{\"arr\": [1, 2], \"obj\": {\"x\": 10}}")
+assert(r8.value.arr[0] == 1, "parse nested array")
+assert(r8.value.obj.x == 10, "parse nested object")
+
+// 测试 stringify
+println("测试 stringify:")
+assert(json.stringify(null) == "null", "stringify(null) == 'null'")
+assert(json.stringify(true) == "true", "stringify(true) == 'true'")
+assert(json.stringify(false) == "false", "stringify(false) == 'false'")
+assert(json.stringify(42) == "42", "stringify(42) == '42'")
+assert(json.stringify("hello") == "\"hello\"", "stringify('hello') == '\"hello\"'")
+
+// 测试错误处理
+println("测试错误处理:")
+let r9 = json.parse("{invalid}")
+assert(r9.error != null, "parse invalid JSON returns error")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

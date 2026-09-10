@@ -1,0 +1,78 @@
+// random - Random number generation module
+// Version: 0.1.0
+
+// Simple linear congruential generator
+// Uses time as seed
+
+// Generate random integer in range [0, max)
+fn int(max) {
+    let seed = time_now()
+    let a = 1103515245
+    let c = 12345
+    let m = 2147483648
+    let result = (seed * a + c) % m
+    if result < 0 {
+        result = -result
+    }
+    return result % max
+}
+
+// Generate random integer in range [min, max)
+fn range(min, max) {
+    return min + int(max - min)
+}
+
+// Generate random float in range [0, 1)
+fn float() {
+    let seed = time_now()
+    let a = 1103515245
+    let c = 12345
+    let m = 2147483648
+    let result = (seed * a + c) % m
+    if result < 0 {
+        result = -result
+    }
+    return result / m
+}
+
+// Generate random boolean
+fn bool() {
+    return int(2) == 1
+}
+
+// Pick random element from array
+fn choice(arr) {
+    let n = len(arr)
+    if n == 0 {
+        return null
+    }
+    return arr[int(n)]
+}
+
+// Shuffle array (simple random reorder)
+fn shuffle(arr) {
+    let result = []
+    let n = len(arr)
+    let i = 0
+    // Simple shuffle: pick random elements
+    while i < n {
+        let idx = int(n - i)
+        result = concat(result, [arr[idx]])
+        // Remove the picked element by rebuilding without it
+        let new_arr = []
+        let j = 0
+        while j < n - i {
+            if j != idx {
+                new_arr = concat(new_arr, [arr[j]])
+            }
+            j = j + 1
+        }
+        arr = new_arr
+        i = i + 1
+    }
+    return result
+}
+
+fn concat(a, b) {
+    return a + b
+}

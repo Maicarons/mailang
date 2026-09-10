@@ -1,0 +1,23 @@
+# Default owner for everything
+* @Maicarons
+
+# Core language crates
+crates/mailang-lexer/ @Maicarons
+crates/mailang-parser/ @Maicarons
+crates/mailang-ast/ @Maicarons
+crates/mailang-analyzer/ @Maicarons
+crates/mailang-compiler/ @Maicarons
+crates/mailang-bytecode/ @Maicarons
+crates/mailang-vm/ @Maicarons
+crates/mailang-gc/ @Maicarons
+crates/mailang-stdlib/ @Maicarons
+crates/mailang-core/ @Maicarons
+
+# Platform bindings
+crates/mailang-ffi/ @Maicarons
+crates/mailang-wasm/ @Maicarons
+crates/mailang-lsp/ @Maicarons
+crates/mailang-cli/ @Maicarons
+
+# CI/CD
+.github/ @Maicarons

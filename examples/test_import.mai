@@ -1,0 +1,9 @@
+// Test import functionality
+import "mai-json"
+
+println("Module imported successfully!")
+println("mai-json library functions are now available")
+
+// Test basic string operation from the library
+let test_str = "hello"
+println("String length: {len(test_str)}")

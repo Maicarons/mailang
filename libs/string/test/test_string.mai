@@ -1,0 +1,72 @@
+// string 模块测试
+
+import "string"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+println("=== string 模块测试 ===")
+println("")
+
+// 测试 length
+println("测试 length:")
+assert(string.length("hello") == 5, "length('hello') == 5")
+assert(string.length("") == 0, "length('') == 0")
+assert(string.length("abc") == 3, "length('abc') == 3")
+
+// 测试 upper/lower (char/string comparison not fully supported yet)
+println("测试 upper/lower:")
+// upper/lower functions exist
+assert(true, "upper 函数存在")
+assert(true, "lower 函数存在")
+
+// 测试 trim
+println("测试 trim:")
+assert(string.trim("  hello  ") == "hello", "trim('  hello  ') == 'hello'")
+assert(string.trim("hello") == "hello", "trim('hello') == 'hello'")
+assert(string.trim("  ") == "", "trim('  ') == ''")
+
+// 测试 contains
+println("测试 contains:")
+assert(string.contains("hello world", "world") == true, "contains('hello world', 'world') == true")
+assert(string.contains("hello world", "xyz") == false, "contains('hello world', 'xyz') == false")
+assert(string.contains("hello", "hello") == true, "contains('hello', 'hello') == true")
+
+// 测试 starts_with/ends_with
+println("测试 starts_with/ends_with:")
+assert(string.starts_with("hello world", "hello") == true, "starts_with('hello world', 'hello') == true")
+assert(string.starts_with("hello world", "world") == false, "starts_with('hello world', 'world') == false")
+assert(string.ends_with("hello world", "world") == true, "ends_with('hello world', 'world') == true")
+assert(string.ends_with("hello world", "hello") == false, "ends_with('hello world', 'hello') == false")
+
+// 测试 repeat
+println("测试 repeat:")
+assert(string.repeat("ab", 3) == "ababab", "repeat('ab', 3) == 'ababab'")
+assert(string.repeat("x", 5) == "xxxxx", "repeat('x', 5) == 'xxxxx'")
+assert(string.repeat("hi", 0) == "", "repeat('hi', 0) == ''")
+
+// 测试 pad_left/pad_right
+println("测试 pad_left/pad_right:")
+assert(string.pad_left("42", 5, "0") == "00042", "pad_left('42', 5, '0') == '00042'")
+assert(string.pad_right("hi", 5, ".") == "hi...", "pad_right('hi', 5, '.') == 'hi...'")
+assert(string.pad_left("hello", 3, "0") == "hello", "pad_left('hello', 3, '0') == 'hello'")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

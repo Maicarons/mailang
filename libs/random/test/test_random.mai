@@ -1,0 +1,75 @@
+// random 模块测试
+
+import "random"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+fn assert_range(val, min, max, msg) {
+    assert(val >= min && val < max, msg)
+}
+
+println("=== random 模块测试 ===")
+println("")
+
+// 测试 int
+println("测试 int:")
+let n1 = random.int(100)
+assert_range(n1, 0, 100, "int(100) 在 [0, 100) 范围内")
+let n2 = random.int(10)
+assert_range(n2, 0, 10, "int(10) 在 [0, 10) 范围内")
+
+// 测试 range
+println("测试 range:")
+let n3 = random.range(5, 15)
+assert_range(n3, 5, 15, "range(5, 15) 在 [5, 15) 范围内")
+let n4 = random.range(-10, 10)
+assert_range(n4, -10, 10, "range(-10, 10) 在 [-10, 10) 范围内")
+
+// 测试 float
+println("测试 float:")
+let f1 = random.float()
+assert(f1 >= 0 && f1 < 1, "float() 在 [0, 1) 范围内")
+let f2 = random.float()
+assert(f2 >= 0 && f2 < 1, "float() 在 [0, 1) 范围内")
+
+// 测试 bool
+println("测试 bool:")
+let b1 = random.bool()
+assert(b1 == true || b1 == false, "bool() 返回布尔值")
+
+// 测试 choice
+println("测试 choice:")
+let arr = [10, 20, 30, 40, 50]
+let c1 = random.choice(arr)
+assert(c1 == 10 || c1 == 20 || c1 == 30 || c1 == 40 || c1 == 50, "choice 返回数组中的元素")
+assert(random.choice([]) == null, "choice([]) 返回 null")
+
+// 测试 shuffle
+println("测试 shuffle:")
+let arr2 = [1, 2, 3, 4, 5]
+let shuffled = random.shuffle(arr2)
+assert(len(shuffled) == 5, "shuffle 保持长度")
+// 检查所有元素都存在
+assert(shuffled[0] != null, "shuffle 元素存在")
+assert(shuffled[4] != null, "shuffle 元素存在")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

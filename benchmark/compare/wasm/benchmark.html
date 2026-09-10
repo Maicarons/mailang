@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MaìLang WASM Benchmark</title>
+    <style>
+        body { font-family: monospace; background: #1e1e2e; color: #cdd6f4; padding: 20px; }
+        h1 { color: #89b4fa; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { border: 1px solid #45475a; padding: 8px 12px; text-align: right; }
+        th { background: #313244; color: #89b4fa; }
+        .winner { color: #a6e3a1; font-weight: bold; }
+        .loser { color: #f38ba8; }
+        #status { color: #f9e2af; margin: 10px 0; }
+        button { background: #89b4fa; color: #1e1e2e; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #585b70; }
+    </style>
+</head>
+<body>
+    <h1>MaìLang WASM Benchmark Suite</h1>
+    <p>Compares MaìLang (WASM) vs JavaScript (V8) running in the browser.</p>
+    <button id="runBtn" onclick="runAll()">Run Benchmarks</button>
+    <div id="status">Ready</div>
+    <div id="results"></div>
+
+    <script type="module">
+        let mailangModule = null;
+
+        async function initMailang() {
+            const status = document.getElementById('status');
+            status.textContent = 'Loading MaìLang WASM...';
+            try {
+                const resp = await fetch('/wasm/mailang_wasm.js');
+                const js = await resp.text();
+                const patched = js.replace(
+                    "new URL('mailang_wasm_bg.wasm', import.meta.url)",
+                    "new URL('/wasm/mailang_wasm_bg.wasm', window.location.origin)"
+                );
+                const blob = new Blob([patched], { type: 'application/javascript' });
+                const url = URL.createObjectURL(blob);
+                mailangModule = await import(/* @vite-ignore */ url);
+                URL.revokeObjectURL(url);
+                await mailangModule.default();
+                status.textContent = 'MaìLang WASM loaded. Ready to run.';
+            } catch (e) {
+                status.textContent = 'Failed to load WASM: ' + e.message;
+            }
+        }
+
+        function runMailang(code) {
+            const interp = new mailangModule.WasmInterpreter();
+            const start = performance.now();
+            const result = interp.eval(code);
+            const elapsed = performance.now() - start;
+            interp.free();
+            return { result, elapsed };
+        }
+
+        function runJs(jsCode) {
+            const start = performance.now();
+            const result = eval(jsCode);
+            const elapsed = performance.now() - start;
+            return { result, elapsed };
+        }
+
+        const BENCHMARKS = [
+            {
+                name: 'Fibonacci (recursive, n=30)',
+                mai: `fn fibonacci(n) { if n <= 1 { return n } return fibonacci(n - 1) + fibonacci(n - 2) } let _ = fibonacci(10) let r = fibonacci(30) println("{r}")`,
+                js: `(function fibonacci(n) { if (n <= 1) return n; return fibonacci(n - 1) + fibonacci(n - 2); })(30)`,
+            },
+            {
+                name: 'Loop (sum 0..100000)',
+                mai: `let sum = 0 for i in 0..100000 { sum = sum + i } println("{sum}")`,
+                js: `let s = 0; for (let i = 0; i < 100000; i++) { s += i; } s`,
+            },
+            {
+                name: 'Function calls (100k)',
+                mai: `fn add(a, b) { return a + b } let result = 0 for i in 0..100000 { result = add(result, i) } println("{result}")`,
+                js: `function add(a, b) { return a + b; } let r = 0; for (let i = 0; i < 100000; i++) { r = add(r, i); } r`,
+            },
+            {
+                name: 'String interpolation (10k)',
+mai: `let result = "" for i in 0..10000 { result = "item_{i}" } println("{result}")`,
+                js: `let r = ""; for (let i = 0; i < 10000; i++) { r = \`item_\${i}\`; } r`,
+            },
+        ];
+
+        window.runAll = async function() {
+            const btn = document.getElementById('runBtn');
+            const status = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+
+            btn.disabled = true;
+            if (!mailangModule) await initMailang();
+
+            const WARMUP = 3;
+            const RUNS = 10;
+            const rows = [];
+
+            for (const bench of BENCHMARKS) {
+                status.textContent = `Running: ${bench.name}...`;
+
+                // Warmup
+                for (let i = 0; i < WARMUP; i++) {
+                    runMailang(bench.mai);
+                    runJs(bench.js);
+                }
+
+                // Measure
+                let maiTotal = 0, jsTotal = 0;
+                for (let i = 0; i < RUNS; i++) {
+                    maiTotal += runMailang(bench.mai).elapsed;
+                    jsTotal += runJs(bench.js).elapsed;
+                }
+
+                const maiAvg = maiTotal / RUNS;
+                const jsAvg = jsTotal / RUNS;
+                const ratio = maiAvg / jsAvg;
+
+                rows.push({ name: bench.name, mai: maiAvg, js: jsAvg, ratio });
+            }
+
+            // Render table
+            let html = `<table>
+                <tr><th>Benchmark</th><th>MaìLang WASM (ms)</th><th>JavaScript (ms)</th><th>Ratio (mai/js)</th></tr>`;
+            for (const r of rows) {
+                const maiClass = r.ratio <= 1 ? 'winner' : 'loser';
+                const jsClass = r.ratio >= 1 ? 'winner' : 'loser';
+                html += `<tr>
+                    <td style="text-align:left">${r.name}</td>
+                    <td class="${maiClass}">${r.mai.toFixed(2)}</td>
+                    <td class="${jsClass}">${r.js.toFixed(2)}</td>
+                    <td>${r.ratio.toFixed(2)}x</td>
+                </tr>`;
+            }
+            html += '</table>';
+
+            // Summary
+            const avgRatio = rows.reduce((s, r) => s + r.ratio, 0) / rows.length;
+            html += `<p><strong>Average ratio: ${avgRatio.toFixed(2)}x</strong> (1.0 = same speed, <1 = MaìLang faster, >1 = JS faster)</p>`;
+
+            resultsDiv.innerHTML = html;
+            status.textContent = 'Done!';
+            btn.disabled = false;
+        };
+
+        initMailang();
+    </script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+// array 模块测试
+
+import "array"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+println("=== array 模块测试 ===")
+println("")
+
+// 测试 new
+println("测试 new:")
+let arr1 = array.create(3, 0)
+assert(len(arr1) == 3, "new(3, 0) 长度为 3")
+assert(arr1[0] == 0, "new(3, 0) 第一个元素为 0")
+assert(arr1[2] == 0, "new(3, 0) 最后一个元素为 0")
+
+// 测试 fill
+println("测试 fill:")
+let arr2 = array.fill([1, 2, 3], 9)
+assert(arr2[0] == 9, "fill 第一个元素为 9")
+assert(arr2[1] == 9, "fill 第二个元素为 9")
+assert(arr2[2] == 9, "fill 第三个元素为 9")
+
+// 测试 reverse
+println("测试 reverse:")
+let arr3 = array.reverse([1, 2, 3])
+assert(arr3[0] == 3, "reverse 第一个元素为 3")
+assert(arr3[1] == 2, "reverse 第二个元素为 2")
+assert(arr3[2] == 1, "reverse 第三个元素为 1")
+
+// 测试 contains
+println("测试 contains:")
+let arr4 = [10, 20, 30]
+assert(array.contains(arr4, 20) == true, "contains(20) == true")
+assert(array.contains(arr4, 99) == false, "contains(99) == false")
+
+// 测试 index_of
+println("测试 index_of:")
+assert(array.index_of(arr4, 20) == 1, "index_of(20) == 1")
+assert(array.index_of(arr4, 99) == -1, "index_of(99) == -1")
+
+// 测试 first/last
+println("测试 first/last:")
+assert(array.first(arr4) == 10, "first == 10")
+assert(array.last(arr4) == 30, "last == 30")
+assert(array.first([]) == null, "first([]) == null")
+assert(array.last([]) == null, "last([]) == null")
+
+// 测试 slice
+println("测试 slice:")
+let arr5 = array.slice([1, 2, 3, 4, 5], 1, 4)
+assert(len(arr5) == 3, "slice 长度为 3")
+assert(arr5[0] == 2, "slice 第一个元素为 2")
+assert(arr5[2] == 4, "slice 最后一个元素为 4")
+
+// 测试 concat
+println("测试 concat:")
+let arr6 = array.concat([1, 2], [3, 4])
+assert(len(arr6) == 4, "concat 长度为 4")
+assert(arr6[0] == 1, "concat 第一个元素为 1")
+assert(arr6[3] == 4, "concat 最后一个元素为 4")
+
+// 测试 join
+println("测试 join:")
+assert(array.join([1, 2, 3], "-") == "1-2-3", "join 正确")
+assert(array.join(["a", "b"], ",") == "a,b", "join 字符串正确")
+
+// 测试 count
+println("测试 count:")
+assert(array.count([1, 2, 2, 3, 2], 2) == 3, "count(2) == 3")
+assert(array.count([1, 2, 3], 4) == 0, "count(4) == 0")
+
+// 测试 remove
+println("测试 remove:")
+let arr7 = array.remove([1, 2, 3, 2, 1], 2)
+assert(len(arr7) == 4, "remove 长度为 4")
+assert(arr7[1] == 3, "remove 正确删除第一个")
+
+// 测试 remove_at
+println("测试 remove_at:")
+let arr8 = array.remove_at([1, 2, 3, 4], 2)
+assert(len(arr8) == 3, "remove_at 长度为 3")
+assert(arr8[2] == 4, "remove_at 正确删除")
+
+// 测试 insert_at
+println("测试 insert_at:")
+let arr9 = array.insert_at([1, 2, 4], 2, 3)
+assert(len(arr9) == 4, "insert_at 长度为 4")
+assert(arr9[2] == 3, "insert_at 正确插入")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

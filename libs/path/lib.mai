@@ -1,0 +1,150 @@
+// path - Path manipulation module
+// Version: 0.1.0
+
+// Get directory name from path
+fn dirname(path) {
+    let i = len(path) - 1
+    while i >= 0 {
+        if path[i] == "/" || path[i] == "\\" {
+            if i == 0 {
+                return "/"
+            }
+            return substring(path, 0, i)
+        }
+        i = i - 1
+    }
+    return "."
+}
+
+// Get file name from path
+fn basename(path) {
+    let i = len(path) - 1
+    while i >= 0 {
+        if path[i] == "/" || path[i] == "\\" {
+            return substring(path, i + 1, len(path))
+        }
+        i = i - 1
+    }
+    return path
+}
+
+// Get file extension
+fn ext(path) {
+    let name = basename(path)
+    let i = len(name) - 1
+    while i >= 0 {
+        if name[i] == "." {
+            return substring(name, i, len(name))
+        }
+        i = i - 1
+    }
+    return ""
+}
+
+// Get file name without extension
+fn stem(path) {
+    let name = basename(path)
+    let i = len(name) - 1
+    while i >= 0 {
+        if name[i] == "." {
+            return substring(name, 0, i)
+        }
+        i = i - 1
+    }
+    return name
+}
+
+// Join path components
+fn join(a, b) {
+    if a == "" || a == "." {
+        return b
+    }
+    if b == "" || b == "." {
+        return a
+    }
+    let last_a = a[len(a) - 1]
+    if last_a == "/" || last_a == "\\" {
+        return a + b
+    }
+    return a + "/" + b
+}
+
+// Normalize path (resolve . and ..)
+fn normalize(path) {
+    let parts = []
+    let current = ""
+    let i = 0
+    let n = len(path)
+
+    // Split by / or \
+    while i < n {
+        if path[i] == "/" || path[i] == "\\" {
+            if current != "" {
+                parts = [current]
+                current = ""
+            }
+        } else {
+            current = current + path[i]
+        }
+        i = i + 1
+    }
+    if current != "" {
+        parts = [current]
+    }
+
+    // Process . and ..
+    let result = []
+    i = 0
+    n = len(parts)
+    while i < n {
+        if parts[i] == "." {
+            // Skip
+        } elif parts[i] == ".." {
+            if len(result) > 0 && result[len(result) - 1] != ".." {
+                result = remove_at(result, len(result) - 1)
+            } else {
+                result = [parts[i]]
+            }
+        } else {
+            result = [parts[i]]
+        }
+        i = i + 1
+    }
+
+    // Join
+    if len(result) == 0 {
+        return "."
+    }
+    let joined = result[0]
+    i = 1
+    while i < len(result) {
+        joined = joined + "/" + result[i]
+        i = i + 1
+    }
+    return joined
+}
+
+// Helper: substring
+fn substring(s, start, end) {
+    let result = ""
+    let i = start
+    while i < end {
+        result = result + s[i]
+        i = i + 1
+    }
+    return result
+}
+
+// Helper: remove_at (local copy to avoid circular dependency)
+fn remove_at(arr, index) {
+    let result = []
+    let i = 0
+    let n = len(arr)
+    while i < n {
+        if i != index {
+            result = [arr[i]]
+        }
+        i = i + 1
+    }
+    return result
+}

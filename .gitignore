@@ -1,0 +1,25 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node
+node_modules/
+/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+.playwright-mcp/
+*.zip
+bindings/c/mailang_ffi.dll
+bindings/c/demo.exe
+bindings/python/mailang_ffi.dll
+crates/mailang-wasm/pkg/

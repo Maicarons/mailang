@@ -1,0 +1,52 @@
+// fs 模块基础使用示例
+
+import "fs"
+
+println("=== fs 模块示例 ===")
+println("")
+
+let test_file = "/tmp/test_fs_example.txt"
+
+// 写入文件
+println("写入文件:")
+let success = fs.write(test_file, "Hello, World!")
+println("  写入成功: {success}")
+println("")
+
+// 检查文件
+println("检查文件:")
+println("  存在: {fs.exists(test_file)}")
+println("  大小: {fs.size(test_file)}")
+println("")
+
+// 读取文件
+println("读取文件:")
+let content = fs.read(test_file)
+println("  内容: {content}")
+println("")
+
+// 追加内容
+println("追加内容:")
+fs.append(test_file, "\n第二行")
+fs.append(test_file, "\n第三行")
+let content2 = fs.read(test_file)
+println("  内容: {content2}")
+println("")
+
+// 读取行
+println("读取行:")
+let lines = fs.read_lines(test_file)
+println("  行数: {len(lines)}")
+let i = 0
+while i < len(lines) {
+    println("  行 {i}: {lines[i]}")
+    i = i + 1
+}
+println("")
+
+// 复制文件
+println("复制文件:")
+let copy_file = "/tmp/test_fs_copy.txt"
+fs.copy(test_file, copy_file)
+println("  复制成功: {fs.exists(copy_file)}")
+println("  内容相同: {fs.read(copy_file) == content2}")

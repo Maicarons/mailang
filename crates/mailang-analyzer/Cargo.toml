@@ -1,0 +1,13 @@
+[package]
+name = "mailang-analyzer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Semantic analyzer for MaìLang"
+
+[dependencies]
+mailang-ast = { path = "../mailang-ast" }
+thiserror = { workspace = true }
+
+[features]
+default = []

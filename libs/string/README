@@ -1,0 +1,91 @@
+# string - 字符串处理模块
+
+版本: 0.1.0
+
+## 功能说明
+
+提供字符串操作和处理函数。
+
+## API 列表
+
+### length(s)
+
+获取字符串长度。
+
+- 参数: `s` - 字符串
+- 返回值: 整数
+
+### upper(s)
+
+转换为大写（ASCII）。
+
+- 参数: `s` - 字符串
+- 返回值: 字符串
+
+### lower(s)
+
+转换为小写（ASCII）。
+
+- 参数: `s` - 字符串
+- 返回值: 字符串
+
+### trim(s)
+
+去除两端空白字符。
+
+- 参数: `s` - 字符串
+- 返回值: 字符串
+
+### contains(s, sub)
+
+检查是否包含子字符串。
+
+- 参数: `s` - 字符串, `sub` - 子字符串
+- 返回值: 布尔
+
+### starts_with(s, prefix)
+
+检查是否以指定前缀开头。
+
+- 参数: `s` - 字符串, `prefix` - 前缀
+- 返回值: 布尔
+
+### ends_with(s, suffix)
+
+检查是否以指定后缀结尾。
+
+- 参数: `s` - 字符串, `suffix` - 后缀
+- 返回值: 布尔
+
+### repeat(s, n)
+
+重复字符串 n 次。
+
+- 参数: `s` - 字符串, `n` - 次数
+- 返回值: 字符串
+
+### pad_left(s, target_len, ch)
+
+左侧填充到指定长度。
+
+- 参数: `s` - 字符串, `target_len` - 目标长度, `ch` - 填充字符
+- 返回值: 字符串
+
+### pad_right(s, target_len, ch)
+
+右侧填充到指定长度。
+
+- 参数: `s` - 字符串, `target_len` - 目标长度, `ch` - 填充字符
+- 返回值: 字符串
+
+## 使用示例
+
+```mai
+import "string"
+
+let s = "Hello, World!"
+println("长度: {string.length(s)}")
+println("包含 World: {string.contains(s, "World")}")
+println("以 Hello 开头: {string.starts_with(s, "Hello")}")
+println("填充: {string.pad_left("42", 5, "0")}")
+```

@@ -1,0 +1,12 @@
+fn divide(a: float, b: float) -> Result<float, str> {
+    if b == 0.0 {
+        return Err("除数不能为零")
+    }
+    return Ok(a / b)
+}
+
+let result = divide(10.0, 3.0)
+match result {
+    Ok(v) => println("结果: {v}"),
+    Err(e) => println("错误: {e}")
+}

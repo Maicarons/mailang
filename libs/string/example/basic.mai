@@ -1,0 +1,37 @@
+// string 模块基础使用示例
+
+import "string"
+
+println("=== string 模块示例 ===")
+println("")
+
+let s = "Hello, World!"
+
+// 基本操作
+println("基本操作:")
+println("  原始字符串: {s}")
+println("  长度: {string.length(s)}")
+println("  大写: {string.upper(s)}")
+println("  小写: {string.lower(s)}")
+println("")
+
+// 去除空白
+println("去除空白:")
+let padded = "  Hello  "
+println("  原始: '{padded}'")
+println("  去除: '{string.trim(padded)}'")
+println("")
+
+// 查找
+println("查找:")
+println("  包含 'World': {string.contains(s, "World")}")
+println("  包含 'xyz': {string.contains(s, "xyz")}")
+println("  以 'Hello' 开头: {string.starts_with(s, "Hello")}")
+println("  以 '!' 结尾: {string.ends_with(s, "!")}")
+println("")
+
+// 重复和填充
+println("重复和填充:")
+println("  重复 'ab' 3 次: {string.repeat("ab", 3)}")
+println("  左填充 '42' 到 5 位: {string.pad_left("42", 5, "0")}")
+println("  右填充 'hi' 到 6 位: {string.pad_right("hi", 6, ".")}")

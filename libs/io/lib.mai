@@ -1,0 +1,44 @@
+// io - Input/Output module
+// Version: 0.1.0
+
+// Read user input
+fn input(prompt) {
+    if prompt != "" {
+        print(prompt)
+    }
+    // Native implementation handles actual input
+    return ""
+}
+
+// Read file contents
+fn read_file(path) {
+    // Native implementation handles actual file reading
+    return ""
+}
+
+// Write content to file
+fn write_file(path, content) {
+    // Native implementation handles actual file writing
+    return true
+}
+
+// Check if file exists
+fn file_exists(path) {
+    // Native implementation handles actual check
+    return false
+}
+
+// Read lines from file
+fn read_lines(path) {
+    let content = read_file(path)
+    return [content]
+}
+
+// Write lines to file
+fn write_lines(path, lines) {
+    let content = ""
+    for line in lines {
+        content = content + line + "\n"
+    }
+    return write_file(path, content)
+}

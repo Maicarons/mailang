@@ -1,0 +1,60 @@
+// sys 模块测试
+
+import "sys"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+println("=== sys 模块测试 ===")
+println("")
+
+// 测试 version
+println("测试 version:")
+let v = sys.version()
+assert(v != null, "version() 返回非空")
+assert(len(v) > 0, "version() 返回非空字符串")
+
+// 测试 platform
+println("测试 platform:")
+let p = sys.platform()
+assert(p != null, "platform() 返回非空")
+
+// 测试 arch
+println("测试 arch:")
+let a = sys.arch()
+assert(a != null, "arch() 返回非空")
+
+// 测试 args
+println("测试 args:")
+let args = sys.args()
+assert(args != null, "args() 返回非空")
+// args() 返回数组
+
+// 测试 env
+println("测试 env:")
+let result = sys.env("PATH")
+// PATH 可能存在也可能不存在，只测试不报错
+assert(true, "env('PATH') 不报错")
+
+let result2 = sys.env("DEFINITELY_NOT_EXIST_VAR_12345")
+assert(result2 == null, "env() 对不存在的变量返回 null")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

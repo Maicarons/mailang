@@ -1,0 +1,46 @@
+// WASM 环境示例
+// 此示例展示在浏览器 WASM 环境中运行的代码
+
+// 基本计算
+fn calculate_area(radius) {
+    let pi = 3.14159
+    return pi * radius * radius
+}
+
+fn calculate_circumference(radius) {
+    let pi = 3.14159
+    return 2 * pi * radius
+}
+
+// 主程序
+println("=== MaìLang WASM Demo ===")
+println("")
+
+// 几何计算
+let r = 5
+let area = calculate_area(r)
+let circumference = calculate_circumference(r)
+
+println("圆的属性:")
+print("  半径 = ")
+println(r)
+print("  面积 = ")
+println(area)
+print("  周长 = ")
+println(circumference)
+println("")
+
+// Lambda 示例
+let square = fn(x) -> x * x
+let nums = [1, 2, 3, 4, 5]
+
+println("Lambda 示例:")
+for n in nums {
+    print("  ")
+    print(n)
+    print("^2 = ")
+    println(square(n))
+}
+println("")
+
+println("WASM 执行完成")

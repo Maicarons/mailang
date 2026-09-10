@@ -1,0 +1,10 @@
+// Function call overhead benchmark
+fn add(a, b) {
+    return a + b
+}
+
+let result = 0
+for i in 0..100000 {
+    result = add(result, i)
+}
+println("result = {result}")

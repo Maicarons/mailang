@@ -1,0 +1,74 @@
+// IoT 传感器数据处理示例
+// 模拟温度传感器数据采集和处理
+
+// 温度转换函数
+fn celsius_to_fahrenheit(c) {
+    return c * 9.0 / 5.0 + 32.0
+}
+
+fn celsius_to_kelvin(c) {
+    return c + 273.15
+}
+
+// 温度分类
+fn classify_temperature(c) {
+    if c < -10 {
+        return "极寒"
+    } elif c < 0 {
+        return "严寒"
+    } elif c < 10 {
+        return "寒冷"
+    } elif c < 20 {
+        return "凉爽"
+    } elif c < 25 {
+        return "适宜"
+    } elif c < 30 {
+        return "温暖"
+    } elif c < 35 {
+        return "炎热"
+    } else {
+        return "极热"
+    }
+}
+
+// 报警检查
+fn check_alarm(temp, threshold) {
+    if temp > threshold {
+        return true
+    }
+    return false
+}
+
+// 模拟传感器读数
+fn read_sensor() {
+    return 23.5
+}
+
+// 主程序
+println("=== IoT 温度监控系统 ===")
+println("")
+
+let temp = read_sensor()
+let fahrenheit = celsius_to_fahrenheit(temp)
+let kelvin = celsius_to_kelvin(temp)
+let category = classify_temperature(temp)
+let alarm = check_alarm(temp, 30.0)
+
+println("传感器读数:")
+print("  摄氏度: ")
+println(temp)
+print("  华氏度: ")
+println(fahrenheit)
+print("  开尔文: ")
+println(kelvin)
+println("")
+print("分类: ")
+println(category)
+print("报警状态: ")
+println(alarm)
+
+if alarm {
+    println("警告：温度超过阈值！")
+} else {
+    println("温度正常")
+}

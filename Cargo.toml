@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mailang-lexer",
+    "crates/mailang-parser",
+    "crates/mailang-ast",
+    "crates/mailang-analyzer",
+    "crates/mailang-compiler",
+    "crates/mailang-bytecode",
+    "crates/mailang-vm",
+    "crates/mailang-gc",
+    "crates/mailang-stdlib",
+    "crates/mailang-core",
+    "crates/mailang-cli",
+    "crates/mailang-ffi",
+    "crates/mailang-wasm",
+    "crates/mailang-lsp",
+    "crates/mailang-macros",
+    "crates/mailang-module",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/Maicarons/mailang"
+description = "MaìLang - A modern programming language for IoT and cross-platform development"
+
+[workspace.dependencies]
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+unicode-xid = "0.2"

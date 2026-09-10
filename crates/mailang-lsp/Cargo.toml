@@ -1,0 +1,16 @@
+[package]
+name = "mailang-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Language Server Protocol for MaìLang"
+
+[dependencies]
+mailang-core = { path = "../mailang-core" }
+tokio = { version = "1", features = ["full"] }
+tower-lsp = "0.20"
+serde_json = "1.0"
+serde = { workspace = true }
+
+[features]
+default = []

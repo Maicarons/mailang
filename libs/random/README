@@ -1,0 +1,71 @@
+# random - 随机数生成模块
+
+版本: 0.1.0
+
+## 功能说明
+
+提供随机数生成功能。
+
+## API 列表
+
+### int(max)
+
+生成 [0, max) 范围内的随机整数。
+
+- 参数: `max` - 整数，上限（不包含）
+- 返回值: 整数
+
+### range(min, max)
+
+生成 [min, max) 范围内的随机整数。
+
+- 参数: `min` - 整数，下限, `max` - 整数，上限
+- 返回值: 整数
+
+### float()
+
+生成 [0, 1) 范围内的随机浮点数。
+
+- 参数: 无
+- 返回值: 浮点数
+
+### bool()
+
+生成随机布尔值。
+
+- 参数: 无
+- 返回值: 布尔
+
+### choice(arr)
+
+从数组中随机选择一个元素。
+
+- 参数: `arr` - 数组
+- 返回值: 任意值或 null
+
+### shuffle(arr)
+
+随机打乱数组。
+
+- 参数: `arr` - 数组
+- 返回值: 数组
+
+## 使用示例
+
+```mai
+import "random"
+
+// 生成随机数
+println("随机整数 [0, 100): {random.int(100)}")
+println("随机整数 [1, 7): {random.range(1, 7)}")
+println("随机浮点数: {random.float()}")
+println("随机布尔: {random.bool()}")
+
+// 从数组中随机选择
+let colors = ["红", "绿", "蓝", "黄"]
+println("随机颜色: {random.choice(colors)}")
+
+// 打乱数组
+let arr = [1, 2, 3, 4, 5]
+println("打乱后: {random.shuffle(arr)}")
+```

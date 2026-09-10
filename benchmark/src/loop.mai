@@ -1,0 +1,6 @@
+// Loop benchmark - iteration performance
+let sum = 0
+for i in 0..100000 {
+    sum = sum + i
+}
+println("sum = {sum}")

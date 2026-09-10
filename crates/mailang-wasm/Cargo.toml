@@ -1,0 +1,21 @@
+[package]
+name = "mailang-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "WebAssembly bindings for MaìLang"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+mailang-core = { path = "../mailang-core" }
+mailang-stdlib = { path = "../mailang-stdlib", features = ["capture-output"] }
+wasm-bindgen = "0.2"
+
+[features]
+default = ["std"]
+std = []

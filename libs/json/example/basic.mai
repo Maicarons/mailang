@@ -1,0 +1,56 @@
+// json 模块基础使用示例
+
+import "json"
+
+println("=== json 模块示例 ===")
+println("")
+
+// 解析简单对象
+println("解析简单对象:")
+let result1 = json.parse("{\"name\": \"Alice\", \"age\": 30}")
+if result1.error {
+    println("  错误: {result1.error}")
+} else {
+    let obj = result1.value
+    println("  名字: {obj.name}")
+    println("  年龄: {obj.age}")
+}
+println("")
+
+// 解析数组
+println("解析数组:")
+let result2 = json.parse("[1, 2, 3, \"hello\"]")
+if result2.error {
+    println("  错误: {result2.error}")
+} else {
+    let arr = result2.value
+    println("  长度: {len(arr)}")
+    println("  第一个: {arr[0]}")
+}
+println("")
+
+// 解析嵌套结构
+println("解析嵌套结构:")
+let result3 = json.parse("{\"users\": [{\"name\": \"Bob\"}, {\"name\": \"Charlie\"}]}")
+if result3.error {
+    println("  错误: {result3.error}")
+} else {
+    let data = result3.value
+    println("  用户数量: {len(data.users)}")
+    println("  第一个用户: {data.users[0].name}")
+}
+println("")
+
+// 生成 JSON
+println("生成 JSON:")
+let obj = {"name": "David", "scores": [95, 87, 92], "active": true}
+let json_str = json.stringify(obj)
+println("  JSON: {json_str}")
+
+let arr = [1, 2, 3]
+println("  数组: {json.stringify(arr)}")
+
+println("  数字: {json.stringify(42)}")
+println("  字符串: {json.stringify("hello")}")
+println("  布尔: {json.stringify(true)}")
+println("  空值: {json.stringify(null)}")

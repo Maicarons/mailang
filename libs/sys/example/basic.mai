@@ -1,0 +1,40 @@
+// sys 模块基础使用示例
+
+import "sys"
+
+println("=== sys 模块示例 ===")
+println("")
+
+// 系统信息
+println("系统信息:")
+println("  MaìLang 版本: {sys.version()}")
+println("  平台: {sys.platform()}")
+println("  架构: {sys.arch()}")
+println("")
+
+// 命令行参数
+println("命令行参数:")
+let args = sys.args()
+println("  参数数量: {len(args)}")
+let i = 0
+while i < len(args) {
+    println("  args[{i}] = {args[i]}")
+    i = i + 1
+}
+println("")
+
+// 环境变量
+println("环境变量:")
+let home = sys.env("HOME")
+if home != null {
+    println("  HOME = {home}")
+} else {
+    println("  HOME 未设置")
+}
+
+let path = sys.env("PATH")
+if path != null {
+    println("  PATH 长度 = {len(path)}")
+} else {
+    println("  PATH 未设置")
+}

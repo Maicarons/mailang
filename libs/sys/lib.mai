@@ -1,0 +1,41 @@
+// sys - System information module
+// Version: 0.1.0
+
+// Get MaìLang version
+fn version() {
+    return "0.1.0"
+}
+
+// Get platform name
+fn platform() {
+    // This will be overridden by native implementation
+    return "unknown"
+}
+
+// Get architecture
+fn arch() {
+    return "unknown"
+}
+
+// Exit the program
+fn exit(code) {
+    // Placeholder - native implementation handles actual exit
+    if code != 0 {
+        println("Exit with code: {code}")
+    }
+}
+
+// Get command line arguments
+fn args() {
+    return []
+}
+
+// Get environment variable (placeholder)
+fn env(name) {
+    return null
+}
+
+// Sleep for milliseconds (placeholder)
+fn sleep(ms) {
+    // Native implementation handles actual sleep
+}

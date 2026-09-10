@@ -1,0 +1,7 @@
+﻿Mailang Benchmark Summary
+========================
+
+fibonacci
+  mailang : 18.89 ms
+  python : 1,469,522.68 ms
+

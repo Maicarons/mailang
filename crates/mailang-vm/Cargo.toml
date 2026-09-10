@@ -1,0 +1,18 @@
+[package]
+name = "mailang-vm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Virtual machine for MaìLang"
+
+[dependencies]
+mailang-bytecode = { path = "../mailang-bytecode" }
+mailang-stdlib = { path = "../mailang-stdlib" }
+mailang-gc = { path = "../mailang-gc" }
+thiserror = { workspace = true }
+
+[features]
+default = ["std", "gc"]
+std = ["alloc"]
+alloc = []
+gc = ["mailang-gc/gc"]

@@ -1,0 +1,42 @@
+// random 模块基础使用示例
+
+import "random"
+
+println("=== random 模块示例 ===")
+println("")
+
+// 生成随机整数
+println("随机整数:")
+println("  [0, 100): {random.int(100)}")
+println("  [0, 100): {random.int(100)}")
+println("  [1, 7): {random.range(1, 7)}")
+println("  [1, 7): {random.range(1, 7)}")
+println("")
+
+// 生成随机浮点数
+println("随机浮点数:")
+println("  [0, 1): {random.float()}")
+println("  [0, 1): {random.float()}")
+println("")
+
+// 生成随机布尔
+println("随机布尔:")
+println("  {random.bool()}")
+println("  {random.bool()}")
+println("  {random.bool()}")
+println("")
+
+// 从数组中随机选择
+println("随机选择:")
+let colors = ["红", "绿", "蓝", "黄", "紫"]
+println("  颜色: {random.choice(colors)}")
+println("  颜色: {random.choice(colors)}")
+println("  颜色: {random.choice(colors)}")
+println("")
+
+// 打乱数组
+println("打乱数组:")
+let arr = [1, 2, 3, 4, 5]
+println("  原始: {arr}")
+println("  打乱: {random.shuffle(arr)}")
+println("  打乱: {random.shuffle(arr)}")

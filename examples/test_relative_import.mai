@@ -1,0 +1,6 @@
+// Test relative path import
+import "./utils"
+
+println("=== Relative Import Test ===")
+println("Utils loaded!")
+println("greet(\\\"World\\\") = {greet(\"World\")}")

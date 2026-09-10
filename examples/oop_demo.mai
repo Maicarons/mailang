@@ -1,0 +1,29 @@
+class Animal {
+    let name: str
+    let age: int
+
+    fn init(name: str, age: int) {
+        this.name = name
+        this.age = age
+    }
+
+    fn speak() -> str {
+        return "{this.name} 发出声音"
+    }
+}
+
+class Dog extends Animal {
+    let breed: str
+
+    fn init(name: str, age: int, breed: str) {
+        super(name, age)
+        this.breed = breed
+    }
+
+    override fn speak() -> str {
+        return "{this.name} 汪汪叫！"
+    }
+}
+
+let dog = Dog("小黑", 3, "拉布拉多")
+println(dog.speak())

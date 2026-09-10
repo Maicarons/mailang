@@ -1,0 +1,79 @@
+// math 模块测试
+
+import "math"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+fn assert_near(actual, expected, tolerance, msg) {
+    let diff = actual - expected
+    if diff < 0 {
+        diff = -diff
+    }
+    assert(diff <= tolerance, msg)
+}
+
+println("=== math 模块测试 ===")
+println("")
+
+// 测试常量
+println("测试常量:")
+assert_near(math.PI, 3.141592653589793, 0.0000001, "PI 值正确")
+assert_near(math.E, 2.718281828459045, 0.0000001, "E 值正确")
+
+// 测试 pow
+println("测试 pow:")
+assert(math.pow(2, 10) == 1024, "pow(2, 10) == 1024")
+assert(math.pow(3, 3) == 27, "pow(3, 3) == 27")
+assert(math.pow(5, 0) == 1, "pow(5, 0) == 1")
+
+// 测试 clamp
+println("测试 clamp:")
+assert(math.clamp(15, 0, 10) == 10, "clamp(15, 0, 10) == 10")
+assert(math.clamp(-5, 0, 10) == 0, "clamp(-5, 0, 10) == 0")
+assert(math.clamp(5, 0, 10) == 5, "clamp(5, 0, 10) == 5")
+
+// 测试 lerp
+println("测试 lerp:")
+assert_near(math.lerp(0, 100, 0.5), 50, 0.001, "lerp(0, 100, 0.5) == 50")
+assert_near(math.lerp(0, 100, 0.25), 25, 0.001, "lerp(0, 100, 0.25) == 25")
+assert_near(math.lerp(10, 20, 0.5), 15, 0.001, "lerp(10, 20, 0.5) == 15")
+
+// 测试角度转换
+println("测试角度转换:")
+assert_near(math.deg_to_rad(180), math.PI, 0.001, "deg_to_rad(180) == PI")
+assert_near(math.rad_to_deg(math.PI), 180, 0.001, "rad_to_deg(PI) == 180")
+assert_near(math.deg_to_rad(90), math.PI / 2, 0.001, "deg_to_rad(90) == PI/2")
+
+// 测试数字判断
+println("测试数字判断:")
+assert(math.is_even(4) == true, "is_even(4) == true")
+assert(math.is_even(7) == false, "is_even(7) == false")
+assert(math.is_odd(7) == true, "is_odd(7) == true")
+assert(math.is_odd(4) == false, "is_odd(4) == false")
+assert(math.is_positive(5) == true, "is_positive(5) == true")
+assert(math.is_positive(-5) == false, "is_positive(-5) == false")
+assert(math.is_negative(-5) == true, "is_negative(-5) == true")
+assert(math.is_negative(5) == false, "is_negative(5) == false")
+assert(math.is_zero(0) == true, "is_zero(0) == true")
+assert(math.is_zero(1) == false, "is_zero(1) == false")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

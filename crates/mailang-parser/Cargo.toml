@@ -1,0 +1,14 @@
+[package]
+name = "mailang-parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Parser for MaìLang"
+
+[dependencies]
+mailang-ast = { path = "../mailang-ast" }
+mailang-lexer = { path = "../mailang-lexer" }
+thiserror = { workspace = true }
+
+[features]
+default = []

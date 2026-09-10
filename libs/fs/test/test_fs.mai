@@ -1,0 +1,84 @@
+// fs 模块测试
+
+import "fs"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+println("=== fs 模块测试 ===")
+println("")
+
+let test_file = "/tmp/mailang_test_fs.txt"
+let test_file2 = "/tmp/mailang_test_fs2.txt"
+
+// 测试 write
+println("测试 write:")
+let result = fs.write(test_file, "Hello, World!")
+assert(result == true, "write 返回 true")
+
+// 测试 exists
+println("测试 exists:")
+assert(fs.exists(test_file) == true, "exists 对已创建文件返回 true")
+assert(fs.exists("/tmp/nonexistent_12345.txt") == false, "exists 对不存在文件返回 false")
+
+// 测试 read
+println("测试 read:")
+let content = fs.read(test_file)
+assert(content == "Hello, World!", "read 返回正确内容")
+
+// 测试 size
+println("测试 size:")
+assert(fs.size(test_file) == 13, "size 返回正确大小")
+assert(fs.size("/tmp/nonexistent_12345.txt") == -1, "size 对不存在文件返回 -1")
+
+// 测试 append
+println("测试 append:")
+fs.append(test_file, "\nLine 2")
+let content2 = fs.read(test_file)
+assert(content2 == "Hello, World!\nLine 2", "append 正确追加")
+
+// 测试 prepend
+println("测试 prepend:")
+fs.prepend(test_file, "Start\n")
+let content3 = fs.read(test_file)
+assert(content3 == "Start\nHello, World!\nLine 2", "prepend 正确添加")
+
+// 测试 read_lines
+println("测试 read_lines:")
+let lines = fs.read_lines(test_file)
+assert(len(lines) == 3, "read_lines 返回正确行数")
+
+// 测试 write_lines
+println("测试 write_lines:")
+let result2 = fs.write_lines(test_file2, ["aaa", "bbb", "ccc"])
+assert(result2 == true, "write_lines 返回 true")
+let content4 = fs.read(test_file2)
+assert(content4 == "aaa\nbbb\nccc\n", "write_lines 内容正确")
+
+// 测试 copy
+println("测试 copy:")
+let copy_file = "/tmp/mailang_test_fs_copy.txt"
+let result3 = fs.copy(test_file, copy_file)
+assert(result3 == true, "copy 返回 true")
+assert(fs.exists(copy_file) == true, "copy 创建目标文件")
+assert(fs.read(copy_file) == content3, "copy 内容正确")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

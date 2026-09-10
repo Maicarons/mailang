@@ -1,0 +1,69 @@
+// path 模块测试
+
+import "path"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+println("=== path 模块测试 ===")
+println("")
+
+// 测试 dirname
+println("测试 dirname:")
+assert(path.dirname("/home/user/file.txt") == "/home/user", "dirname 正常路径")
+assert(path.dirname("/file.txt") == "/", "dirname 根目录文件")
+assert(path.dirname("file.txt") == ".", "dirname 相对路径")
+assert(path.dirname("/") == "/", "dirname 根目录")
+
+// 测试 basename
+println("测试 basename:")
+assert(path.basename("/home/user/file.txt") == "file.txt", "basename 正常路径")
+assert(path.basename("/file.txt") == "file.txt", "basename 根目录文件")
+assert(path.basename("file.txt") == "file.txt", "basename 相对路径")
+
+// 测试 ext
+println("测试 ext:")
+assert(path.ext("/home/user/file.txt") == ".txt", "ext .txt")
+assert(path.ext("file.tar.gz") == ".gz", "ext .gz")
+assert(path.ext("README") == "", "ext 无扩展名")
+assert(path.ext(".gitignore") == ".gitignore", "ext 隐藏文件")
+
+// 测试 stem
+println("测试 stem:")
+assert(path.stem("/home/user/file.txt") == "file", "stem .txt")
+assert(path.stem("file.tar.gz") == "file.tar", "stem .gz")
+assert(path.stem("README") == "README", "stem 无扩展名")
+
+// 测试 join
+println("测试 join:")
+assert(path.join("/home/user", "docs") == "/home/user/docs", "join 正常")
+assert(path.join("/home/user/", "docs") == "/home/user/docs", "join 带斜杠")
+assert(path.join(".", "file.txt") == "./file.txt", "join 相对路径")
+assert(path.join("", "file.txt") == "file.txt", "join 空路径")
+
+// 测试 normalize
+println("测试 normalize:")
+assert(path.normalize("/a/b/../c") == "/a/c", "normalize ..")
+assert(path.normalize("/a/./b") == "/a/b", "normalize .")
+assert(path.normalize("/a/b/../../c") == "/c", "normalize 多级 ..")
+assert(path.normalize("./a/b/../c") == "./a/c", "normalize 相对路径")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

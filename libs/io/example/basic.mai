@@ -1,0 +1,43 @@
+// io 模块基础使用示例
+
+import "io"
+
+println("=== io 模块示例 ===")
+println("")
+
+// 写入文件
+println("写入文件:")
+let success = io.write_file("/tmp/test_io.txt", "Hello, World!\nLine 2\nLine 3")
+println("  写入成功: {success}")
+println("")
+
+// 检查文件
+println("检查文件:")
+let exists = io.file_exists("/tmp/test_io.txt")
+println("  文件存在: {exists}")
+println("")
+
+// 读取文件
+println("读取文件:")
+let content = io.read_file("/tmp/test_io.txt")
+println("  内容: {content}")
+println("")
+
+// 读取行
+println("读取行:")
+let lines = io.read_lines("/tmp/test_io.txt")
+println("  行数: {len(lines)}")
+let i = 0
+while i < len(lines) {
+    println("  行 {i}: {lines[i]}")
+    i = i + 1
+}
+println("")
+
+// 写入多行
+println("写入多行:")
+let success2 = io.write_lines("/tmp/test_io2.txt", ["第一行", "第二行", "第三行"])
+println("  写入成功: {success2}")
+
+let content2 = io.read_file("/tmp/test_io2.txt")
+println("  内容: {content2}")

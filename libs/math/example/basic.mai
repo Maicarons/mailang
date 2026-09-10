@@ -1,0 +1,45 @@
+// math 模块基础使用示例
+
+import "math"
+
+println("=== math 模块示例 ===")
+println("")
+
+// 常量
+println("数学常量:")
+println("  PI = {math.PI}")
+println("  E = {math.E}")
+println("")
+
+// 幂运算
+println("幂运算:")
+println("  2^10 = {math.pow(2, 10)}")
+println("  3^3 = {math.pow(3, 3)}")
+println("")
+
+// 角度转换
+println("角度转换:")
+println("  45° = {math.deg_to_rad(45)} rad")
+println("  π rad = {math.rad_to_deg(math.PI)}°")
+println("")
+
+// 范围限制
+println("范围限制:")
+println("  clamp(15, 0, 10) = {math.clamp(15, 0, 10)}")
+println("  clamp(-5, 0, 10) = {math.clamp(-5, 0, 10)}")
+println("  clamp(5, 0, 10) = {math.clamp(5, 0, 10)}")
+println("")
+
+// 线性插值
+println("线性插值:")
+println("  lerp(0, 100, 0.5) = {math.lerp(0, 100, 0.5)}")
+println("  lerp(0, 100, 0.25) = {math.lerp(0, 100, 0.25)}")
+println("")
+
+// 数字判断
+println("数字判断:")
+println("  is_even(4) = {math.is_even(4)}")
+println("  is_odd(7) = {math.is_odd(7)}")
+println("  is_positive(5) = {math.is_positive(5)}")
+println("  is_negative(-3) = {math.is_negative(-3)}")
+println("  is_zero(0) = {math.is_zero(0)}")

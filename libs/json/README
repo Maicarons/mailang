@@ -1,0 +1,44 @@
+# json - JSON 解析模块
+
+版本: 0.1.0
+
+## 功能说明
+
+提供 JSON 解析和生成功能。
+
+## API 列表
+
+### parse(json)
+
+解析 JSON 字符串。
+
+- 参数: `json` - 字符串，JSON 文本
+- 返回值: 对象 `{value: ...}` 或 `{error: "..."}`
+
+### stringify(value)
+
+将值转换为 JSON 字符串。
+
+- 参数: `value` - 任意值
+- 返回值: 字符串
+
+## 使用示例
+
+```mai
+import "json"
+
+// 解析 JSON
+let result = json.parse("{\"name\": \"Alice\", \"age\": 30}")
+if result.error {
+    println("解析错误: {result.error}")
+} else {
+    let obj = result.value
+    println("名字: {obj.name}")
+    println("年龄: {obj.age}")
+}
+
+// 生成 JSON
+let data = {"name": "Bob", "scores": [95, 87, 92]}
+let json_str = json.stringify(data)
+println("JSON: {json_str}")
+```

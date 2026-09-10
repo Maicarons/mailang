@@ -1,0 +1,11 @@
+// Fibonacci benchmark - recursive computation
+fn fibonacci(n) {
+    if n <= 1 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+let _ = fibonacci(10)
+let result = fibonacci(30)
+println("fibonacci(30) = {result}")

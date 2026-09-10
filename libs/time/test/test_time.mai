@@ -1,0 +1,108 @@
+// time 模块测试
+
+import "time"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+fn assert_near(actual, expected, tolerance, msg) {
+    let diff = actual - expected
+    if diff < 0 {
+        diff = -diff
+    }
+    assert(diff <= tolerance, msg)
+}
+
+println("=== time 模块测试 ===")
+println("")
+
+// 测试 now()
+println("测试 now():")
+let ts = time.now()
+assert(ts > 0, "now() 返回正数时间戳")
+assert(ts > 1700000000000, "now() 返回合理的时间戳 (>2023)")
+
+// 测试 now_secs()
+println("测试 now_secs():")
+let secs = time.now_secs()
+assert(secs > 0, "now_secs() 返回正数时间戳")
+assert_near(secs, ts / 1000, 1, "now_secs() 与 now() 一致")
+
+// 测试 date()
+println("测试 date():")
+let d = time.date()
+assert(len(d) == 10, "date() 返回 10 字符的日期字符串")
+// 简单检查格式
+let year_str = to_string(time.year())
+assert(len(d) > 4, "date() 长度正确")
+
+// 测试 datetime()
+println("测试 datetime():")
+let dt = time.datetime()
+assert(len(dt) == 19, "datetime() 返回 19 字符的日期时间字符串")
+assert(len(dt) > 10, "datetime() 长度正确")
+
+// 测试 year()
+println("测试 year():")
+let y = time.year()
+assert(y >= 2024 && y <= 2100, "year() 返回合理年份")
+
+// 测试 month()
+println("测试 month():")
+let m = time.month()
+assert(m >= 1 && m <= 12, "month() 返回 1-12")
+
+// 测试 day()
+println("测试 day():")
+let day = time.day()
+assert(day >= 1 && day <= 31, "day() 返回 1-31")
+
+// 测试 hour()
+println("测试 hour():")
+let h = time.hour()
+assert(h >= 0 && h <= 23, "hour() 返回 0-23")
+
+// 测试 minute()
+println("测试 minute():")
+let min = time.minute()
+assert(min >= 0 && min <= 59, "minute() 返回 0-59")
+
+// 测试 second()
+println("测试 second():")
+let s = time.second()
+assert(s >= 0 && s <= 59, "second() 返回 0-59")
+
+// 测试 elapsed()
+println("测试 elapsed():")
+let start = time.now()
+time.sleep(50)
+let e = time.elapsed(start)
+assert(e >= 40, "elapsed() 正确计算经过时间 (>40ms)")
+assert(e < 200, "elapsed() 正确计算经过时间 (<200ms)")
+
+// 测试 format_time()
+println("测试 format_time():")
+assert(time.format_time(500) == "500 ms", "format_time(500) == '500 ms'")
+assert(time.format_time(1500) == "1 s", "format_time(1500) == '1 s'")
+assert(time.format_time(61000) == "1m 1s", "format_time(61000) == '1m 1s'")
+assert(time.format_time(3661000) == "1h 1m 1s", "format_time(3661000) == '1h 1m 1s'")
+
+println("")
+println("=== 测试结果 ===")
+println("通过: {passed}")
+println("失败: {failed}")
+println("总计: {passed + failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

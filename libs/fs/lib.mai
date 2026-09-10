@@ -1,0 +1,75 @@
+// fs - File system operations module
+// Version: 0.1.0
+
+// Check if path exists
+fn exists(path) {
+    return file_exists(path)
+}
+
+// Read file content
+fn read(path) {
+    return read_file(path)
+}
+
+// Write content to file
+fn write(path, content) {
+    return write_file(path, content)
+}
+
+// Read file lines
+fn read_lines(path) {
+    return read_lines(path)
+}
+
+// Write lines to file
+fn write_lines(path, lines) {
+    return write_lines(path, lines)
+}
+
+// Append content to file
+fn append(path, content) {
+    let existing = ""
+    if file_exists(path) {
+        existing = read_file(path)
+    }
+    return write_file(path, existing + content)
+}
+
+// Prepend content to file
+fn prepend(path, content) {
+    let existing = ""
+    if file_exists(path) {
+        existing = read_file(path)
+    }
+    return write_file(path, content + existing)
+}
+
+// Get file size (approximate, by reading content)
+fn size(path) {
+    if !file_exists(path) {
+        return -1
+    }
+    let content = read_file(path)
+    return len(content)
+}
+
+// Copy file
+fn copy(src, dst) {
+    if !file_exists(src) {
+        return false
+    }
+    let content = read_file(src)
+    return write_file(dst, content)
+}
+
+// Read JSON file
+fn read_json(path) {
+    let content = read_file(path)
+    return json.parse(content)
+}
+
+// Write JSON file
+fn write_json(path, value) {
+    let content = json.stringify(value)
+    return write_file(path, content)
+}

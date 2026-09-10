@@ -1,0 +1,39 @@
+// time 模块基础使用示例
+
+import "time"
+
+println("=== time 模块示例 ===")
+println("")
+
+// 获取当前时间戳
+let ts = time.now()
+println("当前时间戳: {ts} ms")
+
+// 获取日期时间
+println("当前日期: {time.date()}")
+println("当前时间: {time.datetime()}")
+println("")
+
+// 获取各个时间分量
+println("年: {time.year()}")
+println("月: {time.month()}")
+println("日: {time.day()}")
+println("时: {time.hour()}")
+println("分: {time.minute()}")
+println("秒: {time.second()}")
+println("")
+
+// 计时示例
+println("开始计时...")
+let start = time.now()
+time.sleep(500)
+let elapsed = time.elapsed(start)
+println("休眠 500ms 后，实际经过: {elapsed} ms")
+println("")
+
+// 格式化时间
+println("时间格式化示例:")
+println("  1000 ms = {time.format_time(1000)}")
+println("  61000 ms = {time.format_time(61000)}")
+println("  3661000 ms = {time.format_time(3661000)}")
+println("  90061000 ms = {time.format_time(90061000)}")

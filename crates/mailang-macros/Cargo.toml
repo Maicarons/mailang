@@ -1,0 +1,17 @@
+[package]
+name = "mailang-macros"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Procedural macros for MaìLang"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2"
+quote = "1"
+proc-macro2 = "1"
+
+[features]
+default = []

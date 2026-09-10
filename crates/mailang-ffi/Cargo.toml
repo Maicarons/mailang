@@ -1,0 +1,13 @@
+[package]
+name = "mailang-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "C FFI for MaìLang"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+mailang-core = { path = "../mailang-core" }
+libc = "0.2"

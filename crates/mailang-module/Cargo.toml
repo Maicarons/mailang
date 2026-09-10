@@ -1,0 +1,12 @@
+[package]
+name = "mailang-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Module loader for MaìLang"
+
+[dependencies]
+mailang-ast = { path = "../mailang-ast" }
+mailang-parser = { path = "../mailang-parser" }
+mailang-compiler = { path = "../mailang-compiler" }
+mailang-bytecode = { path = "../mailang-bytecode" }

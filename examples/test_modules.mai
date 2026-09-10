@@ -1,0 +1,18 @@
+// Test module imports
+import "math"
+
+println("=== Module Import Test ===")
+
+// The math module exports PI and E as constants
+println("Math constants loaded:")
+println("PI = {PI}")
+println("E = {E}")
+
+// Test math functions (imported directly)
+println("\n=== Math Functions ===")
+println("sqrt(144) = {sqrt(144)}")
+println("abs(-42) = {abs(-42)}")
+println("min(10, 20) = {min(10, 20)}")
+println("max(10, 20) = {max(10, 20)}")
+
+println("\nAll modules loaded successfully!")

@@ -1,0 +1,22 @@
+[package]
+name = "mailang-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core library integrating all MaìLang components"
+
+[dependencies]
+mailang-lexer = { path = "../mailang-lexer" }
+mailang-parser = { path = "../mailang-parser" }
+mailang-ast = { path = "../mailang-ast" }
+mailang-compiler = { path = "../mailang-compiler" }
+mailang-bytecode = { path = "../mailang-bytecode" }
+mailang-vm = { path = "../mailang-vm" }
+mailang-stdlib = { path = "../mailang-stdlib" }
+mailang-module = { path = "../mailang-module" }
+
+[features]
+default = ["std", "gc"]
+std = ["mailang-vm/std"]
+alloc = ["mailang-vm/alloc"]
+gc = ["mailang-vm/gc"]

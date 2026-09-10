@@ -1,0 +1,320 @@
+// mai-json: JSON parser and stringifier for MaìLang
+// Version: 0.1.0
+
+// JSON parser state
+fn is_digit(ch) {
+    return ch >= "0" && ch <= "9"
+}
+
+fn is_whitespace(ch) {
+    return ch == " " || ch == "\t" || ch == "\n" || ch == "\r"
+}
+
+fn is_hex_digit(ch) {
+    return (ch >= "0" && ch <= "9") || (ch >= "a" && ch <= "f") || (ch >= "A" && ch <= "F")
+}
+
+// Parse a JSON string value
+fn parse_string(json, pos) {
+    let result = ""
+    let i = pos + 1
+    let len = len(json)
+
+    while i < len {
+        let ch = json[i]
+        if ch == "\"" {
+            return { value: result, pos: i + 1 }
+        }
+        if ch == "\\" {
+            i = i + 1
+            if i >= len {
+                return { error: "Unexpected end of string" }
+            }
+            let escaped = json[i]
+            if escaped == "\"" {
+                result = result + "\""
+            } elif escaped == "\\" {
+                result = result + "\\"
+            } elif escaped == "/" {
+                result = result + "/"
+            } elif escaped == "n" {
+                result = result + "\n"
+            } elif escaped == "r" {
+                result = result + "\r"
+            } elif escaped == "t" {
+                result = result + "\t"
+            } elif escaped == "u" {
+                let hex = ""
+                let j = 0
+                while j < 4 {
+                    i = i + 1
+                    if i >= len {
+                        return { error: "Unexpected end of unicode escape" }
+                    }
+                    hex = hex + json[i]
+                    j = j + 1
+                }
+                let code = 0
+                let k = 0
+                while k < len(hex) {
+                    let h = hex[k]
+                    let digit = 0
+                    if h >= "0" && h <= "9" {
+                        digit = h - "0"
+                    } elif h >= "a" && h <= "f" {
+                        digit = h - "a" + 10
+                    } elif h >= "A" && h <= "F" {
+                        digit = h - "A" + 10
+                    }
+                    code = code * 16 + digit
+                    k = k + 1
+                }
+                if code < 128 {
+                    result = result + char(code)
+                } else {
+                    result = result + "?"
+                }
+            } else {
+                return { error: "Invalid escape sequence" }
+            }
+        } else {
+            result = result + ch
+        }
+        i = i + 1
+    }
+
+    return { error: "Unterminated string" }
+}
+
+// Parse a JSON number value
+fn parse_number(json, pos) {
+    let result = ""
+    let i = pos
+    let len = len(json)
+
+    if i < len && json[i] == "-" {
+        result = result + "-"
+        i = i + 1
+    }
+
+    while i < len && is_digit(json[i]) {
+        result = result + json[i]
+        i = i + 1
+    }
+
+    if i < len && json[i] == "." {
+        result = result + "."
+        i = i + 1
+        while i < len && is_digit(json[i]) {
+            result = result + json[i]
+            i = i + 1
+        }
+    }
+
+    if i < len && (json[i] == "e" || json[i] == "E") {
+        result = result + json[i]
+        i = i + 1
+        if i < len && (json[i] == "+" || json[i] == "-") {
+            result = result + json[i]
+            i = i + 1
+        }
+        while i < len && is_digit(json[i]) {
+            result = result + json[i]
+            i = i + 1
+        }
+    }
+
+    return { value: parse_float(result), pos: i }
+}
+
+// Skip whitespace
+fn skip_whitespace(json, pos) {
+    let i = pos
+    let len = len(json)
+    while i < len && is_whitespace(json[i]) {
+        i = i + 1
+    }
+    return i
+}
+
+// Parse a JSON value
+fn parse_value(json, pos) {
+    let i = skip_whitespace(json, pos)
+    let len = len(json)
+
+    if i >= len {
+        return { error: "Unexpected end of input" }
+    }
+
+    let ch = json[i]
+
+    if ch == "\"" {
+        return parse_string(json, i)
+    }
+
+    if ch == "-" || is_digit(ch) {
+        return parse_number(json, i)
+    }
+
+    if ch == "{" {
+        return parse_object(json, i)
+    }
+
+    if ch == "[" {
+        return parse_array(json, i)
+    }
+
+    if i + 4 <= len && json[i] == "t" && json[i+1] == "r" && json[i+2] == "u" && json[i+3] == "e" {
+        return { value: true, pos: i + 4 }
+    }
+
+    if i + 5 <= len && json[i] == "f" && json[i+1] == "a" && json[i+2] == "l" && json[i+3] == "s" && json[i+4] == "e" {
+        return { value: false, pos: i + 5 }
+    }
+
+    if i + 4 <= len && json[i] == "n" && json[i+1] == "u" && json[i+2] == "l" && json[i+3] == "l" {
+        return { value: null, pos: i + 4 }
+    }
+
+    return { error: "Unexpected character" }
+}
+
+// Parse a JSON object
+fn parse_object(json, pos) {
+    let result = {}
+    let i = pos + 1
+    let len = len(json)
+
+    i = skip_whitespace(json, i)
+    if i < len && json[i] == "}" {
+        return { value: result, pos: i + 1 }
+    }
+
+    while i < len {
+        i = skip_whitespace(json, i)
+        if i >= len {
+            return { error: "Unexpected end of object" }
+        }
+
+        if json[i] != "\"" {
+            return { error: "Expected string key" }
+        }
+        let key_result = parse_string(json, i)
+        if key_result.error {
+            return key_result
+        }
+        let key = key_result.value
+        i = key_result.pos
+
+        i = skip_whitespace(json, i)
+        if i >= len || json[i] != ":" {
+            return { error: "Expected colon" }
+        }
+        i = i + 1
+
+        let value_result = parse_value(json, i)
+        if value_result.error {
+            return value_result
+        }
+        result[key] = value_result.value
+        i = value_result.pos
+
+        i = skip_whitespace(json, i)
+        if i >= len {
+            return { error: "Unexpected end of object" }
+        }
+        if json[i] == "}" {
+            return { value: result, pos: i + 1 }
+        }
+        if json[i] != "," {
+            return { error: "Expected comma or closing brace" }
+        }
+        i = i + 1
+    }
+
+    return { error: "Unterminated object" }
+}
+
+// Parse a JSON array
+fn parse_array(json, pos) {
+    let result = []
+    let i = pos + 1
+    let len = len(json)
+
+    i = skip_whitespace(json, i)
+    if i < len && json[i] == "]" {
+        return { value: result, pos: i + 1 }
+    }
+
+    while i < len {
+        let value_result = parse_value(json, i)
+        if value_result.error {
+            return value_result
+        }
+        result = [value_result.value]
+        i = value_result.pos
+
+        i = skip_whitespace(json, i)
+        if i >= len {
+            return { error: "Unexpected end of array" }
+        }
+        if json[i] == "]" {
+            return { value: result, pos: i + 1 }
+        }
+        if json[i] != "," {
+            return { error: "Expected comma or closing bracket" }
+        }
+        i = i + 1
+    }
+
+    return { error: "Unterminated array" }
+}
+
+// Public API: Parse JSON string
+fn parse(json) {
+    let result = parse_value(json, 0)
+    if result.error {
+        return { error: result.error }
+    }
+    return { value: result.value }
+}
+
+// Public API: Stringify a value to JSON
+fn stringify(value) {
+    if value == null {
+        return "null"
+    }
+    if value == true {
+        return "true"
+    }
+    if value == false {
+        return "false"
+    }
+    if typeof(value) == "int" || typeof(value) == "float" {
+        return "{value}"
+    }
+    if typeof(value) == "string" {
+        let result = "\""
+        let i = 0
+        let slen = len(value)
+        while i < slen {
+            let ch = value[i]
+            if ch == "\"" {
+                result = result + "\\\""
+            } elif ch == "\\" {
+                result = result + "\\\\"
+            } elif ch == "\n" {
+                result = result + "\\n"
+            } elif ch == "\r" {
+                result = result + "\\r"
+            } elif ch == "\t" {
+                result = result + "\\t"
+            } else {
+                result = result + ch
+            }
+            i = i + 1
+        }
+        return result + "\""
+    }
+    return "null"
+}

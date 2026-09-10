@@ -1,0 +1,40 @@
+// path 模块基础使用示例
+
+import "path"
+
+println("=== path 模块示例 ===")
+println("")
+
+let p = "/home/user/documents/file.txt"
+println("原始路径: {p}")
+println("")
+
+// 路径分解
+println("路径分解:")
+println("  目录名: {path.dirname(p)}")
+println("  文件名: {path.basename(p)}")
+println("  扩展名: {path.ext(p)}")
+println("  文件名(无扩展名): {path.stem(p)}")
+println("")
+
+// 更多示例
+println("更多示例:")
+println("  /usr/local/bin/ -> 目录: {path.dirname("/usr/local/bin/")}")
+println("  README.md -> 扩展名: {path.ext("README.md")}")
+println("  archive.tar.gz -> 扩展名: {path.ext("archive.tar.gz")}")
+println("  archive.tar.gz -> 文件名: {path.stem("archive.tar.gz")}")
+println("")
+
+// 路径连接
+println("路径连接:")
+println("  join('/home/user', 'docs') = {path.join("/home/user", "docs")}")
+println("  join('/home/user/', 'docs') = {path.join("/home/user/", "docs")}")
+println("  join('.', 'file.txt') = {path.join(".", "file.txt")}")
+println("")
+
+// 路径规范化
+println("路径规范化:")
+println("  /home/user/../user/./docs -> {path.normalize("/home/user/../user/./docs")}")
+println("  /a/b/../c -> {path.normalize("/a/b/../c")}")
+println("  ./a/b/../c -> {path.normalize("./a/b/../c")}")
+println("  /a/./b/../../c -> {path.normalize("/a/./b/../../c")}")

@@ -1,0 +1,788 @@
+use std::collections::HashMap;
+use mailang_bytecode::{Bytecode, Opcode, Value};
+use crate::error::VmError;
+
+type BuiltinFn = fn(&[Value]) -> Result<Value, String>;
+
+#[derive(Debug, Clone)]
+struct CallFrame {
+    chunk_index: usize,
+    ip: usize,
+    stack_base: usize,
+}
+
+pub struct Vm {
+    bytecode: Bytecode,
+    stack: Vec<Value>,
+    globals: HashMap<String, Value>,
+    builtins: HashMap<String, BuiltinFn>,
+    call_stack: Vec<CallFrame>,
+    ip: usize,
+    chunk_index: usize,
+}
+
+impl Vm {
+    pub fn new(bytecode: Bytecode) -> Self {
+        let mut vm = Self {
+            bytecode,
+            stack: Vec::with_capacity(256),
+            globals: HashMap::new(),
+            builtins: HashMap::new(),
+            call_stack: Vec::new(),
+            ip: 0,
+            chunk_index: 0,
+        };
+        vm.register_stdlib_builtins();
+        vm
+    }
+
+    fn register_stdlib_builtins(&mut self) {
+        // Register built-in functions
+        self.builtins.insert("println".to_string(), |args| {
+            mailang_stdlib::builtin_println(args)
+        });
+        self.builtins.insert("print".to_string(), |args| {
+            mailang_stdlib::builtin_print(args)
+        });
+        self.builtins.insert("input".to_string(), |args| {
+            mailang_stdlib::builtin_input(args)
+        });
+        self.builtins.insert("sqrt".to_string(), |args| {
+            mailang_stdlib::builtin_sqrt(args)
+        });
+        self.builtins.insert("abs".to_string(), |args| {
+            mailang_stdlib::builtin_abs(args)
+        });
+        self.builtins.insert("sin".to_string(), |args| {
+            mailang_stdlib::builtin_sin(args)
+        });
+        self.builtins.insert("cos".to_string(), |args| {
+            mailang_stdlib::builtin_cos(args)
+        });
+        self.builtins.insert("floor".to_string(), |args| {
+            mailang_stdlib::builtin_floor(args)
+        });
+        self.builtins.insert("ceil".to_string(), |args| {
+            mailang_stdlib::builtin_ceil(args)
+        });
+        self.builtins.insert("round".to_string(), |args| {
+            mailang_stdlib::builtin_round(args)
+        });
+        self.builtins.insert("min".to_string(), |args| {
+            mailang_stdlib::builtin_min(args)
+        });
+        self.builtins.insert("max".to_string(), |args| {
+            mailang_stdlib::builtin_max(args)
+        });
+        self.builtins.insert("len".to_string(), |args| {
+            mailang_stdlib::builtin_len(args)
+        });
+        self.builtins.insert("to_string".to_string(), |args| {
+            mailang_stdlib::builtin_to_string(args)
+        });
+        self.builtins.insert("parse_int".to_string(), |args| {
+            mailang_stdlib::builtin_parse_int(args)
+        });
+        self.builtins.insert("parse_float".to_string(), |args| {
+            mailang_stdlib::builtin_parse_float(args)
+        });
+
+        // Time functions
+        self.builtins.insert("time_now".to_string(), |args| {
+            mailang_stdlib::builtin_time_now(args)
+        });
+        self.builtins.insert("time_now_secs".to_string(), |args| {
+            mailang_stdlib::builtin_time_now_secs(args)
+        });
+        self.builtins.insert("time_year".to_string(), |args| {
+            mailang_stdlib::builtin_time_year(args)
+        });
+        self.builtins.insert("time_month".to_string(), |args| {
+            mailang_stdlib::builtin_time_month(args)
+        });
+        self.builtins.insert("time_day".to_string(), |args| {
+            mailang_stdlib::builtin_time_day(args)
+        });
+        self.builtins.insert("time_hour".to_string(), |args| {
+            mailang_stdlib::builtin_time_hour(args)
+        });
+        self.builtins.insert("time_minute".to_string(), |args| {
+            mailang_stdlib::builtin_time_minute(args)
+        });
+        self.builtins.insert("time_second".to_string(), |args| {
+            mailang_stdlib::builtin_time_second(args)
+        });
+        self.builtins.insert("time_date".to_string(), |args| {
+            mailang_stdlib::builtin_time_date(args)
+        });
+        self.builtins.insert("time_datetime".to_string(), |args| {
+            mailang_stdlib::builtin_time_datetime(args)
+        });
+        self.builtins.insert("time_elapsed".to_string(), |args| {
+            mailang_stdlib::builtin_time_elapsed(args)
+        });
+        self.builtins.insert("time_sleep".to_string(), |args| {
+            mailang_stdlib::builtin_time_sleep(args)
+        });
+
+        // Also register as globals so they can be called
+        for (name, _) in &self.builtins {
+            self.globals.insert(name.clone(), Value::Builtin {
+                name: name.clone(),
+                arity: 0, // Will be checked at call time
+            });
+        }
+    }
+
+    pub fn run(&mut self) -> Result<Value, VmError> {
+        loop {
+            let instructions = &self.bytecode.chunks[self.chunk_index].instructions;
+            if self.ip >= instructions.len() {
+                return Err(VmError::Internal("IP out of bounds".to_string()));
+            }
+
+            let instruction = &instructions[self.ip];
+            self.ip += 1;
+
+            let opcode = instruction.opcode;
+            let operand = instruction.operand;
+
+            match opcode {
+                Opcode::Push => {
+                    let index = operand.ok_or_else(|| VmError::Internal("Push missing operand".to_string()))? as usize;
+                    let value = self.bytecode.chunks[self.chunk_index]
+                        .constants
+                        .get(index)
+                        .cloned()
+                        .ok_or_else(|| VmError::Internal("Invalid constant index".to_string()))?;
+                    self.push(value)?;
+                }
+                Opcode::Pop => {
+                    self.pop()?;
+                }
+                Opcode::Dup => {
+                    let value = self.peek()?.clone();
+                    self.push(value)?;
+                }
+                Opcode::LoadLocal => {
+                    let index = operand.ok_or_else(|| VmError::Internal("LoadLocal missing operand".to_string()))? as usize;
+                    let base = self.current_frame().stack_base;
+                    let value = self.stack
+                        .get(base + index)
+                        .cloned()
+                        .ok_or_else(|| VmError::Internal("Invalid local index".to_string()))?;
+                    self.push(value)?;
+                }
+                Opcode::StoreLocal => {
+                    let index = operand.ok_or_else(|| VmError::Internal("StoreLocal missing operand".to_string()))? as usize;
+                    let value = self.pop()?;
+                    let base = self.current_frame().stack_base;
+                    if base + index >= self.stack.len() {
+                        self.stack.resize(base + index + 1, Value::Null);
+                    }
+                    self.stack[base + index] = value;
+                }
+                Opcode::LoadGlobal => {
+                    let index = operand.ok_or_else(|| VmError::Internal("LoadGlobal missing operand".to_string()))? as usize;
+                    let name = match &self.bytecode.chunks[self.chunk_index].constants[index] {
+                        Value::Str(s) => s.clone(),
+                        _ => return Err(VmError::Internal("Expected string constant".to_string())),
+                    };
+                    let value = self.globals
+                        .get(&name)
+                        .cloned()
+                        .unwrap_or(Value::Null);
+                    self.push(value)?;
+                }
+                Opcode::StoreGlobal => {
+                    let index = operand.ok_or_else(|| VmError::Internal("StoreGlobal missing operand".to_string()))? as usize;
+                    let name = match &self.bytecode.chunks[self.chunk_index].constants[index] {
+                        Value::Str(s) => s.clone(),
+                        _ => return Err(VmError::Internal("Expected string constant".to_string())),
+                    };
+                    let value = self.pop()?;
+                    self.globals.insert(name, value);
+                }
+                Opcode::LoadUpvalue => {
+                    let _index = operand.unwrap_or(0) as usize;
+                    self.push(Value::Null)?;
+                }
+                Opcode::StoreUpvalue => {
+                    let _index = operand.unwrap_or(0) as usize;
+                    let _value = self.pop()?;
+                }
+                Opcode::Add => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.add_values(left, right)?)?;
+                }
+                Opcode::Sub => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.sub_values(left, right)?)?;
+                }
+                Opcode::Mul => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.mul_values(left, right)?)?;
+                }
+                Opcode::Div => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.div_values(left, right)?)?;
+                }
+                Opcode::Mod => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.mod_values(left, right)?)?;
+                }
+                Opcode::Pow => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.pow_values(left, right)?)?;
+                }
+                Opcode::Neg => {
+                    let value = self.pop()?;
+                    match value {
+                        Value::Int(n) => self.push(Value::Int(-n))?,
+                        Value::Float(n) => self.push(Value::Float(-n))?,
+                        _ => return Err(VmError::TypeError("Cannot negate non-number".to_string())),
+                    }
+                }
+                Opcode::BitAnd => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.bitand_values(left, right)?)?;
+                }
+                Opcode::BitOr => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.bitor_values(left, right)?)?;
+                }
+                Opcode::BitXor => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(self.bitxor_values(left, right)?)?;
+                }
+                Opcode::BitNot => {
+                    let value = self.pop()?;
+                    match value {
+                        Value::Int(n) => self.push(Value::Int(!n))?,
+                        _ => return Err(VmError::TypeError("Cannot bitwise-not non-integer".to_string())),
+                    }
+                }
+                Opcode::Shl => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    match (&left, &right) {
+                        (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a << b))?,
+                        _ => return Err(VmError::TypeError("Shift requires integers".to_string())),
+                    }
+                }
+                Opcode::Shr => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    match (&left, &right) {
+                        (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a >> b))?,
+                        _ => return Err(VmError::TypeError("Shift requires integers".to_string())),
+                    }
+                }
+                Opcode::Eq => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(Value::Bool(self.values_equal(&left, &right)))?;
+                }
+                Opcode::Ne => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(Value::Bool(!self.values_equal(&left, &right)))?;
+                }
+                Opcode::Lt => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(Value::Bool(self.compare_values(&left, &right)? < 0))?;
+                }
+                Opcode::Le => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(Value::Bool(self.compare_values(&left, &right)? <= 0))?;
+                }
+                Opcode::Gt => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(Value::Bool(self.compare_values(&left, &right)? > 0))?;
+                }
+                Opcode::Ge => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    self.push(Value::Bool(self.compare_values(&left, &right)? >= 0))?;
+                }
+                Opcode::And => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    let result = self.is_truthy(&left) && self.is_truthy(&right);
+                    self.push(Value::Bool(result))?;
+                }
+                Opcode::Or => {
+                    let right = self.pop()?;
+                    let left = self.pop()?;
+                    let result = self.is_truthy(&left) || self.is_truthy(&right);
+                    self.push(Value::Bool(result))?;
+                }
+                Opcode::Not => {
+                    let value = self.pop()?;
+                    self.push(Value::Bool(!self.is_truthy(&value)))?;
+                }
+                Opcode::Jump => {
+                    let target = operand.ok_or_else(|| VmError::Internal("Jump missing target".to_string()))? as usize;
+                    self.ip = target;
+                }
+                Opcode::JumpIfFalse => {
+                    let target = operand.ok_or_else(|| VmError::Internal("JumpIfFalse missing target".to_string()))? as usize;
+                    let condition = self.peek()?;
+                    if !self.is_truthy(condition) {
+                        self.ip = target;
+                    }
+                }
+                Opcode::JumpIfTrue => {
+                    let target = operand.ok_or_else(|| VmError::Internal("JumpIfTrue missing target".to_string()))? as usize;
+                    let condition = self.peek()?;
+                    if self.is_truthy(condition) {
+                        self.ip = target;
+                    }
+                }
+                Opcode::Call => {
+                    let arg_count = operand.unwrap_or(0) as usize;
+                    let func_index = self.stack.len().checked_sub(arg_count + 1)
+                        .ok_or_else(|| VmError::Internal(format!(
+                            "Stack underflow in Call: stack_len={}, arg_count={}",
+                            self.stack.len(), arg_count
+                        )))?;
+                    let func = self.stack[func_index].clone();
+
+                    match func {
+                        Value::Function { arity, chunk_index, .. } => {
+                            if arity != arg_count {
+                                return Err(VmError::WrongArgumentCount {
+                                    expected: arity,
+                                    found: arg_count,
+                                });
+                            }
+                            let frame = CallFrame {
+                                chunk_index: self.chunk_index,
+                                ip: self.ip,
+                                stack_base: func_index + 1,
+                            };
+                            self.call_stack.push(frame);
+                            self.chunk_index = chunk_index;
+                            self.ip = 0;
+                        }
+                        Value::Builtin { name, .. } => {
+                            let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
+                            self.stack.truncate(func_index);
+                            if let Some(builtin_fn) = self.builtins.get(&name) {
+                                match builtin_fn(&args) {
+                                    Ok(result) => self.push(result)?,
+                                    Err(e) => return Err(VmError::RuntimeError(e)),
+                                }
+                            } else {
+                                return Err(VmError::UndefinedFunction(name));
+                            }
+                        }
+                        _ => {
+                            return Err(VmError::TypeError("Cannot call non-function".to_string()));
+                        }
+                    }
+                }
+                Opcode::Return => {
+                    let value = self.pop()?;
+                    if let Some(frame) = self.call_stack.pop() {
+                        // stack_base points to first arg; function is at stack_base - 1
+                        let base = frame.stack_base.saturating_sub(1);
+                        self.stack.truncate(base);
+                        self.chunk_index = frame.chunk_index;
+                        self.ip = frame.ip;
+                        self.push(value)?;
+                    } else {
+                        return Ok(value);
+                    }
+                }
+                Opcode::GetProperty => {
+                    let prop_index = operand.ok_or_else(|| VmError::Internal("GetProperty missing operand".to_string()))? as usize;
+                    let prop_name = match &self.bytecode.chunks[self.chunk_index].constants[prop_index] {
+                        Value::Str(s) => s.clone(),
+                        _ => return Err(VmError::Internal("Expected string constant".to_string())),
+                    };
+                    let object = self.pop()?;
+                    match object {
+                        Value::Map(entries) => {
+                            let mut found = false;
+                            for (k, v) in &entries {
+                                if let Value::Str(s) = k {
+                                    if s == &prop_name {
+                                        self.push(v.clone())?;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if !found {
+                                self.push(Value::Null)?;
+                            }
+                        }
+                        Value::Instance { fields, .. } => {
+                            for (name, value) in &fields {
+                                if name == &prop_name {
+                                    self.push(value.clone())?;
+                                    continue;
+                                }
+                            }
+                            self.push(Value::Null)?;
+                        }
+                        Value::Array(arr) => {
+                            match prop_name.as_str() {
+                                "len" => self.push(Value::Int(arr.len() as i64))?,
+                                _ => return Err(VmError::UndefinedProperty(prop_name)),
+                            }
+                        }
+                        Value::Str(s) => {
+                            match prop_name.as_str() {
+                                "len" => self.push(Value::Int(s.len() as i64))?,
+                                _ => return Err(VmError::UndefinedProperty(prop_name)),
+                            }
+                        }
+                        _ => return Err(VmError::TypeError("Cannot access property of non-object".to_string())),
+                    }
+                }
+                Opcode::SetProperty => {
+                    let prop_index = operand.ok_or_else(|| VmError::Internal("SetProperty missing operand".to_string()))? as usize;
+                    let prop_name = match &self.bytecode.chunks[self.chunk_index].constants[prop_index] {
+                        Value::Str(s) => s.clone(),
+                        _ => return Err(VmError::Internal("Expected string constant".to_string())),
+                    };
+                    let value = self.pop()?;
+                    let object = self.pop()?;
+                    match object {
+                        Value::Instance { class_index, mut fields } => {
+                            let mut found = false;
+                            for (name, v) in &mut fields {
+                                if name == &prop_name {
+                                    *v = value.clone();
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if !found {
+                                fields.push((prop_name, value.clone()));
+                            }
+                            self.push(Value::Instance { class_index, fields })?;
+                        }
+                        Value::Map(mut entries) => {
+                            entries.retain(|(k, _)| {
+                                if let Value::Str(s) = k {
+                                    s != &prop_name
+                                } else {
+                                    true
+                                }
+                            });
+                            entries.push((Value::Str(prop_name), value));
+                            self.push(Value::Map(entries))?;
+                        }
+                        _ => return Err(VmError::TypeError("Cannot set property of non-object".to_string())),
+                    }
+                }
+                Opcode::Invoke => {
+                    let _method_index = operand.ok_or_else(|| VmError::Internal("Invoke missing operand".to_string()))? as usize;
+                    let _arg_count = 0;
+                    self.push(Value::Null)?;
+                }
+                Opcode::BuildArray => {
+                    let count = operand.unwrap_or(0) as usize;
+                    let mut elements = Vec::with_capacity(count);
+                    for _ in 0..count {
+                        elements.push(self.pop()?);
+                    }
+                    elements.reverse();
+                    self.push(Value::Array(elements))?;
+                }
+                Opcode::BuildMap => {
+                    let count = operand.unwrap_or(0) as usize;
+                    let mut entries = Vec::with_capacity(count);
+                    // Stack has key, value pairs pushed in order: k1, v1, k2, v2, ...
+                    // We pop from top: v2, k2, v1, k1
+                    for _ in 0..count {
+                        let value = self.pop()?;
+                        let key = self.pop()?;
+                        entries.push((key, value));
+                    }
+                    // Reverse to maintain original order
+                    entries.reverse();
+                    self.push(Value::Map(entries))?;
+                }
+                Opcode::IndexGet => {
+                    let index = self.pop()?;
+                    let object = self.pop()?;
+                    match (&object, &index) {
+                        (Value::Array(arr), Value::Int(i)) => {
+                            if *i < 0 || *i >= arr.len() as i64 {
+                                return Err(VmError::IndexOutOfBounds {
+                                    index: *i,
+                                    length: arr.len(),
+                                });
+                            }
+                            self.push(arr[*i as usize].clone())?;
+                        }
+                        (Value::Map(entries), key) => {
+                            for (k, v) in entries {
+                                if self.values_equal(k, key) {
+                                    self.push(v.clone())?;
+                                    continue;
+                                }
+                            }
+                            self.push(Value::Null)?;
+                        }
+                        (Value::Str(s), Value::Int(i)) => {
+                            if *i < 0 || *i >= s.len() as i64 {
+                                return Err(VmError::IndexOutOfBounds {
+                                    index: *i,
+                                    length: s.len(),
+                                });
+                            }
+                            self.push(Value::Char(s.chars().nth(*i as usize).unwrap()))?;
+                        }
+                        _ => return Err(VmError::TypeError("Cannot index this type".to_string())),
+                    }
+                }
+                Opcode::IndexSet => {
+                    let value = self.pop()?;
+                    let index = self.pop()?;
+                    let mut object = self.pop()?;
+                    match (&mut object, &index) {
+                        (Value::Array(arr), Value::Int(i)) => {
+                            if *i < 0 || *i >= arr.len() as i64 {
+                                return Err(VmError::IndexOutOfBounds {
+                                    index: *i,
+                                    length: arr.len(),
+                                });
+                            }
+                            arr[*i as usize] = value;
+                        }
+                        (Value::Map(entries), key) => {
+                            entries.retain(|(k, _)| !self.values_equal(k, key));
+                            entries.push((index, value));
+                        }
+                        _ => return Err(VmError::TypeError("Cannot index-assign this type".to_string())),
+                    }
+                    self.push(object)?;
+                }
+                Opcode::CreateClass => {
+                    let _class_index = operand.unwrap_or(0) as usize;
+                    let class = self.pop()?;
+                    self.push(class)?;
+                }
+                Opcode::CreateInstance => {
+                    self.push(Value::Null)?;
+                }
+                Opcode::GetMethod => {
+                    self.push(Value::Null)?;
+                }
+                Opcode::MatchPattern => {
+                    self.push(Value::Bool(true))?;
+                }
+                Opcode::Throw => {
+                    let value = self.pop()?;
+                    return Err(VmError::RuntimeError(format!("Thrown: {:?}", value)));
+                }
+                Opcode::TryBegin => {}
+                Opcode::TryEnd => {}
+                Opcode::Nop => {}
+                Opcode::Halt => {
+                    if self.stack.is_empty() {
+                        return Ok(Value::Null);
+                    }
+                    return Ok(self.pop()?);
+                }
+            }
+        }
+    }
+
+    fn push(&mut self, value: Value) -> Result<(), VmError> {
+        if self.stack.len() >= 10000 {
+            return Err(VmError::StackOverflow);
+        }
+        self.stack.push(value);
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Result<Value, VmError> {
+        self.stack.pop().ok_or(VmError::StackUnderflow)
+    }
+
+    fn peek(&self) -> Result<&Value, VmError> {
+        self.stack.last().ok_or(VmError::StackUnderflow)
+    }
+
+    fn current_frame(&self) -> CallFrame {
+        self.call_stack.last().cloned().unwrap_or(CallFrame {
+            chunk_index: 0,
+            ip: 0,
+            stack_base: 0,
+        })
+    }
+
+    fn is_truthy(&self, value: &Value) -> bool {
+        match value {
+            Value::Null => false,
+            Value::Bool(b) => *b,
+            Value::Int(n) => *n != 0,
+            Value::Float(n) => *n != 0.0,
+            Value::Str(s) => !s.is_empty(),
+            _ => true,
+        }
+    }
+
+    fn values_equal(&self, a: &Value, b: &Value) -> bool {
+        match (a, b) {
+            (Value::Null, Value::Null) => true,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Str(a), Value::Str(b)) => a == b,
+            (Value::Char(a), Value::Char(b)) => a == b,
+            (Value::Char(a), Value::Str(b)) => a.to_string().as_str() == b,
+            (Value::Str(a), Value::Char(b)) => a.as_str() == b.to_string().as_str(),
+            _ => false,
+        }
+    }
+
+    fn compare_values(&self, a: &Value, b: &Value) -> Result<i32, VmError> {
+        match (a, b) {
+            (Value::Int(a), Value::Int(b)) => Ok(a.cmp(b) as i32),
+            (Value::Float(a), Value::Float(b)) => Ok(a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal) as i32),
+            (Value::Int(a), Value::Float(b)) => Ok((*a as f64).partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal) as i32),
+            (Value::Float(a), Value::Int(b)) => Ok(a.partial_cmp(&(*b as f64)).unwrap_or(std::cmp::Ordering::Equal) as i32),
+            (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b) as i32),
+            (Value::Char(a), Value::Char(b)) => Ok(a.cmp(b) as i32),
+            (Value::Char(a), Value::Str(b)) => {
+                let a_str = a.to_string();
+                Ok(a_str.as_str().cmp(b) as i32)
+            }
+            (Value::Str(a), Value::Char(b)) => {
+                let b_str = b.to_string();
+                Ok(a.as_str().cmp(&b_str) as i32)
+            }
+            _ => Err(VmError::TypeError("Cannot compare these types".to_string())),
+        }
+    }
+
+    fn add_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_add(b))),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f64 + b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + b as f64)),
+            (Value::Str(a), Value::Str(b)) => Ok(Value::Str(format!("{}{}", a, b))),
+            (Value::Str(a), b) => Ok(Value::Str(format!("{}{}", a, self.value_to_string(&b)))),
+            (a, Value::Str(b)) => Ok(Value::Str(format!("{}{}", self.value_to_string(&a), b))),
+            (Value::Array(mut a), Value::Array(b)) => {
+                a.extend(b);
+                Ok(Value::Array(a))
+            }
+            _ => Err(VmError::TypeError("Cannot add these types".to_string())),
+        }
+    }
+
+    fn sub_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_sub(b))),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f64 - b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - b as f64)),
+            _ => Err(VmError::TypeError("Cannot subtract these types".to_string())),
+        }
+    }
+
+    fn mul_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_mul(b))),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f64 * b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * b as f64)),
+            (Value::Str(s), Value::Int(n)) => Ok(Value::Str(s.repeat(n.max(0) as usize))),
+            _ => Err(VmError::TypeError("Cannot multiply these types".to_string())),
+        }
+    }
+
+    fn div_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(_), Value::Int(0)) => Err(VmError::DivisionByZero),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
+            (Value::Float(a), Value::Float(b)) => {
+                if b == 0.0 { Err(VmError::DivisionByZero) } else { Ok(Value::Float(a / b)) }
+            }
+            (Value::Int(a), Value::Float(b)) => {
+                if b == 0.0 { Err(VmError::DivisionByZero) } else { Ok(Value::Float(a as f64 / b)) }
+            }
+            (Value::Float(a), Value::Int(b)) => {
+                if b == 0 { Err(VmError::DivisionByZero) } else { Ok(Value::Float(a / b as f64)) }
+            }
+            _ => Err(VmError::TypeError("Cannot divide these types".to_string())),
+        }
+    }
+
+    fn mod_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(_), Value::Int(0)) => Err(VmError::DivisionByZero),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a % b)),
+            (Value::Float(a), Value::Float(b)) => {
+                if b == 0.0 { Err(VmError::DivisionByZero) } else { Ok(Value::Float(a % b)) }
+            }
+            (Value::Int(a), Value::Float(b)) => {
+                if b == 0.0 { Err(VmError::DivisionByZero) } else { Ok(Value::Float(a as f64 % b)) }
+            }
+            (Value::Float(a), Value::Int(b)) => {
+                if b == 0 { Err(VmError::DivisionByZero) } else { Ok(Value::Float(a % b as f64)) }
+            }
+            _ => Err(VmError::TypeError("Cannot modulo these types".to_string())),
+        }
+    }
+
+    fn pow_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.pow(b.max(0) as u32))),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.powf(b))),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float((a as f64).powf(b))),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a.powf(b as f64))),
+            _ => Err(VmError::TypeError("Cannot power these types".to_string())),
+        }
+    }
+
+    fn bitand_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a & b)),
+            _ => Err(VmError::TypeError("Bitwise AND requires integers".to_string())),
+        }
+    }
+
+    fn bitor_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a | b)),
+            _ => Err(VmError::TypeError("Bitwise OR requires integers".to_string())),
+        }
+    }
+
+    fn bitxor_values(&self, left: Value, right: Value) -> Result<Value, VmError> {
+        match (left, right) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a ^ b)),
+            _ => Err(VmError::TypeError("Bitwise XOR requires integers".to_string())),
+        }
+    }
+
+    fn value_to_string(&self, v: &Value) -> String {
+        mailang_stdlib::value_to_string(v)
+    }
+
+    pub fn set_global(&mut self, name: String, value: Value) {
+        self.globals.insert(name, value);
+    }
+}

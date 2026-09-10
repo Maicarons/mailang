@@ -1,0 +1,78 @@
+# sys - 系统信息模块
+
+版本: 0.1.0
+
+## 功能说明
+
+提供系统信息和程序控制功能。
+
+## API 列表
+
+### version()
+
+获取 MaìLang 版本号。
+
+- 参数: 无
+- 返回值: 字符串
+
+### platform()
+
+获取平台名称。
+
+- 参数: 无
+- 返回值: 字符串
+
+### arch()
+
+获取系统架构。
+
+- 参数: 无
+- 返回值: 字符串
+
+### exit(code)
+
+退出程序。
+
+- 参数: `code` - 整数，退出码
+- 返回值: 无（不返回）
+
+### args()
+
+获取命令行参数。
+
+- 参数: 无
+- 返回值: 数组
+
+### env(name)
+
+获取环境变量。
+
+- 参数: `name` - 字符串，环境变量名
+- 返回值: 字符串或 null
+
+### sleep(ms)
+
+休眠指定毫秒数。
+
+- 参数: `ms` - 整数，毫秒数
+- 返回值: null
+
+## 使用示例
+
+```mai
+import "sys"
+
+println("MaìLang 版本: {sys.version()}")
+println("平台: {sys.platform()}")
+println("架构: {sys.arch()}")
+
+// 获取环境变量
+let path = sys.env("PATH")
+if path != null {
+    println("PATH 长度: {len(path)}")
+}
+
+// 获取命令行参数
+let args = sys.args()
+println("参数数量: {len(args)}")
+```

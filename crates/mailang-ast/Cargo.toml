@@ -1,0 +1,12 @@
+[package]
+name = "mailang-ast"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "AST definitions for MaìLang"
+
+[dependencies]
+serde = { workspace = true }
+
+[features]
+default = []

@@ -1,0 +1,65 @@
+# path - 路径处理模块
+
+版本: 0.1.0
+
+## 功能说明
+
+提供路径处理和操作功能。
+
+## API 列表
+
+### dirname(path)
+
+获取目录名。
+
+- 参数: `path` - 字符串
+- 返回值: 字符串
+
+### basename(path)
+
+获取文件名。
+
+- 参数: `path` - 字符串
+- 返回值: 字符串
+
+### ext(path)
+
+获取文件扩展名。
+
+- 参数: `path` - 字符串
+- 返回值: 字符串
+
+### stem(path)
+
+获取不带扩展名的文件名。
+
+- 参数: `path` - 字符串
+- 返回值: 字符串
+
+### join(a, b)
+
+连接路径。
+
+- 参数: `a` - 字符串, `b` - 字符串
+- 返回值: 字符串
+
+### normalize(path)
+
+规范化路径（解析 . 和 ..）。
+
+- 参数: `path` - 字符串
+- 返回值: 字符串
+
+## 使用示例
+
+```mai
+import "path"
+
+let p = "/home/user/documents/file.txt"
+println("目录: {path.dirname(p)}")
+println("文件名: {path.basename(p)}")
+println("扩展名: {path.ext(p)}")
+println("文件名(无扩展名): {path.stem(p)}")
+println("连接: {path.join("/home/user", "docs")}")
+println("规范化: {path.normalize("/home/user/../user/./docs")}")
+```

@@ -1,0 +1,335 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use mailang_ast::Program;
+use mailang_parser::Parser;
+use mailang_compiler::Compiler;
+use mailang_bytecode::Bytecode;
+
+/// Module information from mailib.ini
+#[derive(Debug, Clone, Default)]
+pub struct ModuleInfo {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub author: String,
+    pub entry: String,  // entry file, default "lib.mai"
+}
+
+/// Errors that can occur during module loading
+#[derive(Debug, Clone)]
+pub enum ModuleError {
+    NotFound(String),
+    ParseError(String),
+    CompileError(String),
+    IoError(String),
+}
+
+impl std::fmt::Display for ModuleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleError::NotFound(path) => write!(f, "Module not found: {}", path),
+            ModuleError::ParseError(msg) => write!(f, "Parse error: {}", msg),
+            ModuleError::CompileError(msg) => write!(f, "Compile error: {}", msg),
+            ModuleError::IoError(msg) => write!(f, "IO error: {}", msg),
+        }
+    }
+}
+
+/// A compiled module with its bytecode and exports
+#[derive(Debug, Clone)]
+pub struct CompiledModule {
+    pub name: String,
+    pub info: ModuleInfo,
+    pub bytecode: Bytecode,
+    pub exports: HashMap<String, u32>,
+}
+
+/// Trait for loading modules
+pub trait ModuleLoader {
+    /// Load and compile a module by path or name
+    fn load(&mut self, path: &str) -> Result<&CompiledModule, ModuleError>;
+
+    /// Check if a module is already loaded
+    fn is_loaded(&self, path: &str) -> bool;
+
+    /// Get a loaded module by path
+    fn get(&self, path: &str) -> Option<&CompiledModule>;
+}
+
+/// File-based module loader
+pub struct FileModuleLoader {
+    /// Base directory for resolving relative paths
+    base_dir: PathBuf,
+    /// Library directory (e.g., next to CLI executable)
+    lib_dir: Option<PathBuf>,
+    /// Loaded modules cache
+    modules: HashMap<String, CompiledModule>,
+    /// Built-in modules
+    builtins: HashMap<String, CompiledModule>,
+}
+
+impl FileModuleLoader {
+    /// Create a new file module loader
+    pub fn new(base_dir: impl AsRef<Path>) -> Self {
+        Self {
+            base_dir: base_dir.as_ref().to_path_buf(),
+            lib_dir: None,
+            modules: HashMap::new(),
+            builtins: HashMap::new(),
+        }
+    }
+
+    /// Set the library directory (for named imports like `import "sys"`)
+    pub fn set_lib_dir(&mut self, path: impl AsRef<Path>) {
+        self.lib_dir = Some(path.as_ref().to_path_buf());
+    }
+
+    /// Register a built-in module
+    pub fn register_builtin(&mut self, name: &str, module: CompiledModule) {
+        self.builtins.insert(name.to_string(), module);
+    }
+
+    /// Parse mailib.ini file
+    fn parse_module_info(dir: &Path) -> ModuleInfo {
+        let ini_path = dir.join("mailib.ini");
+        let mut info = ModuleInfo {
+            entry: "lib.mai".to_string(),
+            ..Default::default()
+        };
+
+        if let Ok(content) = std::fs::read_to_string(&ini_path) {
+            for line in content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') || line.starts_with('[') {
+                    continue;
+                }
+                if let Some((key, value)) = line.split_once('=') {
+                    let key = key.trim();
+                    let value = value.trim().trim_matches('"');
+                    match key {
+                        "name" => info.name = value.to_string(),
+                        "version" => info.version = value.to_string(),
+                        "description" => info.description = value.to_string(),
+                        "author" => info.author = value.to_string(),
+                        "entry" => info.entry = value.to_string(),
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        info
+    }
+
+    /// Resolve a module path to a directory or file
+    /// Supports two modes:
+    /// 1. Named module: `import "sys"` -> looks in lib_dir/sys/lib.mai
+    /// 2. Relative path: `import "./utils"` or `import "../lib/helper"`
+    pub fn resolve_path(&self, path: &str) -> Option<PathBuf> {
+        // Check built-ins first
+        if self.builtins.contains_key(path) {
+            return None; // Built-in, no file path
+        }
+
+        // Mode 1: Relative path (starts with ./ or ../)
+        if path.starts_with("./") || path.starts_with("../") {
+            return self.resolve_relative(path);
+        }
+
+        // Mode 2: Absolute path
+        let abs_path = Path::new(path);
+        if abs_path.is_absolute() {
+            return self.resolve_absolute(abs_path);
+        }
+
+        // Mode 3: Named module (e.g., "sys", "time")
+        return self.resolve_named(path);
+    }
+
+    /// Resolve a relative path
+    fn resolve_relative(&self, path: &str) -> Option<PathBuf> {
+        let full_path = self.base_dir.join(path);
+
+        // Try as direct file
+        if full_path.exists() && full_path.is_file() {
+            return Some(full_path);
+        }
+
+        // Try with .mai extension
+        let mai_path = full_path.with_extension("mai");
+        if mai_path.exists() {
+            return Some(mai_path);
+        }
+
+        // Try as directory with lib.mai
+        if full_path.is_dir() {
+            let lib_path = full_path.join("lib.mai");
+            if lib_path.exists() {
+                return Some(lib_path);
+            }
+        }
+
+        None
+    }
+
+    /// Resolve an absolute path
+    fn resolve_absolute(&self, path: &Path) -> Option<PathBuf> {
+        if path.exists() && path.is_file() {
+            return Some(path.to_path_buf());
+        }
+
+        let mai_path = path.with_extension("mai");
+        if mai_path.exists() {
+            return Some(mai_path);
+        }
+
+        if path.is_dir() {
+            let lib_path = path.join("lib.mai");
+            if lib_path.exists() {
+                return Some(lib_path);
+            }
+        }
+
+        None
+    }
+
+    /// Resolve a named module (e.g., "sys" -> libs/sys/lib.mai)
+    fn resolve_named(&self, name: &str) -> Option<PathBuf> {
+        // Try lib_dir first (e.g., next to CLI executable)
+        if let Some(ref lib_dir) = self.lib_dir {
+            let module_dir = lib_dir.join(name);
+
+            // Check if module directory exists
+            if module_dir.is_dir() {
+                let info = Self::parse_module_info(&module_dir);
+                let lib_path = module_dir.join(&info.entry);
+                if lib_path.exists() {
+                    return Some(lib_path);
+                }
+            }
+
+            // Try as direct file
+            let mai_path = lib_dir.join(format!("{}.mai", name));
+            if mai_path.exists() {
+                return Some(mai_path);
+            }
+        }
+
+        // Try base_dir/libs
+        let module_dir = self.base_dir.join("libs").join(name);
+        if module_dir.is_dir() {
+            let info = Self::parse_module_info(&module_dir);
+            let lib_path = module_dir.join(&info.entry);
+            if lib_path.exists() {
+                return Some(lib_path);
+            }
+        }
+
+        // Try CWD/libs
+        if let Ok(cwd) = std::env::current_dir() {
+            let module_dir = cwd.join("libs").join(name);
+            if module_dir.is_dir() {
+                let info = Self::parse_module_info(&module_dir);
+                let lib_path = module_dir.join(&info.entry);
+                if lib_path.exists() {
+                    return Some(lib_path);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Load a module from a file path
+    fn load_from_path(&self, path: &Path) -> Result<Program, ModuleError> {
+        let code = std::fs::read_to_string(path)
+            .map_err(|e| ModuleError::IoError(format!("Failed to read '{}': {}", path.display(), e)))?;
+
+        let mut parser = Parser::new(&code)
+            .map_err(|e| ModuleError::ParseError(e.to_string()))?;
+
+        parser.parse_program()
+            .map_err(|e| ModuleError::ParseError(e.to_string()))
+    }
+
+    /// Compile a program to bytecode
+    fn compile_program(&self, program: &Program) -> Result<Bytecode, ModuleError> {
+        let compiler = Compiler::new();
+        compiler.compile(program)
+            .map_err(|e| ModuleError::CompileError(e.to_string()))
+    }
+}
+
+impl ModuleLoader for FileModuleLoader {
+    fn load(&mut self, path: &str) -> Result<&CompiledModule, ModuleError> {
+        // Check if already loaded
+        if self.modules.contains_key(path) {
+            return Ok(self.modules.get(path).unwrap());
+        }
+
+        // Check built-ins
+        if self.builtins.contains_key(path) {
+            return Ok(self.builtins.get(path).unwrap());
+        }
+
+        // Resolve the module path
+        let file_path = self.resolve_path(path)
+            .ok_or_else(|| ModuleError::NotFound(path.to_string()))?;
+
+        // Parse module info if it's in a directory
+        let info = if let Some(parent) = file_path.parent() {
+            if parent.join("mailib.ini").exists() {
+                Self::parse_module_info(parent)
+            } else {
+                ModuleInfo {
+                    name: path.to_string(),
+                    ..Default::default()
+                }
+            }
+        } else {
+            ModuleInfo {
+                name: path.to_string(),
+                ..Default::default()
+            }
+        };
+
+        let program = self.load_from_path(&file_path)?;
+        let bytecode = self.compile_program(&program)?;
+
+        let module = CompiledModule {
+            name: path.to_string(),
+            info,
+            bytecode,
+            exports: HashMap::new(),
+        };
+
+        self.modules.insert(path.to_string(), module);
+        Ok(self.modules.get(path).unwrap())
+    }
+
+    fn is_loaded(&self, path: &str) -> bool {
+        self.modules.contains_key(path) || self.builtins.contains_key(path)
+    }
+
+    fn get(&self, path: &str) -> Option<&CompiledModule> {
+        self.modules.get(path).or(self.builtins.get(path))
+    }
+}
+
+/// Create a pre-configured module loader with default settings
+pub fn create_loader(base_dir: impl AsRef<Path>) -> FileModuleLoader {
+    let base = base_dir.as_ref().to_path_buf();
+    let mut loader = FileModuleLoader::new(&base);
+
+    // Try to find lib directory next to the executable
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let lib_dir = exe_dir.join("libs");
+            if lib_dir.is_dir() {
+                loader.set_lib_dir(&lib_dir);
+            }
+        }
+    }
+
+    loader
+}

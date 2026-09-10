@@ -1,0 +1,87 @@
+// time - Time and date module
+// Version: 0.2.0
+// Uses native system calls for accurate time
+
+// Get current timestamp in milliseconds since Unix epoch
+fn now() {
+    return time_now()
+}
+
+// Get current timestamp in seconds since Unix epoch
+fn now_secs() {
+    return time_now_secs()
+}
+
+// Calculate elapsed time in milliseconds from a start timestamp
+fn elapsed(start) {
+    return time_elapsed(start)
+}
+
+// Sleep for specified milliseconds
+fn sleep(ms) {
+    time_sleep(ms)
+}
+
+// Format milliseconds to human readable string
+fn format_time(ms) {
+    if ms < 1000 {
+        return "{ms} ms"
+    }
+    let seconds = ms / 1000
+    if seconds < 60 {
+        return "{seconds} s"
+    }
+    let minutes = seconds / 60
+    let secs = seconds % 60
+    if minutes < 60 {
+        return "{minutes}m {secs}s"
+    }
+    let hours = minutes / 60
+    let mins = minutes % 60
+    if hours < 24 {
+        return "{hours}h {mins}m {secs}s"
+    }
+    let days = hours / 24
+    let hrs = hours % 24
+    return "{days}d {hrs}h {mins}m {secs}s"
+}
+
+// Get current date string (YYYY-MM-DD)
+fn date() {
+    return time_date()
+}
+
+// Get current datetime string (YYYY-MM-DD HH:MM:SS)
+fn datetime() {
+    return time_datetime()
+}
+
+// Get current year (UTC)
+fn year() {
+    return time_year()
+}
+
+// Get current month 1-12 (UTC)
+fn month() {
+    return time_month()
+}
+
+// Get current day 1-31 (UTC)
+fn day() {
+    return time_day()
+}
+
+// Get current hour 0-23 (UTC)
+fn hour() {
+    return time_hour()
+}
+
+// Get current minute 0-59 (UTC)
+fn minute() {
+    return time_minute()
+}
+
+// Get current second 0-59 (UTC)
+fn second() {
+    return time_second()
+}

@@ -1,0 +1,9 @@
+// utils.mai - Utility functions
+
+fn greet(name) {
+    return "Hello, {name}!"
+}
+
+fn add(a, b) {
+    return a + b
+}

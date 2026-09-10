@@ -1,0 +1,70 @@
+// IoT 设备配置管理示例
+// 演示如何解析和管理设备配置
+
+// 设备配置
+fn create_device_config(id, name, interval, threshold) {
+    println("=== 设备配置 ===")
+    println("设备ID: {id}")
+    println("设备名称: {name}")
+    println("采样间隔: {interval}秒")
+    println("报警阈值: {threshold}°C")
+    println("")
+    return interval
+}
+
+// 数据采集模拟
+fn collect_samples(count, interval) {
+    println("开始数据采集...")
+    println("采样数: {count}")
+    println("间隔: {interval}秒")
+    println("")
+
+    var i = 0
+    while i < count {
+        // 模拟传感器读数
+        let temp = 20 + i * 2
+        println("  样本 {i}: {temp}°C")
+        i = i + 1
+    }
+    println("")
+}
+
+// 统计分析
+fn analyze_data() {
+    println("=== 数据分析 ===")
+
+    let samples = [22, 24, 23, 25, 26, 24, 23, 25, 27, 26]
+    let count = len(samples)
+
+    // 计算总和
+    var sum = 0
+    for s in samples {
+        sum = sum + s
+    }
+
+    // 计算平均值
+    let avg = sum / count
+
+    println("样本数: {count}")
+    println("总和: {sum}")
+    println("平均值: {avg}")
+    println("")
+}
+
+// 主程序
+println("╔══════════════════════════════════╗")
+println("║   IoT 设备配置管理系统 v1.0     ║")
+println("╚══════════════════════════════════╝")
+println("")
+
+let interval = create_device_config(
+    "SENSOR_001",
+    "温度传感器A",
+    5,
+    30
+)
+
+collect_samples(5, interval)
+analyze_data()
+
+println("✅ 配置完成")

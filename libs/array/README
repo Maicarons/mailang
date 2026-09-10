@@ -1,0 +1,119 @@
+# array - 数组操作模块
+
+版本: 0.1.0
+
+## 功能说明
+
+提供数组操作和处理函数。
+
+## API 列表
+
+### create(n, value)
+
+创建包含 n 个 value 的数组。
+
+- 参数: `n` - 整数, `value` - 任意值
+- 返回值: 数组
+
+### fill(arr, value)
+
+用 value 填充数组。
+
+- 参数: `arr` - 数组, `value` - 任意值
+- 返回值: 数组
+
+### reverse(arr)
+
+反转数组。
+
+- 参数: `arr` - 数组
+- 返回值: 数组
+
+### contains(arr, value)
+
+检查数组是否包含 value。
+
+- 参数: `arr` - 数组, `value` - 任意值
+- 返回值: 布尔
+
+### index_of(arr, value)
+
+查找 value 的第一个索引，不存在返回 -1。
+
+- 参数: `arr` - 数组, `value` - 任意值
+- 返回值: 整数
+
+### first(arr)
+
+获取第一个元素。
+
+- 参数: `arr` - 数组
+- 返回值: 任意值或 null
+
+### last(arr)
+
+获取最后一个元素。
+
+- 参数: `arr` - 数组
+- 返回值: 任意值或 null
+
+### slice(arr, start, end)
+
+获取子数组 [start, end)。
+
+- 参数: `arr` - 数组, `start` - 整数, `end` - 整数
+- 返回值: 数组
+
+### concat(a, b)
+
+连接两个数组。
+
+- 参数: `a` - 数组, `b` - 数组
+- 返回值: 数组
+
+### join(arr, separator)
+
+将数组元素连接成字符串。
+
+- 参数: `arr` - 数组, `separator` - 字符串
+- 返回值: 字符串
+
+### count(arr, value)
+
+计算 value 出现次数。
+
+- 参数: `arr` - 数组, `value` - 任意值
+- 返回值: 整数
+
+### remove(arr, value)
+
+删除第一个匹配的元素。
+
+- 参数: `arr` - 数组, `value` - 任意值
+- 返回值: 数组
+
+### remove_at(arr, index)
+
+删除指定索引的元素。
+
+- 参数: `arr` - 数组, `index` - 整数
+- 返回值: 数组
+
+### insert_at(arr, index, value)
+
+在指定索引插入元素。
+
+- 参数: `arr` - 数组, `index` - 整数, `value` - 任意值
+- 返回值: 数组
+
+## 使用示例
+
+```mai
+import "array"
+
+let arr = [1, 2, 3, 4, 5]
+println("反转: {array.reverse(arr)}")
+println("包含 3: {array.contains(arr, 3)}")
+println("3 的索引: {array.index_of(arr, 3)}")
+println("连接: {array.join(arr, ", ")}")
+```

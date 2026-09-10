@@ -1,0 +1,6 @@
+// String interpolation benchmark
+let result = ""
+for i in 0..10000 {
+    result = "item_{i}"
+}
+println("last = {result}")
