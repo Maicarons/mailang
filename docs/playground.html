@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaìLang Playground — 在线运行</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; background:#0d1117; color:#e6edf3; height:100vh; display:flex; flex-direction:column; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:10px 20px; background:#161b22; border-bottom:1px solid #30363d; }
+.topbar h1 { font-size:1.2em; color:#f0c040; }
+.topbar h1 small { color:#8b949e; font-weight:400; font-size:0.7em; margin-left:8px; }
+.topbar a { color:#58a6ff; text-decoration:none; font-size:0.85em; }
+.topbar a:hover { text-decoration:underline; }
+.main { display:flex; flex:1; overflow:hidden; }
+.editor-pane { flex:1; display:flex; flex-direction:column; border-right:1px solid #30363d; }
+.output-pane { flex:1; display:flex; flex-direction:column; }
+.pane-header { padding:8px 16px; background:#161b22; border-bottom:1px solid #30363d; font-size:0.8em; color:#8b949e; display:flex; align-items:center; justify-content:space-between; }
+.pane-header .actions { display:flex; gap:8px; }
+textarea { flex:1; width:100%; background:#0d1117; color:#e6edf3; border:none; padding:16px; font-family:'JetBrains Mono','Fira Code','Consolas',monospace; font-size:14px; line-height:1.6; resize:none; outline:none; tab-size:4; }
+textarea::placeholder { color:#484f58; }
+pre#output { flex:1; margin:0; padding:16px; font-family:'JetBrains Mono','Fira Code','Consolas',monospace; font-size:14px; line-height:1.6; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+pre#output .error { color:#f85149; }
+pre#output .info { color:#8b949e; }
+pre#output .success { color:#3fb950; }
+button { padding:6px 16px; border:1px solid #30363d; border-radius:6px; background:#21262d; color:#e6edf3; font-size:0.85em; cursor:pointer; transition:background 0.15s; }
+button:hover { background:#30363d; }
+button.primary { background:#238636; border-color:#2ea043; color:#fff; }
+button.primary:hover { background:#2ea043; }
+button:disabled { opacity:0.5; cursor:not-allowed; }
+.examples { display:flex; gap:6px; flex-wrap:wrap; }
+.examples select { padding:4px 8px; border:1px solid #30363d; border-radius:4px; background:#21262d; color:#e6edf3; font-size:0.8em; }
+.status { padding:6px 16px; background:#161b22; border-top:1px solid #30363d; font-size:0.75em; color:#8b949e; display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>MaìLang <small>Playground — 在线运行</small></h1>
+  <div>
+    <a href="index.html">← 返回首页</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/Maicarons/mailang" target="_blank">GitHub</a>
+  </div>
+</div>
+<div class="main">
+  <div class="editor-pane">
+    <div class="pane-header">
+      <span>代码编辑器</span>
+      <div class="actions">
+        <select id="examples" onchange="loadExample()">
+          <option value="">选择示例...</option>
+          <option value="hello">Hello World</option>
+          <option value="variables">变量与类型</option>
+          <option value="functions">函数</option>
+          <option value="oop">面向对象</option>
+          <option value="closures">闭包</option>
+          <option value="match">模式匹配</option>
+          <option value="fib">斐波那契</option>
+          <option value="arrays">数组操作</option>
+        </select>
+        <button onclick="clearEditor()">清空</button>
+        <button class="primary" id="runBtn" onclick="runCode()">▶ 运行</button>
+      </div>
+    </div>
+    <textarea id="code" placeholder="在这里输入 MaìLang 代码...&#10;&#10;示例：&#10;println(&quot;你好，MaìLang！&quot;)" spellcheck="false">println("你好，MaìLang！🌍")
+println("1 + 2 = {1 + 2}")
+
+let name = "World"
+println("Hello, {name}!")</textarea>
+  </div>
+  <div class="output-pane">
+    <div class="pane-header">
+      <span>输出</span>
+      <div class="actions">
+        <button onclick="clearOutput()">清空输出</button>
+      </div>
+    </div>
+    <pre id="output"><span class="info">正在加载 MaìLang WASM 引擎...</span></pre>
+  </div>
+</div>
+<div class="status">
+  <span id="engineStatus">引擎状态: 加载中...</span>
+  <span id="execTime"></span>
+</div>
+
+<script type="module">
+import init, { WasmInterpreter } from './wasm/mailang_wasm.js';
+
+let interpreter = null;
+
+const EXAMPLES = {
+  hello: `println("你好，MaìLang！🌍")`,
+  variables: `let x = 42
+let y = 3.14
+let name = "MaìLang"
+let flag = true
+
+println("x = {x}")
+println("y = {y}")
+println("name = {name}")
+println("flag = {flag}")`,
+  functions: `fn add(a, b) {
+    return a + b
+}
+
+fn greet(name = "World") {
+    return "Hello, {name}!"
+}
+
+println(add(1, 2))
+println(greet())
+println(greet("MaìLang"))`,
+  oop: `class Animal {
+    let name: str
+    fn init(name: str) {
+        this.name = name
+    }
+    fn speak() -> str {
+        return "{this.name} makes a sound"
+    }
+}
+
+class Dog extends Animal {
+    override fn speak() -> str {
+        return "{this.name} barks!"
+    }
+}
+
+let dog = Dog("Rex")
+println(dog.speak())`,
+  closures: `fn make_counter() {
+    var count = 0
+    return fn() {
+        count = count + 1
+        return count
+    }
+}
+
+let counter = make_counter()
+println(counter())
+println(counter())
+println(counter())`,
+  match: `let x = 42
+
+let result = match x {
+    0 => "zero"
+    1 => "one"
+    _ => "other: {x}"
+}
+
+println(result)`,
+  fib: `fn fib(n) {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+for i in 0..10 {
+    println("fib({i}) = {fib(i)}")
+}`,
+  arrays: `let nums = [3, 1, 4, 1, 5, 9, 2, 6]
+
+println("数组: {nums}")
+println("长度: {nums.len}")
+
+var sum = 0
+for n in nums {
+    sum = sum + n
+}
+println("求和: {sum}")`
+};
+
+window.loadExample = function() {
+  const sel = document.getElementById('examples');
+  const key = sel.value;
+  if (key && EXAMPLES[key]) {
+    document.getElementById('code').value = EXAMPLES[key];
+  }
+};
+
+window.clearEditor = function() {
+  document.getElementById('code').value = '';
+};
+
+window.clearOutput = function() {
+  document.getElementById('output').innerHTML = '';
+};
+
+window.runCode = async function() {
+  if (!interpreter) {
+    appendOutput('引擎尚未加载完成，请稍候...', 'error');
+    return;
+  }
+
+  const code = document.getElementById('code').value;
+  if (!code.trim()) {
+    appendOutput('请输入代码', 'info');
+    return;
+  }
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '运行中...';
+
+  const start = performance.now();
+
+  try {
+    interpreter.reset();
+    const result = interpreter.eval_json(code);
+    const parsed = JSON.parse(result);
+    const elapsed = (performance.now() - start).toFixed(1);
+
+    if (parsed.ok) {
+      if (parsed.output) {
+        appendOutput(parsed.output, 'success');
+      } else {
+        appendOutput('(无输出)', 'info');
+      }
+      document.getElementById('execTime').textContent = `执行时间: ${elapsed}ms`;
+    } else {
+      appendOutput(parsed.error, 'error');
+      document.getElementById('execTime').textContent = '';
+    }
+  } catch (e) {
+    appendOutput('WASM 调用失败: ' + e.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ 运行';
+};
+
+function appendOutput(text, cls) {
+  const pre = document.getElementById('output');
+  if (pre.querySelector('.info') && pre.querySelector('.info').textContent.includes('正在加载')) {
+    pre.innerHTML = '';
+  }
+  const span = document.createElement('span');
+  span.className = cls || '';
+  span.textContent = text + '\n';
+  pre.appendChild(span);
+  pre.scrollTop = pre.scrollHeight;
+}
+
+// Ctrl+Enter to run
+document.getElementById('code').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runCode();
+  }
+});
+
+// Load WASM
+async function boot() {
+  try {
+    await init();
+    interpreter = new WasmInterpreter();
+    document.getElementById('engineStatus').textContent = '引擎状态: 就绪 ✓ (v' + WasmInterpreter.version() + ')';
+    document.getElementById('output').innerHTML = '<span class="success">MaìLang 引擎已就绪。点击「运行」或按 Ctrl+Enter 执行代码。</span>\n';
+  } catch (e) {
+    document.getElementById('engineStatus').textContent = '引擎状态: 加载失败';
+    document.getElementById('output').innerHTML = '<span class="error">WASM 加载失败: ' + e.message + '</span>\n';
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

@@ -61,6 +61,7 @@ code { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; color:
 </div>
 
 <h2>Quick Start</h2>
+<p><a href="playground.html" style="display:inline-block;padding:8px 20px;background:#238636;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;margin-bottom:16px;">🚀 在线运行 — 打开 Playground</a></p>
 <pre><code># Install
 cargo install mailang-cli
 
@@ -93,8 +94,79 @@ class Dog extends Animal {
 let dog = Dog("Rex")
 println(dog.speak())  // Rex barks!</code></pre>
 
+<h2>在线运行</h2>
+<p>无需安装，直接在浏览器中运行 MaìLang 代码：</p>
+<div style="margin:16px 0;border:1px solid #30363d;border-radius:8px;overflow:hidden;">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#161b22;border-bottom:1px solid #30363d;">
+<span style="font-size:0.85em;color:#8b949e">试试看 — 编辑代码后点击运行</span>
+<button onclick="runInlineDemo()" style="padding:4px 16px;border:1px solid #2ea043;border-radius:4px;background:#238636;color:#fff;font-size:0.85em;cursor:pointer;">▶ 运行</button>
+</div>
+<textarea id="inline-demo" style="width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:14px;line-height:1.6;resize:vertical;min-height:120px;outline:none;tab-size:4;" spellcheck="false">class Animal {
+    let name: str
+    fn init(name: str) {
+        this.name = name
+    }
+    fn speak() -> str {
+        return "{this.name} speaks"
+    }
+}
+
+class Dog extends Animal {
+    override fn speak() -> str {
+        return "{this.name} barks!"
+    }
+}
+
+let dog = Dog("Rex")
+println(dog.speak())
+
+let nums = [1, 2, 3, 4, 5]
+var sum = 0
+for n in nums {
+    sum = sum + n
+}
+println("Sum = {sum}")</textarea>
+<div id="inline-demo-output" style="display:none;padding:12px 16px;background:#0d1117;border-top:1px solid #30363d;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:13px;white-space:pre-wrap;min-height:2em;"></div>
+</div>
+<p style="font-size:0.85em;color:#8b949e;">完整 Playground 请访问 <a href="playground.html">playground.html</a>，支持示例加载、Ctrl+Enter 快捷运行。</p>
+
+<script type="module">
+import init, { WasmInterpreter } from './wasm/mailang_wasm.js';
+
+let _interp = null;
+async function getInterp() {
+  if (!_interp) {
+    await init();
+    _interp = new WasmInterpreter();
+  }
+  return _interp;
+}
+
+window.runInlineDemo = async function() {
+  const code = document.getElementById('inline-demo').value;
+  const out = document.getElementById('inline-demo-output');
+  out.style.display = 'block';
+  out.innerHTML = '<span style="color:#8b949e">运行中...</span>';
+  try {
+    const interp = await getInterp();
+    interp.reset();
+    const r = JSON.parse(interp.eval_json(code));
+    if (r.ok) {
+      out.innerHTML = r.output
+        ? '<span style="color:#3fb950">' + r.output.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>'
+        : '<span style="color:#8b949e">(无输出)</span>';
+    } else {
+      out.innerHTML = '<span style="color:#f85149">' + r.error.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>';
+    }
+  } catch(e) {
+    out.innerHTML = '<span style="color:#f85149">加载失败: ' + e.message + '</span>';
+  }
+};
+</script>
+
 <h2>Project Links</h2>
 <div class="links">
+<a class="link-card" href="playground.html"><h3>🚀 Playground</h3><p>在线运行 MaìLang 代码</p></a>
 <a class="link-card" href="https://github.com/Maicarons/mailang"><h3>GitHub</h3><p>Source code and issues</p></a>
 <a class="link-card" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0"><h3>Release</h3><p>v0.1.0 — Phase A Complete</p></a>
 <a class="link-card" href="https://github.com/Maicarons/mailang/tags"><h3>Tags</h3><p>12 component tags</p></a>
