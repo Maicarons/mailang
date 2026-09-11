@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaìLang (麦语) - A Modern Programming Language</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #0a0a0a; color: #e0e0e0; line-height: 1.7; }
+.container { max-width: 900px; margin: 0 auto; padding: 60px 24px; }
+h1 { font-size: 2.8em; margin-bottom: 8px; color: #fff; }
+h1 span { color: #f0c040; }
+.subtitle { font-size: 1.2em; color: #888; margin-bottom: 40px; }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 40px; }
+.badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8em; font-weight: 600; text-decoration: none; }
+.badge-rust { background: #dea584; color: #000; }
+.badge-license { background: #007acc; color: #fff; }
+.badge-version { background: #4c1; color: #fff; }
+.badge-ci { background: #2088ff; color: #fff; }
+h2 { font-size: 1.6em; margin: 40px 0 16px; color: #f0c040; border-bottom: 1px solid #333; padding-bottom: 8px; }
+p { margin-bottom: 16px; color: #bbb; }
+a { color: #6cb6ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin: 24px 0; }
+.feature { background: #161616; border: 1px solid #2a2a2a; border-radius: 8px; padding: 20px; }
+.feature h3 { color: #f0c040; margin-bottom: 8px; font-size: 1.1em; }
+.feature p { color: #999; font-size: 0.9em; margin: 0; }
+pre { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 16px; overflow-x: auto; margin: 16px 0; font-size: 0.9em; }
+code { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; color: #e0e0e0; }
+.inline-code { background: #2a2a2a; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+.links { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 24px 0; }
+.link-card { background: #161616; border: 1px solid #2a2a2a; border-radius: 8px; padding: 16px; text-decoration: none; transition: border-color 0.2s; }
+.link-card:hover { border-color: #f0c040; text-decoration: none; }
+.link-card h3 { color: #f0c040; margin-bottom: 4px; font-size: 1em; }
+.link-card p { color: #888; font-size: 0.85em; margin: 0; }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.tag { background: #1a1a1a; border: 1px solid #333; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; color: #aaa; }
+.footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid #222; color: #666; font-size: 0.85em; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1><span>Maì</span>Lang <small style="font-size:0.5em;color:#888">麦语</small></h1>
+<p class="subtitle">A modern programming language for IoT and cross-platform development, written in Rust.</p>
+
+<div class="badges">
+<a class="badge badge-rust" href="https://www.rust-lang.org/">Rust 1.70+</a>
+<a class="badge badge-license" href="https://github.com/Maicarons/mailang/blob/master/LICENSE-APACHE">Apache 2.0</a>
+<a class="badge badge-version" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0">v0.1.0</a>
+<a class="badge badge-ci" href="https://github.com/Maicarons/mailang/actions/workflows/ci.yml">CI</a>
+</div>
+
+<h2>Features</h2>
+<div class="features">
+<div class="feature"><h3>OOP</h3><p>Classes, inheritance, constructors, super() calls</p></div>
+<div class="feature"><h3>Closures</h3><p>Upvalue capture, first-class functions</p></div>
+<div class="feature"><h3>Pattern Matching</h3><p>Literals, wildcards, or-patterns, guards</p></div>
+<div class="feature"><h3>UTF-8 Native</h3><p>Identifiers support any Unicode script</p></div>
+<div class="feature"><h3>Bytecode VM</h3><p>Stack-based with slot-based locals</p></div>
+<div class="feature"><h3>12-Language FFI</h3><p>C, Python, JS, Java, Go, and more</p></div>
+</div>
+
+<h2>Quick Start</h2>
+<pre><code># Install
+cargo install mailang-cli
+
+# Run a file
+mailang run hello.mai
+
+# REPL
+mailang
+
+# Inline evaluation
+mailang eval 'println("Hello, 世界!")'</code></pre>
+
+<h2>Example</h2>
+<pre><code>class Animal {
+    let name: str
+    fn init(name: str) {
+        this.name = name
+    }
+    fn speak() -> str {
+        return "{this.name} speaks"
+    }
+}
+
+class Dog extends Animal {
+    override fn speak() -> str {
+        return "{this.name} barks!"
+    }
+}
+
+let dog = Dog("Rex")
+println(dog.speak())  // Rex barks!</code></pre>
+
+<h2>Project Links</h2>
+<div class="links">
+<a class="link-card" href="https://github.com/Maicarons/mailang"><h3>GitHub</h3><p>Source code and issues</p></a>
+<a class="link-card" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0"><h3>Release</h3><p>v0.1.0 — Phase A Complete</p></a>
+<a class="link-card" href="https://github.com/Maicarons/mailang/tags"><h3>Tags</h3><p>12 component tags</p></a>
+<a class="link-card" href="https://github.com/Maicarons/mailang/blob/master/ROADMAP.md"><h3>Roadmap</h3><p>90-day development plan</p></a>
+<a class="link-card" href="https://github.com/Maicarons/mailang/blob/master/REPORT.md"><h3>Report</h3><p>Project status report</p></a>
+<a class="link-card" href="https://github.com/Maicarons/mailang/blob/master/docs/guide/getting-started.md"><h3>Docs</h3><p>Getting started guide</p></a>
+</div>
+
+<h2>Component Tags</h2>
+<div class="tags">
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer">v0.1.0-lexer</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser">v0.1.0-parser</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-vm">v0.1.0-vm</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-oop">v0.1.0-oop</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-closures">v0.1.0-closures</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-pattern-match">v0.1.0-pattern-match</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-ffi">v0.1.0-ffi</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-wasm">v0.1.0-wasm</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-stdlib">v0.1.0-stdlib</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/v0.1.0-cli">v0.1.0-cli</a>
+<a class="tag" href="https://github.com/Maicarons/mailang/releases/tag/phase-a-complete">phase-a-complete</a>
+</div>
+
+<div class="footer">
+<p>MaìLang (麦语) — Built with Rust · <a href="https://github.com/Maicarons/mailang">GitHub</a> · <a href="https://github.com/Maicarons/mailang/blob/master/LICENSE-APACHE">Apache 2.0</a></p>
+</div>
+</div>
+</body>
+</html>
