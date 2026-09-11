@@ -1,5 +1,7 @@
 # 快速开始
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [Playground](https://maicarons.github.io/mailang/playground)
+
 ## 系统要求
 
 - **操作系统**：Windows、macOS、Linux

@@ -1,5 +1,7 @@
 # 内置函数
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [stdlib 源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-stdlib)
+
 ## 概述
 
 MaìLang 提供丰富的内置函数，无需导入即可使用。

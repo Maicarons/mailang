@@ -1,5 +1,7 @@
 # 运算符
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [编译器源码](https://github.com/Maicarons/mailang/blob/master/crates/mailang-compiler/src/compiler.rs)
+
 ## 概述
 
 MaìLang 提供丰富的运算符，包括算术、比较、逻辑、位运算和赋值运算符。

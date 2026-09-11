@@ -1,5 +1,7 @@
 # Parser Internals
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [Parser Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-parser) · [v0.1.0-parser](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser)
+
 ## Overview
 
 MaìLang's parser uses **Recursive Descent** for statements and **Pratt Parsing** for expressions.

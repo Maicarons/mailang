@@ -1,5 +1,7 @@
 # 类型系统
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [AST 源码](https://github.com/Maicarons/mailang/blob/master/crates/mailang-ast/src/lib.rs)
+
 ## 概述
 
 MaìLang 采用混合类型系统，支持类型推导和显式类型标注。默认使用类型推导，也可以显式指定类型。

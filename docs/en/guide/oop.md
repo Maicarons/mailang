@@ -1,5 +1,7 @@
 # Object-Oriented Programming
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [v0.1.0-oop](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-oop)
+
 ## Overview
 
 MaìLang supports full OOP including classes, inheritance, traits, and polymorphism.

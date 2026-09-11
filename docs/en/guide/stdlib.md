@@ -1,5 +1,7 @@
 # Standard Library
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [stdlib Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-stdlib) · [v0.1.0-stdlib](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-stdlib)
+
 ## Overview
 
 MaìLang's standard library provides commonly used modules out of the box.

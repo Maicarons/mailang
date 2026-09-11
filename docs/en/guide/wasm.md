@@ -1,5 +1,7 @@
 # WASM Integration Guide
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [WASM Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-wasm) · [Playground](https://maicarons.github.io/mailang/playground)
+
 ## Overview
 
 MaìLang supports compilation to WebAssembly (WASM), enabling execution in browsers and Node.js. This guide covers building, using, and optimizing the WASM version.

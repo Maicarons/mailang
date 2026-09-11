@@ -1,5 +1,7 @@
 # MaìLang 下一步更新方案（深度研究报告）
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [Tags](https://github.com/Maicarons/mailang/tags)
+>
 > 研究日期：2026-06-17
 > 研究方法：三路并行深度审计 — 代码结构扫描 + 运行时行为验证 + 竞品/趋势分析
 

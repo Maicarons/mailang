@@ -1,5 +1,7 @@
 # 语法指南
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0-parser](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser) · [v0.1.0-lexer](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer)
+
 ## 概述
 
 MaìLang 采用混合式语法风格，结合了 Rust、Python、JavaScript 等语言的优点。语法设计遵循以下原则：

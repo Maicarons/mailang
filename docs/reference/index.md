@@ -1,5 +1,7 @@
 # API 参考
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [源码](https://github.com/Maicarons/mailang/tree/master/crates)
+
 ## 概述
 
 本节提供 MaìLang 的完整 API 参考文档，包括类型系统、运算符、内置函数和错误码。

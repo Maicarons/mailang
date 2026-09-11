@@ -1,5 +1,7 @@
 # FFI Guide
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [FFI Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-ffi) · [Bindings](https://github.com/Maicarons/mailang/tree/master/bindings)
+
 ## Overview
 
 MaìLang supports 12 programming languages through its C FFI layer.

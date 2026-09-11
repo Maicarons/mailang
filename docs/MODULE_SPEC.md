@@ -1,5 +1,7 @@
 # MaìLang 模块规范
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [模块加载器源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-module) · [libs 目录](https://github.com/Maicarons/mailang/tree/master/libs)
+
 ## 目录结构
 
 每个模块必须遵循以下目录结构：

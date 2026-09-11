@@ -1,5 +1,7 @@
 # IoT 部署指南
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [Cross.toml](https://github.com/Maicarons/mailang/blob/master/Cross.toml) · [rust-toolchain.toml](https://github.com/Maicarons/mailang/blob/master/rust-toolchain.toml)
+
 ## 概述
 
 MaìLang 通过三级特性门控（Feature Gating）支持从 64KB 到数 GB 内存的各类设备。本指南介绍如何为嵌入式设备编译和部署 MaìLang。

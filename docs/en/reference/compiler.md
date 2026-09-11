@@ -1,5 +1,7 @@
 # Compiler Internals
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [Compiler Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-compiler) · [VM Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-vm)
+
 ## Overview
 
 MaìLang uses a classic compilation pipeline to transform source code into bytecode executed by a register-based virtual machine.

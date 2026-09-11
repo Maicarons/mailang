@@ -1,5 +1,7 @@
 # 解析器详解
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [解析器源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-parser) · [v0.1.0-parser](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser)
+
 ## 概述
 
 MaìLang 的解析器采用**递归下降**（Recursive Descent）方法，表达式部分使用 **Pratt 解析**（也称为 Top-Down Operator Precedence）。本文档详细解析器的工作原理。

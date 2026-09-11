@@ -1,5 +1,7 @@
 # Syntax Guide
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [v0.1.0-parser](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser) · [v0.1.0-lexer](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer)
+
 ## Overview
 
 MaìLang uses a hybrid syntax style combining the best features of Rust, Python, and JavaScript.

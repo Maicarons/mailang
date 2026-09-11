@@ -1,6 +1,30 @@
 # Introduction
 
+> **Project Links**: [GitHub Repository](https://github.com/Maicarons/mailang) · [v0.1.0 Release](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [Online Playground](https://maicarons.github.io/mailang/playground) · [Issue Tracker](https://github.com/Maicarons/mailang/issues)
+
 MaìLang is a modern programming language designed for **IoT and cross-platform development**, written in Rust. It combines the best features of multiple languages to provide a simple, efficient, and safe programming experience.
+
+## Key Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| OOP | Classes, inheritance, constructors, `super()` | ✅ Implemented |
+| Closures | Upvalue capture, first-class functions | ✅ Implemented |
+| Pattern Matching | Literals, wildcards, or-patterns, guards | ✅ Implemented |
+| UTF-8 Native | Identifiers support any Unicode script | ✅ Implemented |
+| Stack-based Bytecode VM | Slot-based high-performance execution | ✅ Implemented |
+| C FFI | 12-language binding support | ✅ Implemented |
+| WebAssembly | Browser/edge runtime | ✅ Implemented |
+| CLI + REPL | Command-line tool | ✅ Implemented |
+
+## Project Resources
+
+- **Source Code**: [github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
+- **Releases**: [Releases](https://github.com/Maicarons/mailang/releases)
+- **Tags**: [Tags](https://github.com/Maicarons/mailang/tags)
+- **Contributing**: [CONTRIBUTING.md](https://github.com/Maicarons/mailang/blob/master/CONTRIBUTING.md)
+- **Roadmap**: [ROADMAP.md](https://github.com/Maicarons/mailang/blob/master/ROADMAP.md)
+- **Report**: [REPORT.md](https://github.com/Maicarons/mailang/blob/master/REPORT.md)
 
 ## Design Philosophy
 

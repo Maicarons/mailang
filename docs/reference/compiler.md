@@ -1,5 +1,7 @@
 # 编译原理
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [编译器源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-compiler) · [VM 源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-vm)
+
 ## 概述
 
 MaìLang 的编译器采用经典的流水线架构，将源代码转换为字节码并在虚拟机中执行。

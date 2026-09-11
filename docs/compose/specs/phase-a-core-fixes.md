@@ -8,6 +8,8 @@ commits: 8fe3e55..HEAD
 
 # Phase A: Core Fixes — Make the Language Actually Work
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [phase-a-complete](https://github.com/Maicarons/mailang/releases/tag/phase-a-complete)
+
 ## Report
 
 **What was built** — Fixed the MaìLang interpreter so that OOP (classes, constructors, method calls, inheritance with `super()`), closures (upvalue capture), and pattern matching (literal, wildcard, identifier binding, or-patterns, guards) actually work end-to-end. Fixed 40 integration tests that now pass. Fixed multiple P0 bugs: `GetProperty`/`IndexGet` `continue`→`break`, UTF-8 `.len` using `chars().count()`, `CreateClass` reading from constants instead of stack, parser emitting `MethodCall` instead of `Call(PropertyAccess)`, and property assignment compile order.

@@ -1,5 +1,7 @@
 # WASM 集成指南
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [WASM 源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-wasm) · [Playground](https://maicarons.github.io/mailang/playground)
+
 ## 概述
 
 MaìLang 支持编译为 WebAssembly (WASM)，可在浏览器和 Node.js 中运行。本指南介绍如何构建、使用和优化 MaìLang 的 WASM 版本。

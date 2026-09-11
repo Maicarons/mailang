@@ -1,5 +1,7 @@
 # 标准库
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [stdlib 源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-stdlib)
+
 ## 概述
 
 MaìLang 标准库提供了常用的功能模块，无需额外安装即可使用。

@@ -1,5 +1,7 @@
 # IoT Deployment
 
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [Cross.toml](https://github.com/Maicarons/mailang/blob/master/Cross.toml) · [rust-toolchain.toml](https://github.com/Maicarons/mailang/blob/master/rust-toolchain.toml)
+
 ## Overview
 
 MaìLang supports devices from 64KB to GBs of memory through three-tier feature gating.

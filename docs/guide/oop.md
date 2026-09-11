@@ -1,5 +1,7 @@
 # 面向对象编程
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0-oop](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-oop)
+
 ## 概述
 
 MaìLang 支持完整的面向对象编程范式，包括：

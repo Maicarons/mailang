@@ -1,5 +1,7 @@
 # FFI 接入指南
 
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [FFI 源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-ffi) · [绑定示例](https://github.com/Maicarons/mailang/tree/master/bindings)
+
 ## 概述
 
 MaìLang 通过 C FFI 层支持 12 种编程语言调用。所有语言绑定都基于统一的 C ABI，确保跨语言的一致性。

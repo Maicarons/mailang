@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'MaìLang',
   description: 'MaìLang - A modern programming language for IoT and cross-platform development',
+  base: '/mailang/',
   locales: {
     root: {
       label: '简体中文',
@@ -11,7 +12,7 @@ export default defineConfig({
         nav: [
           { text: '指南', link: '/guide/' },
           { text: '参考', link: '/reference/' },
-          { text: 'Playground', link: '/playground' },
+          { text: 'Playground', link: 'https://maicarons.github.io/mailang/playground' },
           { text: 'GitHub', link: 'https://github.com/Maicarons/mailang' },
         ],
         sidebar: {
@@ -69,7 +70,7 @@ export default defineConfig({
         nav: [
           { text: 'Guide', link: '/en/guide/' },
           { text: 'Reference', link: '/reference/' },
-          { text: 'Playground', link: '/playground' },
+          { text: 'Playground', link: 'https://maicarons.github.io/mailang/playground' },
           { text: 'GitHub', link: 'https://github.com/Maicarons/mailang' },
         ],
         sidebar: {

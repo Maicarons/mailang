@@ -1,10 +1,34 @@
 # MaìLang 介绍
 
+> **项目链接**：[GitHub 仓库](https://github.com/Maicarons/mailang) · [v0.1.0 发布](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [在线 Playground](https://maicarons.github.io/mailang/playground) · [Issue 反馈](https://github.com/Maicarons/mailang/issues)
+
 ## 什么是 MaìLang？
 
 MaìLang（麦语）是一门为 **IoT 和跨平台开发** 设计的现代编程语言，使用 Rust 编写。它结合了多种编程语言的优点，提供了简洁、高效、安全的编程体验。
 
 **名称含义**：「麦」取自小麦（Wheat），象征着语言的朴实与普适；「语」代表语言。Maì 中的 `ì` 带有声调，致敬中文的声调系统。
+
+## 核心特性
+
+| 特性 | 说明 | 状态 |
+|------|------|------|
+| 面向对象编程 | 类、继承、构造函数、`super()` | ✅ 已实现 |
+| 闭包 | upvalue 捕获，一等公民函数 | ✅ 已实现 |
+| 模式匹配 | 字面量、通配符、or-pattern、守卫 | ✅ 已实现 |
+| UTF-8 原生 | 标识符支持任何 Unicode 文字 | ✅ 已实现 |
+| 栈式字节码 VM | 基于 slot 的高性能执行 | ✅ 已实现 |
+| C FFI | 12 种语言绑定支持 | ✅ 已实现 |
+| WebAssembly | 浏览器/边缘运行 | ✅ 已实现 |
+| CLI + REPL | 命令行工具 | ✅ 已实现 |
+
+## 项目资源
+
+- **源代码**：[github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
+- **版本发布**：[Releases](https://github.com/Maicarons/mailang/releases)
+- **项目标签**：[Tags](https://github.com/Maicarons/mailang/tags)
+- **贡献指南**：[CONTRIBUTING.md](https://github.com/Maicarons/mailang/blob/master/CONTRIBUTING.md)
+- **路线图**：[ROADMAP.md](https://github.com/Maicarons/mailang/blob/master/ROADMAP.md)
+- **项目报告**：[REPORT.md](https://github.com/Maicarons/mailang/blob/master/REPORT.md)
 
 ## 设计理念
 

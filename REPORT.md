@@ -1,6 +1,8 @@
 # MaìLang (麦语) 项目报告
 
-> **状态：Phase 1 进行中（核心管道可用，高级特性为桩）**
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [Tags](https://github.com/Maicarons/mailang/tags)
+>
+> **状态：Phase A 完成（OOP、闭包、模式匹配已实现，40/40 测试通过）**
 > 
 > 本报告如实反映项目实际状态。详细差距分析见 [ROADMAP.md](ROADMAP.md)。
 

@@ -1,17 +1,43 @@
 # MaìLang (麦语)
 
+[![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
+[![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
+
 A modern programming language designed for IoT and cross-platform development, written in Rust.
+
+**Repository**: [github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
+**Documentation**: [Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
+**Releases**: [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
 
 ## Features
 
-- **Object-Oriented Programming** - Classes, inheritance, traits, and polymorphism
+- **Object-Oriented Programming** - Classes, inheritance, constructors, `super()` calls
+- **Closures** - First-class functions with upvalue capture
+- **Pattern Matching** - Literals, wildcards, or-patterns, guard expressions
 - **UTF-8 Native** - Full Unicode support for identifiers and strings
-- **Register-based Bytecode VM** - Fast execution with register-based virtual machine
-- **IoT Ready** - Three-tier feature gating for embedded devices (64KB+)
+- **Stack-based Bytecode VM** - Fast execution with slot-based locals
 - **12 Language FFI** - Call MaìLang from C, Python, JavaScript, Java, Go, and more
-- **Pattern Matching** - Powerful match expressions
-- **Error Handling** - Result/Option types for safe error handling
-- **Lambda/Closures** - First-class functions
+- **WebAssembly** - Run in browsers and edge environments
+- **IoT Ready** - Three-tier feature gating for embedded devices
+
+## Project Tags
+
+| Tag | Description |
+|-----|-------------|
+| [`v0.1.0`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) | Phase 1 complete release |
+| [`v0.1.0-lexer`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer) | Unicode-aware lexer |
+| [`v0.1.0-parser`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser) | Recursive descent + Pratt parser |
+| [`v0.1.0-vm`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-vm) | Stack-based bytecode VM |
+| [`v0.1.0-oop`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-oop) | Class system with inheritance |
+| [`v0.1.0-closures`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-closures) | Upvalue capture for closures |
+| [`v0.1.0-pattern-match`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-pattern-match) | Pattern matching engine |
+| [`v0.1.0-ffi`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-ffi) | C FFI layer |
+| [`v0.1.0-wasm`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-wasm) | WebAssembly bindings |
+| [`v0.1.0-stdlib`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-stdlib) | Standard library |
+| [`v0.1.0-cli`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-cli) | CLI with REPL |
+| [`phase-a-complete`](https://github.com/Maicarons/mailang/releases/tag/phase-a-complete) | Phase A milestone |
 
 ## Quick Start
 
