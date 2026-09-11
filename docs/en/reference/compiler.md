@@ -1,4 +1,4 @@
-# Compiler Internals
+﻿# Compiler Internals
 
 > **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [Compiler Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-compiler) · [VM Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-vm)
 
@@ -34,9 +34,9 @@ Source Code (.mai)
 
 | Crate | Responsibility | Input | Output |
 |-------|---------------|-------|--------|
-| `mailang-lexer` | Tokenization | Source string | `Vec<Token>` |
+| `mailang-lexer` | Tokenization | Source string | `Vec&lt;Token&gt;` |
 | `mailang-ast` | AST types | - | Data structures |
-| `mailang-parser` | Parsing | `Vec<Token>` | `Program` |
+| `mailang-parser` | Parsing | `Vec&lt;Token&gt;` | `Program` |
 | `mailang-bytecode` | Bytecode types | - | Data structures |
 | `mailang-compiler` | Compilation | `Program` | `Bytecode` |
 | `mailang-vm` | Execution | `Bytecode` | `Value` |

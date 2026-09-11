@@ -4,7 +4,9 @@
 
 # Node
 node_modules/
-/dist/
+dist/
+.vitepress/dist/
+.vitepress/cache/
 
 # IDE
 .idea/

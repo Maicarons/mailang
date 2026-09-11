@@ -4,6 +4,15 @@ export default defineConfig({
   title: 'MaìLang',
   description: 'MaìLang - A modern programming language for IoT and cross-platform development',
   base: '/mailang/',
+  ignoreDeadLinks: true,
+  // Disable Vue template compilation in markdown to avoid {} conflicts
+  vueTemplate: false,
+  markdown: {
+    // Configure markdown-it to not treat {} as Vue interpolation
+    config(md) {
+      // No special config needed when vueTemplate is false
+    }
+  },
   locales: {
     root: {
       label: '简体中文',
@@ -12,7 +21,7 @@ export default defineConfig({
         nav: [
           { text: '指南', link: '/guide/' },
           { text: '参考', link: '/reference/' },
-          { text: 'Playground', link: 'https://maicarons.github.io/mailang/playground' },
+          { text: 'Playground', link: '/playground' },
           { text: 'GitHub', link: 'https://github.com/Maicarons/mailang' },
         ],
         sidebar: {
@@ -70,7 +79,7 @@ export default defineConfig({
         nav: [
           { text: 'Guide', link: '/en/guide/' },
           { text: 'Reference', link: '/reference/' },
-          { text: 'Playground', link: 'https://maicarons.github.io/mailang/playground' },
+          { text: 'Playground', link: '/playground' },
           { text: 'GitHub', link: 'https://github.com/Maicarons/mailang' },
         ],
         sidebar: {

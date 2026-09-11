@@ -1,10 +1,10 @@
-# 错误码
+﻿# 错误码
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [VM 错误源码](https://github.com/Maicarons/mailang/blob/master/crates/mailang-vm/src/error.rs)
 
 ## 概述
 
-MaìLang 使用 Result 类型进行错误处理，不抛出异常。所有可能失败的操作都返回 `Result<T, E>` 或 `Option<T>`。
+MaìLang 使用 Result 类型进行错误处理，不抛出异常。所有可能失败的操作都返回 `Result&lt;T, E&gt;` 或 `Option&lt;T&gt;`。
 
 ## 运行时错误
 

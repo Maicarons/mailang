@@ -1,4 +1,4 @@
-# 语法指南
+﻿# 语法指南
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0-parser](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser) · [v0.1.0-lexer](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer)
 
@@ -137,7 +137,7 @@ var arr = [1, 2, 3]
 arr[0] = 10
 ```
 
-### 字典 `{K: V}`
+### 字典 `&lbrace;K: V&rbrace;`
 
 ```
 let person = {

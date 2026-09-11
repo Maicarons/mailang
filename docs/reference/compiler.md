@@ -1,4 +1,4 @@
-# 编译原理
+﻿# 编译原理
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [编译器源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-compiler) · [VM 源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-vm)
 
@@ -46,9 +46,9 @@ MaìLang 的编译器采用经典的流水线架构，将源代码转换为字�
 
 | Crate | 职责 | 输入 | 输出 |
 |-------|------|------|------|
-| `mailang-lexer` | 词法分析 | 源代码字符串 | `Vec<Token>` |
+| `mailang-lexer` | 词法分析 | 源代码字符串 | `Vec&lt;Token&gt;` |
 | `mailang-ast` | AST 定义 | - | 数据结构 |
-| `mailang-parser` | 语法分析 | `Vec<Token>` | `Program` (AST) |
+| `mailang-parser` | 语法分析 | `Vec&lt;Token&gt;` | `Program` (AST) |
 | `mailang-analyzer` | 语义分析 | `Program` | 类型检查结果 |
 | `mailang-bytecode` | 字节码定义 | - | 数据结构 |
 | `mailang-compiler` | 字节码编译 | `Program` | `Bytecode` |

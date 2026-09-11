@@ -1,4 +1,4 @@
-# 类型系统
+﻿# 类型系统
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [AST 源码](https://github.com/Maicarons/mailang/blob/master/crates/mailang-ast/src/lib.rs)
 
@@ -67,7 +67,7 @@ let d: str = "MaìLang"
 - `\\` - 反斜杠
 - `\"` - 双引号
 - `\0` - 空字符
-- `\u{XXXX}` - Unicode 转义
+- `\u&lbrace;XXXX&rbrace;` - Unicode 转义
 
 **字符串插值**:
 ```
@@ -119,7 +119,7 @@ arr.insert(i, x)// 插入
 arr.remove(i)   // 删除指定位置
 ```
 
-### 字典 `{K: V}`
+### 字典 `&lbrace;K: V&rbrace;`
 
 键值对集合。
 
@@ -157,7 +157,7 @@ let (x, y) = point  // 解构
 let first = point[0] // 索引
 ```
 
-### Result<T, E>
+### Result&lt;T, E&gt;
 
 用于错误处理的类型。
 
@@ -175,7 +175,7 @@ let result = divide(10.0, 3.0) match {
 }
 ```
 
-### Option<T>
+### Option&lt;T&gt;
 
 用于表示可选值的类型。
 
