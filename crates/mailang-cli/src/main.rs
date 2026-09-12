@@ -4,7 +4,11 @@ use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "mailang", about = "MaìLang interpreter")]
+#[command(
+    name = "mailang",
+    about = "MaìLang interpreter",
+    version = env!("CARGO_PKG_VERSION")
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,

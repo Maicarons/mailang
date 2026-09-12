@@ -48,6 +48,9 @@ Phases B–F: language completeness, IoT surface, embeddability, tooling, and pe
 ### Testing
 - 72+ integration tests covering Phase B–F features
 
+### Security
+- Docs/playground npm overrides: vite ≥ 6.4.3, esbuild ≥ 0.25, nanoid ≥ 3.3.18, postcss ≥ 8.5.23, brace-expansion ≥ 2.1.4
+
 ## [0.1.0] - 2026-06-17
 
 ### Added — Core Language

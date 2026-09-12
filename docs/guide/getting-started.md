@@ -1,12 +1,12 @@
-# 快速开�?
+# 快速开始
 
-> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [Playground](https://maicarons.github.io/mailang/playground)
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.0](https://github.com/Maicarons/mailang/releases/tag/v0.2.0) · [Playground](https://maicarons.github.io/mailang/playground)
 
 ## 系统要求
 
 - **操作系统**：Windows、macOS、Linux
-- **Rust**�?.70+（用于从源码构建�?
-- **内存**：最�?256MB
+- **Rust** 1.70+（用于从源码构建）
+- **内存**：至少 256MB
 
 ## 安装
 
@@ -16,7 +16,7 @@
 cargo install mailang-cli
 ```
 
-### 方式二：从源码构�?
+### 方式二：从源码构建
 
 ```bash
 git clone https://github.com/Maicarons/mailang.git
@@ -24,49 +24,55 @@ cd mailang
 cargo build --release
 ```
 
-构建完成后，二进制文件位�?`target/release/mailang`�?
+构建完成后，二进制文件位于 `target/release/mailang`。
 
 ### 方式三：下载预编译二进制
 
-�?[GitHub Releases](https://github.com/Maicarons/mailang/releases) 下载对应平台的二进制文件�?
+从 [GitHub Releases](https://github.com/Maicarons/mailang/releases) 下载对应平台的二进制文件。
 
 ## 验证安装
 
 ```bash
 mailang --version
-# 输出：mailang 0.1.0
+# 输出：mailang 0.2.0
 ```
 
 ## Hello World
 
-### 创建文件
-
-创建 `hello.mai`�?
+创建 `hello.mai`：
 
 ```
-// 这是 MaìLang �?Hello World
-println("你好，MaìLang！�?)
+// 这是 MaìLang 的 Hello World
+println("你好，MaìLang！")
 ```
 
-### 运行
+运行：
 
 ```bash
 mailang run hello.mai
-# 输出：你好，MaìLang！�?
+# 输出：你好，MaìLang！
 ```
 
-## REPL 交互模式
+## CLI 子命令
 
-REPL（Read-Eval-Print Loop）是学习和调试的最佳方式：
+| 命令 | 说明 |
+|------|------|
+| `mailang` | 启动 REPL |
+| `mailang run file.mai` | 运行源文件 |
+| `mailang run file.mailangbc` | 运行编译后的字节码 |
+| `mailang eval '1+2'` | 执行内联代码 |
+| `mailang build file.mai` | 编译为 `.mailangbc` |
+| `mailang fmt file.mai` | 格式化源文件（`--check` 仅检查） |
+| `mailang lsp` | 启动 Language Server |
+
+## REPL 交互模式
 
 ```bash
 mailang
 ```
 
-进入 REPL 后，可以逐行输入代码�?
-
 ```
-MaìLang REPL v0.1.0
+MaìLang REPL v0.2.0
 Type 'exit' or 'quit' to exit.
 > 1 + 2
 3
@@ -78,11 +84,16 @@ Hello, MaìLang!
 
 ## 内联代码执行
 
-使用 `eval` 子命令直接执行代码：
-
 ```bash
 mailang eval 'println(42 * 2)'
-# 输出�?4
+# 输出：84
+```
+
+## 编译为字节码
+
+```bash
+mailang build hello.mai -o hello.mailangbc
+mailang run hello.mailangbc
 ```
 
 ## 基本语法速览
@@ -90,7 +101,7 @@ mailang eval 'println(42 * 2)'
 ### 变量
 
 ```
-let x = 42              // 不可变变�?
+let x = 42              // 不可变变量
 var y = 100             // 可变变量
 const PI = 3.14159      // 常量
 let name: str = "麦语"  // 显式类型
@@ -102,17 +113,11 @@ let name: str = "麦语"  // 显式类型
 fn add(a: int, b: int) -> int {
     return a + b
 }
-
-// 默认参数
-fn greet(name = "世界") -> str {
-    return "你好，{name}�?
-}
 ```
 
-### 控制�?
+### 控制流
 
 ```
-// if-elif-else
 if x > 10 {
     println("大于10")
 } elif x > 5 {
@@ -121,27 +126,21 @@ if x > 10 {
     println("小于等于5")
 }
 
-// for 循环
 for i in 0..10 {
     println(i)
 }
-
-// while 循环
-while condition {
-    // ...
-}
 ```
 
-### 面向对象
+### 面向对象与 Trait
 
 ```
 class Animal {
     let name: str
-    
+
     fn init(name: str) {
         this.name = name
     }
-    
+
     fn speak() -> str {
         return "{this.name} speaks"
     }
@@ -173,8 +172,8 @@ match divide(10.0, 3.0) {
 }
 ```
 
-## 下一�?
+## 下一步
 
-- [语法指南](/guide/syntax) - 完整语法参�?
+- [语法指南](/guide/syntax) - 完整语法参考
 - [面向对象](/guide/oop) - 类、继承、trait
 - [标准库](/guide/stdlib) - 内置模块

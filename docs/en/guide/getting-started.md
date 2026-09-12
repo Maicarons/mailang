@@ -1,6 +1,6 @@
 # Getting Started
 
-> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [Playground](https://maicarons.github.io/mailang/playground)
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [v0.2.0](https://github.com/Maicarons/mailang/releases/tag/v0.2.0) · [Playground](https://maicarons.github.io/mailang/playground)
 
 ## System Requirements
 
@@ -53,6 +53,18 @@ mailang run hello.mai
 # Output: Hello, MaìLang! 🌍
 ```
 
+## CLI commands
+
+| Command | Description |
+|---------|-------------|
+| `mailang` | Start REPL |
+| `mailang run file.mai` | Run a source file |
+| `mailang run file.mailangbc` | Run compiled bytecode |
+| `mailang eval '1+2'` | Evaluate inline code |
+| `mailang build file.mai` | Compile to `.mailangbc` |
+| `mailang fmt file.mai` | Format sources (`--check` to lint only) |
+| `mailang lsp` | Start the language server |
+
 ## REPL
 
 REPL (Read-Eval-Print Loop) is the best way to learn and debug:
@@ -62,7 +74,7 @@ mailang
 ```
 
 ```
-MaìLang REPL v0.1.0
+MaìLang REPL v0.2.0
 Type 'exit' or 'quit' to exit.
 > 1 + 2
 3
