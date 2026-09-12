@@ -2,7 +2,9 @@ use mailang_core::MailangInterpreter;
 
 fn eval(code: &str) -> String {
     let mut interp = MailangInterpreter::new();
-    interp.eval(code).unwrap_or_else(|e| panic!("eval failed: {}", e))
+    interp
+        .eval(code)
+        .unwrap_or_else(|e| panic!("eval failed: {}", e))
 }
 
 // ===== 基本算术 =====
@@ -95,7 +97,10 @@ fn test_string_concat() {
 
 #[test]
 fn test_string_interpolation() {
-    assert_eq!(eval("let name = \"MaìLang\"\n\"Hello, {name}!\""), "Hello, MaìLang!");
+    assert_eq!(
+        eval("let name = \"MaìLang\"\n\"Hello, {name}!\""),
+        "Hello, MaìLang!"
+    );
 }
 
 // ===== 比较 =====
@@ -156,7 +161,10 @@ fn test_while_loop() {
 
 #[test]
 fn test_for_loop() {
-    assert_eq!(eval("var sum = 0\nfor i in 0..5 { sum = sum + i }\nsum"), "10");
+    assert_eq!(
+        eval("var sum = 0\nfor i in 0..5 { sum = sum + i }\nsum"),
+        "10"
+    );
 }
 
 // ===== 函数 =====
@@ -168,7 +176,10 @@ fn test_function_call() {
 
 #[test]
 fn test_function_recursion() {
-    assert_eq!(eval("fn fib(n) { if n <= 1 { return n } return fib(n-1) + fib(n-2) }\nfib(10)"), "55");
+    assert_eq!(
+        eval("fn fib(n) { if n <= 1 { return n } return fib(n-1) + fib(n-2) }\nfib(10)"),
+        "55"
+    );
 }
 
 #[test]
@@ -204,12 +215,18 @@ fn test_map_literal() {
 
 #[test]
 fn test_match_literal() {
-    assert_eq!(eval("let x = 2\nmatch x {\n1 => \"one\"\n2 => \"two\"\n_ => \"other\"\n}"), "two");
+    assert_eq!(
+        eval("let x = 2\nmatch x {\n1 => \"one\"\n2 => \"two\"\n_ => \"other\"\n}"),
+        "two"
+    );
 }
 
 #[test]
 fn test_match_wildcard() {
-    assert_eq!(eval("let x = 99\nmatch x {\n1 => \"one\"\n_ => \"other\"\n}"), "other");
+    assert_eq!(
+        eval("let x = 99\nmatch x {\n1 => \"one\"\n_ => \"other\"\n}"),
+        "other"
+    );
 }
 
 // ===== UTF-8 =====
@@ -296,7 +313,10 @@ fn test_match_ok() {
 
 #[test]
 fn test_match_err() {
-    assert_eq!(eval("match Err(\"boom\") {\nOk(v) => 1\nErr(e) => e\n}"), "boom");
+    assert_eq!(
+        eval("match Err(\"boom\") {\nOk(v) => 1\nErr(e) => e\n}"),
+        "boom"
+    );
 }
 
 #[test]
@@ -313,12 +333,18 @@ fn test_match_comma_separated_arms() {
 
 #[test]
 fn test_match_range_inclusive_start() {
-    assert_eq!(eval("match 5 {\n1..10 => \"small\"\n_ => \"big\"\n}"), "small");
+    assert_eq!(
+        eval("match 5 {\n1..10 => \"small\"\n_ => \"big\"\n}"),
+        "small"
+    );
 }
 
 #[test]
 fn test_match_range_outside() {
-    assert_eq!(eval("match 15 {\n1..10 => \"small\"\n_ => \"big\"\n}"), "big");
+    assert_eq!(
+        eval("match 15 {\n1..10 => \"small\"\n_ => \"big\"\n}"),
+        "big"
+    );
 }
 
 #[test]
@@ -523,7 +549,8 @@ a.next
 fn test_gc_breaks_array_cycle() {
     let mut interp = MailangInterpreter::new();
     let out = interp
-        .eval(r#"
+        .eval(
+            r#"
 class Box {
     let items
     fn init() { this.items = [] }
@@ -531,7 +558,8 @@ class Box {
 let b = Box()
 b.items = [b]
 1
-"#)
+"#,
+        )
         .unwrap();
     assert_eq!(out, "1");
     let broken = interp.collect_cycles();

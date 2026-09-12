@@ -1,9 +1,9 @@
 //! Literal parsing for MaìLang (arrays, maps, lambdas, if/match expressions)
 
+use super::Parser;
+use crate::error::ParseError;
 use mailang_ast::*;
 use mailang_lexer::Token;
-use crate::error::ParseError;
-use super::Parser;
 
 fn pattern_to_expr(p: &Pattern) -> Result<Expr, ParseError> {
     match p {
@@ -253,7 +253,11 @@ impl Parser {
             // Convert to range using expressions
             let start_expr = pattern_to_expr(&first)?;
             let end_expr = pattern_to_expr(&end)?;
-            return Ok(Pattern::Range(Box::new(start_expr), Box::new(end_expr), inclusive));
+            return Ok(Pattern::Range(
+                Box::new(start_expr),
+                Box::new(end_expr),
+                inclusive,
+            ));
         }
 
         // Check for or-pattern: a | b | c
@@ -364,14 +368,17 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_string_interpolation(&self, s: &str) -> Result<Vec<StringPart>, ParseError> {
+    pub(crate) fn parse_string_interpolation(
+        &self,
+        s: &str,
+    ) -> Result<Vec<StringPart>, ParseError> {
         let mut parts = Vec::new();
         let mut current_text = String::new();
-        let mut chars = s.chars().peekable();
+        let chars = s.chars();
         let mut depth = 0;
         let mut expr_text = String::new();
 
-        while let Some(ch) = chars.next() {
+        for ch in chars {
             if ch == '{' && depth == 0 {
                 // Start of expression
                 if !current_text.is_empty() {
@@ -387,10 +394,12 @@ impl Parser {
                 depth -= 1;
                 if depth == 0 {
                     // End of expression - parse it
-                    let mut expr_parser = Parser::new(&expr_text)
-                        .map_err(|_| ParseError::ExpectedExpression(format!("Failed to parse: {}", expr_text)))?;
-                    let expr = expr_parser.parse_expression()
-                        .map_err(|_| ParseError::ExpectedExpression(format!("Invalid expression: {}", expr_text)))?;
+                    let mut expr_parser = Parser::new(&expr_text).map_err(|_| {
+                        ParseError::ExpectedExpression(format!("Failed to parse: {}", expr_text))
+                    })?;
+                    let expr = expr_parser.parse_expression().map_err(|_| {
+                        ParseError::ExpectedExpression(format!("Invalid expression: {}", expr_text))
+                    })?;
                     parts.push(StringPart::Expr(expr));
                 } else {
                     expr_text.push(ch);

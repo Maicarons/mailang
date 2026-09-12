@@ -1,8 +1,9 @@
-use std::collections::HashMap;
-use mailang_ast::*;
 use crate::error::AnalyzerError;
+use mailang_ast::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // richer type model used as the analyzer grows
 pub enum Type {
     Int,
     Float,
@@ -48,7 +49,10 @@ impl std::fmt::Display for Type {
             }
             Type::Result(ok, err) => write!(f, "Result<{}, {}>", ok, err),
             Type::Option(inner) => write!(f, "Option<{}>", inner),
-            Type::Function { params, return_type } => {
+            Type::Function {
+                params,
+                return_type,
+            } => {
                 write!(f, "fn(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
@@ -67,6 +71,7 @@ impl std::fmt::Display for Type {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // reserved for typed analysis
 struct Variable {
     name: String,
     ty: Type,
@@ -75,6 +80,7 @@ struct Variable {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // reserved for typed analysis
 struct FunctionInfo {
     name: String,
     params: Vec<(String, Type)>,
@@ -82,6 +88,7 @@ struct FunctionInfo {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // reserved for typed analysis
 struct ClassInfo {
     name: String,
     superclass: Option<String>,
@@ -91,6 +98,7 @@ struct ClassInfo {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // reserved for typed analysis
 struct TraitInfo {
     name: String,
     methods: HashMap<String, FunctionInfo>,
@@ -145,13 +153,39 @@ impl Analyzer {
 
     fn register_stdlib_builtins(&mut self) {
         const BUILTINS: &[&str] = &[
-            "println", "print", "input", "sqrt", "abs", "sin", "cos", "floor", "ceil", "round",
-            "min", "max", "len", "to_string", "parse_int", "parse_float",
-            "time_now", "time_now_secs", "time_year", "time_month", "time_day",
-            "time_hour", "time_minute", "time_second", "time_date", "time_datetime",
-            "time_elapsed", "time_sleep",
+            "println",
+            "print",
+            "input",
+            "sqrt",
+            "abs",
+            "sin",
+            "cos",
+            "floor",
+            "ceil",
+            "round",
+            "min",
+            "max",
+            "len",
+            "to_string",
+            "parse_int",
+            "parse_float",
+            "time_now",
+            "time_now_secs",
+            "time_year",
+            "time_month",
+            "time_day",
+            "time_hour",
+            "time_minute",
+            "time_second",
+            "time_date",
+            "time_datetime",
+            "time_elapsed",
+            "time_sleep",
             // simulated HAL
-            "gpio_write", "gpio_read", "delay_ms", "adc_read",
+            "gpio_write",
+            "gpio_read",
+            "delay_ms",
+            "adc_read",
         ];
         for name in BUILTINS {
             self.register_builtin(name);
@@ -171,7 +205,8 @@ impl Analyzer {
         let scope = &self.scopes[self.current_scope];
         for var in scope.variables.values() {
             if !var.used && !var.name.starts_with('_') {
-                self.errors.push(AnalyzerError::UnusedVariable(var.name.clone()));
+                self.errors
+                    .push(AnalyzerError::UnusedVariable(var.name.clone()));
             }
         }
         if let Some(parent) = scope.parent {
@@ -333,7 +368,7 @@ impl Analyzer {
             Stmt::TraitDef { name, methods } => {
                 self.analyze_trait(name, methods);
             }
-            Stmt::ModuleDef { name, body } => {
+            Stmt::ModuleDef { name: _, body } => {
                 self.push_scope();
                 for stmt in body {
                     self.analyze_statement(stmt);
@@ -488,9 +523,7 @@ impl Analyzer {
         self.push_scope();
         self.define_variable("this".to_string(), Type::Class(name.to_string()), true);
         for member in members {
-            if let ClassMember::Method {
-                params, body, ..
-            } = member {
+            if let ClassMember::Method { params, body, .. } = member {
                 self.push_scope();
                 self.define_variable("this".to_string(), Type::Class(name.to_string()), true);
                 for param in params {
@@ -635,7 +668,7 @@ impl Analyzer {
             }
             Expr::MethodCall {
                 object,
-                method,
+                method: _,
                 args,
             } => {
                 self.analyze_expression(object);
@@ -643,7 +676,10 @@ impl Analyzer {
                     self.analyze_expression(arg);
                 }
             }
-            Expr::PropertyAccess { object, property } => {
+            Expr::PropertyAccess {
+                object,
+                property: _,
+            } => {
                 self.analyze_expression(object);
             }
             Expr::Index { object, index } => {
@@ -768,18 +804,18 @@ impl Analyzer {
             TypeAnnotation::Str => Type::Str,
             TypeAnnotation::Char => Type::Char,
             TypeAnnotation::Array(inner) => Type::Array(Box::new(self.resolve_type(inner))),
-            TypeAnnotation::Map(key, value) => {
-                Type::Map(Box::new(self.resolve_type(key)), Box::new(self.resolve_type(value)))
-            }
+            TypeAnnotation::Map(key, value) => Type::Map(
+                Box::new(self.resolve_type(key)),
+                Box::new(self.resolve_type(value)),
+            ),
             TypeAnnotation::Tuple(types) => {
                 Type::Tuple(types.iter().map(|t| self.resolve_type(t)).collect())
             }
-            TypeAnnotation::Result(ok, err) => {
-                Type::Result(Box::new(self.resolve_type(ok)), Box::new(self.resolve_type(err)))
-            }
-            TypeAnnotation::Option(inner) => {
-                Type::Option(Box::new(self.resolve_type(inner)))
-            }
+            TypeAnnotation::Result(ok, err) => Type::Result(
+                Box::new(self.resolve_type(ok)),
+                Box::new(self.resolve_type(err)),
+            ),
+            TypeAnnotation::Option(inner) => Type::Option(Box::new(self.resolve_type(inner))),
             TypeAnnotation::Custom(name) => {
                 if self.classes.contains_key(name) {
                     Type::Class(name.clone())

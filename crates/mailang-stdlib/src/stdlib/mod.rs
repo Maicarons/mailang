@@ -2,17 +2,17 @@
 //!
 //! This module provides built-in functions for MaìLang.
 
+mod convert;
 mod io;
 mod math;
 mod string;
 mod time;
-mod convert;
 
+pub use convert::*;
 pub use io::*;
 pub use math::*;
 pub use string::*;
 pub use time::*;
-pub use convert::*;
 
 use mailang_bytecode::Value;
 

@@ -1,14 +1,14 @@
 //! I/O built-in functions
 
+use super::value_to_string;
 use mailang_bytecode::Value;
 use std::io::{self, Write};
-use super::value_to_string;
 
 #[cfg(feature = "capture-output")]
 use super::capture;
 
 pub fn builtin_println(args: &[Value]) -> Result<Value, String> {
-    let parts: Vec<String> = args.iter().map(|v| value_to_string(v)).collect();
+    let parts: Vec<String> = args.iter().map(value_to_string).collect();
     let line = parts.join(" ");
 
     #[cfg(feature = "capture-output")]
@@ -24,7 +24,7 @@ pub fn builtin_println(args: &[Value]) -> Result<Value, String> {
 }
 
 pub fn builtin_print(args: &[Value]) -> Result<Value, String> {
-    let parts: Vec<String> = args.iter().map(|v| value_to_string(v)).collect();
+    let parts: Vec<String> = args.iter().map(value_to_string).collect();
     let text = parts.join(" ");
 
     #[cfg(feature = "capture-output")]
@@ -46,6 +46,8 @@ pub fn builtin_input(args: &[Value]) -> Result<Value, String> {
         io::stdout().flush().map_err(|e| e.to_string())?;
     }
     let mut input = String::new();
-    io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| e.to_string())?;
     Ok(Value::Str(input.trim_end().into()))
 }

@@ -19,7 +19,10 @@ pub use format::{decode, encode, BytecodeFormatError, FORMAT_MAGIC, FORMAT_VERSI
 /// Opcode is `Copy` and serialized as a single byte in the binary format.
 /// Keep variants in a stable order; append-only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    derive(Serialize, Deserialize)
+)]
 #[repr(u8)]
 pub enum Opcode {
     // Stack operations
@@ -209,7 +212,10 @@ impl Opcode {
 
 /// Fat payloads are boxed so `Value` stays small on the operand stack.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    derive(Serialize, Deserialize)
+)]
 pub struct FunctionObj {
     pub name: Rc<str>,
     pub arity: usize,
@@ -217,7 +223,10 @@ pub struct FunctionObj {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    derive(Serialize, Deserialize)
+)]
 pub struct ClosureObj {
     pub function_index: usize,
     pub arity: usize,
@@ -225,7 +234,10 @@ pub struct ClosureObj {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    derive(Serialize, Deserialize)
+)]
 pub struct ClassObj {
     pub name: Rc<str>,
     pub methods: Rc<Vec<(String, usize)>>,
@@ -234,7 +246,10 @@ pub struct ClassObj {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    derive(Serialize, Deserialize)
+)]
 pub enum Value {
     Null,
     Bool(bool),
@@ -306,7 +321,10 @@ impl PartialEq for Value {
 
 /// Compact, `Copy` instruction — fetched by value on the hot path.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    derive(Serialize, Deserialize)
+)]
 pub struct Instruction {
     pub opcode: Opcode,
     pub operand: Option<u32>,
@@ -314,7 +332,10 @@ pub struct Instruction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    derive(Serialize, Deserialize)
+)]
 pub struct Chunk {
     pub instructions: Vec<Instruction>,
     pub constants: Vec<Value>,
@@ -346,7 +367,10 @@ impl Chunk {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    derive(Serialize, Deserialize)
+)]
 pub struct Bytecode {
     pub chunks: Vec<Chunk>,
     pub main_chunk: usize,

@@ -1,7 +1,7 @@
-mod error;
 mod analyzer;
+mod error;
 mod span;
 
-pub use error::AnalyzerError;
 pub use analyzer::Analyzer;
+pub use error::AnalyzerError;
 pub use span::{diagnose, locate_identifier, Diagnostic, Severity};

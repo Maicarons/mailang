@@ -1,9 +1,9 @@
 //! Statement parsing for MaìLang
 
+use super::Parser;
+use crate::error::ParseError;
 use mailang_ast::*;
 use mailang_lexer::Token;
-use crate::error::ParseError;
-use super::Parser;
 
 impl Parser {
     pub(crate) fn parse_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -184,7 +184,10 @@ impl Parser {
                     self.expect(&Token::Comma)?;
                     let err_type = self.parse_type_annotation()?;
                     self.expect(&Token::Greater)?;
-                    Ok(TypeAnnotation::Result(Box::new(ok_type), Box::new(err_type)))
+                    Ok(TypeAnnotation::Result(
+                        Box::new(ok_type),
+                        Box::new(err_type),
+                    ))
                 }
                 "Option" => {
                     // Option<T>
@@ -205,8 +208,13 @@ impl Parser {
                         }
                         self.expect(&Token::Greater)?;
                         // Represent generic as Custom with encoded args
-                        let args_str: Vec<String> = type_args.iter().map(|t| format!("{:?}", t)).collect();
-                        Ok(TypeAnnotation::Custom(format!("{}<{}>", name, args_str.join(","))))
+                        let args_str: Vec<String> =
+                            type_args.iter().map(|t| format!("{:?}", t)).collect();
+                        Ok(TypeAnnotation::Custom(format!(
+                            "{}<{}>",
+                            name,
+                            args_str.join(",")
+                        )))
                     } else {
                         Ok(TypeAnnotation::Custom(name))
                     }
@@ -288,7 +296,10 @@ impl Parser {
         match self.peek() {
             Token::Let | Token::Var => self.parse_property_member(),
             Token::Override | Token::Fn => self.parse_method_member(),
-            _ => Err(ParseError::ExpectedClassMember(format!("{:?}", self.peek()))),
+            _ => Err(ParseError::ExpectedClassMember(format!(
+                "{:?}",
+                self.peek()
+            ))),
         }
     }
 

@@ -12,23 +12,6 @@ struct Backend {
     documents: Arc<DashMap<Url, String>>,
 }
 
-fn offset_to_position(text: &str, offset: usize) -> Position {
-    let mut line = 0u32;
-    let mut col = 0u32;
-    for (i, ch) in text.char_indices() {
-        if i >= offset {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += ch.len_utf16() as u32;
-        }
-    }
-    Position::new(line, col)
-}
-
 fn parse_line_col(message: &str) -> Option<(u32, u32)> {
     // Patterns: "at line 3, column 5" or "line 3, col 5"
     let lower = message.to_lowercase();
@@ -130,12 +113,48 @@ fn collect_diagnostics(source: &str) -> Vec<Diagnostic> {
 
 fn builtin_completions() -> Vec<CompletionItem> {
     let names = [
-        "println", "print", "input", "sqrt", "abs", "sin", "cos", "floor", "ceil", "round",
-        "min", "max", "len", "to_string", "parse_int", "parse_float",
-        "let", "var", "const", "fn", "if", "elif", "else", "while", "for", "in",
-        "match", "return", "class", "trait", "extends", "implements", "super", "this",
-        "Ok", "Err", "Some", "None",
-        "gpio_write", "gpio_read", "delay_ms", "adc_read",
+        "println",
+        "print",
+        "input",
+        "sqrt",
+        "abs",
+        "sin",
+        "cos",
+        "floor",
+        "ceil",
+        "round",
+        "min",
+        "max",
+        "len",
+        "to_string",
+        "parse_int",
+        "parse_float",
+        "let",
+        "var",
+        "const",
+        "fn",
+        "if",
+        "elif",
+        "else",
+        "while",
+        "for",
+        "in",
+        "match",
+        "return",
+        "class",
+        "trait",
+        "extends",
+        "implements",
+        "super",
+        "this",
+        "Ok",
+        "Err",
+        "Some",
+        "None",
+        "gpio_write",
+        "gpio_read",
+        "delay_ms",
+        "adc_read",
     ];
     names
         .iter()
@@ -213,11 +232,10 @@ fn find_definition(source: &str, position: Position, doc_uri: &Url) -> Option<Lo
             let name_col = l[..pos].chars().count() as u32
                 + if l[pos..].starts_with("fn ") {
                     3
-                } else if l[pos..].starts_with("class ") {
-                    6
-                } else if l[pos..].starts_with("trait ") {
-                    6
-                } else if l[pos..].starts_with("const ") {
+                } else if l[pos..].starts_with("class ")
+                    || l[pos..].starts_with("trait ")
+                    || l[pos..].starts_with("const ")
+                {
                     6
                 } else {
                     4

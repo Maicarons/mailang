@@ -2,13 +2,13 @@
 //!
 //! This module provides the recursive descent + Pratt parser for MaìLang.
 
-mod statement;
 mod expression;
 mod literal;
+mod statement;
 
+use crate::error::ParseError;
 use mailang_ast::*;
 use mailang_lexer::{Lexer, Token};
-use crate::error::ParseError;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -29,6 +29,7 @@ impl Parser {
         self.tokens.get(self.pos).unwrap_or(&Token::Eof)
     }
 
+    #[allow(dead_code)]
     fn peek_at(&self, offset: usize) -> &Token {
         self.tokens.get(self.pos + offset).unwrap_or(&Token::Eof)
     }

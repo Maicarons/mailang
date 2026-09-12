@@ -31,18 +31,14 @@ pub enum AnalyzerError {
     },
 
     #[error("Method '{method}' not found on type '{type_name}'")]
-    MethodNotFound {
-        method: String,
-        type_name: String,
-    },
+    MethodNotFound { method: String, type_name: String },
 
     #[error("Property '{property}' not found on type '{type_name}'")]
-    PropertyNotFound {
-        property: String,
-        type_name: String,
-    },
+    PropertyNotFound { property: String, type_name: String },
 
-    #[error("Class '{class}' does not implement required method '{method}' from trait '{trait_name}'")]
+    #[error(
+        "Class '{class}' does not implement required method '{method}' from trait '{trait_name}'"
+    )]
     MissingTraitMethod {
         class: String,
         method: String,

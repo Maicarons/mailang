@@ -133,14 +133,19 @@ impl Lexer {
                                     }
                                 }
                             }
-                            let codepoint = u32::from_str_radix(&hex, 16)
-                                .map_err(|_| LexerError::InvalidUnicodeEscape(self.line, self.column))?;
+                            let codepoint = u32::from_str_radix(&hex, 16).map_err(|_| {
+                                LexerError::InvalidUnicodeEscape(self.line, self.column)
+                            })?;
                             let ch = char::from_u32(codepoint)
                                 .ok_or(LexerError::InvalidUnicodeEscape(self.line, self.column))?;
                             result.push(ch);
                         }
                         Some(ch) => {
-                            return Err(LexerError::InvalidEscapeSequence(ch, self.line, self.column));
+                            return Err(LexerError::InvalidEscapeSequence(
+                                ch,
+                                self.line,
+                                self.column,
+                            ));
                         }
                         None => {
                             return Err(LexerError::UnterminatedString(start_line, start_col));
@@ -182,7 +187,11 @@ impl Lexer {
                 Some('\'') => '\'',
                 Some('0') => '\0',
                 Some(ch) => {
-                    return Err(LexerError::InvalidEscapeSequence(ch, self.line, self.column));
+                    return Err(LexerError::InvalidEscapeSequence(
+                        ch,
+                        self.line,
+                        self.column,
+                    ));
                 }
                 None => {
                     return Err(LexerError::UnterminatedChar(start_line, start_col));
@@ -217,11 +226,31 @@ impl Lexer {
         let prev = self.source[i];
         // After an operator, opening paren/bracket, comma, or start - parse as negative
         // After an identifier, digit, or closing paren/bracket - parse as minus operator
-        match prev {
-            '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '~' | '!' | '=' | '<' | '>'
-            | '(' | '[' | '{' | ',' | ':' | ';' | '\n' | '\r' | '\t' | ' ' => true,
-            _ => false,
-        }
+        matches!(
+            prev,
+            '+' | '-'
+                | '*'
+                | '/'
+                | '%'
+                | '&'
+                | '|'
+                | '^'
+                | '~'
+                | '!'
+                | '='
+                | '<'
+                | '>'
+                | '('
+                | '['
+                | '{'
+                | ','
+                | ':'
+                | ';'
+                | '\n'
+                | '\r'
+                | '\t'
+                | ' '
+        )
     }
 
     fn read_number(&mut self) -> Result<Token, LexerError> {
@@ -420,7 +449,12 @@ impl Lexer {
                     let token = self.read_char()?;
                     tokens.push(token);
                 }
-                Some(ch) if ch.is_ascii_digit() || (ch == '-' && self.peek_at(1).map_or(false, |c| c.is_ascii_digit()) && self.should_parse_negative()) => {
+                Some(ch)
+                    if ch.is_ascii_digit()
+                        || (ch == '-'
+                            && self.peek_at(1).is_some_and(|c| c.is_ascii_digit())
+                            && self.should_parse_negative()) =>
+                {
                     let token = self.read_number()?;
                     tokens.push(token);
                 }

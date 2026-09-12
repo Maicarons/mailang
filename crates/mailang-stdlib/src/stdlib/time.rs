@@ -56,17 +56,22 @@ pub fn builtin_time_second(_args: &[Value]) -> Result<Value, String> {
 pub fn builtin_time_date(_args: &[Value]) -> Result<Value, String> {
     let secs = get_epoch_secs()?;
     let (year, month, day) = epoch_to_ymd(secs);
-    Ok(Value::Str(format!("{:04}-{:02}-{:02}", year, month, day).into()))
+    Ok(Value::Str(
+        format!("{:04}-{:02}-{:02}", year, month, day).into(),
+    ))
 }
 
 pub fn builtin_time_datetime(_args: &[Value]) -> Result<Value, String> {
     let secs = get_epoch_secs()?;
     let (year, month, day) = epoch_to_ymd(secs);
     let (_, hour, minute, second) = epoch_to_hms(secs);
-    Ok(Value::Str(format!(
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-        year, month, day, hour, minute, second
-    ).into()))
+    Ok(Value::Str(
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            year, month, day, hour, minute, second
+        )
+        .into(),
+    ))
 }
 
 pub fn builtin_time_elapsed(args: &[Value]) -> Result<Value, String> {
@@ -114,7 +119,20 @@ fn epoch_to_ymd(epoch: i64) -> (i64, i64, i64) {
     }
 
     let leap = is_leap_year(y);
-    let month_days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let month_days = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut m = 1;
     for &days_in_month in &month_days {
         if remaining_days < days_in_month {

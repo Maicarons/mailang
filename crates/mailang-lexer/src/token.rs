@@ -43,60 +43,60 @@ pub enum Token {
     None,
 
     // Operators
-    Plus,        // +
-    Minus,       // -
-    Star,        // *
-    Slash,       // /
-    Percent,     // %
-    StarStar,    // **
-    Ampersand,   // &
-    Pipe,        // |
-    Caret,       // ^
-    Tilde,       // ~
-    LessLess,    // <<
+    Plus,           // +
+    Minus,          // -
+    Star,           // *
+    Slash,          // /
+    Percent,        // %
+    StarStar,       // **
+    Ampersand,      // &
+    Pipe,           // |
+    Caret,          // ^
+    Tilde,          // ~
+    LessLess,       // <<
     GreaterGreater, // >>
 
     // Comparison
-    Equal,       // ==
-    NotEqual,    // !=
-    Less,        // <
-    LessEqual,   // <=
-    Greater,     // >
+    Equal,        // ==
+    NotEqual,     // !=
+    Less,         // <
+    LessEqual,    // <=
+    Greater,      // >
     GreaterEqual, // >=
 
     // Logical
-    And,         // &&
-    Or,          // ||
-    Not,         // !
+    And, // &&
+    Or,  // ||
+    Not, // !
 
     // Assignment
-    Assign,      // =
-    PlusAssign,  // +=
-    MinusAssign, // -=
-    StarAssign,  // *=
-    SlashAssign, // /=
-    PercentAssign, // %=
-    AmpersandAssign, // &=
-    PipeAssign,  // |=
-    CaretAssign, // ^=
-    LessLessAssign, // <<=
+    Assign,               // =
+    PlusAssign,           // +=
+    MinusAssign,          // -=
+    StarAssign,           // *=
+    SlashAssign,          // /=
+    PercentAssign,        // %=
+    AmpersandAssign,      // &=
+    PipeAssign,           // |=
+    CaretAssign,          // ^=
+    LessLessAssign,       // <<=
     GreaterGreaterAssign, // >>=
 
     // Delimiters
-    LeftParen,   // (
-    RightParen,  // )
-    LeftBrace,   // {
-    RightBrace,  // }
-    LeftBracket, // [
+    LeftParen,    // (
+    RightParen,   // )
+    LeftBrace,    // {
+    RightBrace,   // }
+    LeftBracket,  // [
     RightBracket, // ]
-    Comma,       // ,
-    Dot,         // .
-    Colon,       // :
-    Semicolon,   // ;
-    Arrow,       // ->
-    FatArrow,    // =>
-    DotDot,      // ..
-    Question,    // ?
+    Comma,        // ,
+    Dot,          // .
+    Colon,        // :
+    Semicolon,    // ;
+    Arrow,        // ->
+    FatArrow,     // =>
+    DotDot,       // ..
+    Question,     // ?
 
     // Special
     Eof,

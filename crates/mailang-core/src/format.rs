@@ -344,7 +344,7 @@ fn format_expr(expr: &Expr, out: &mut String) {
         Expr::BinaryOp { left, op, right } => {
             format_expr(left, out);
             out.push(' ');
-            out.push_str(&binop_str(op));
+            out.push_str(binop_str(op));
             out.push(' ');
             format_expr(right, out);
         }
@@ -437,14 +437,10 @@ fn format_expr(expr: &Expr, out: &mut String) {
             out.push_str(" = ");
             format_expr(value, out);
         }
-        Expr::CompoundAssign {
-            op,
-            target,
-            value,
-        } => {
+        Expr::CompoundAssign { op, target, value } => {
             format_expr(target, out);
             out.push(' ');
-            out.push_str(&binop_str(op));
+            out.push_str(binop_str(op));
             out.push_str("= ");
             format_expr(value, out);
         }

@@ -3,10 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone)]
 pub enum ParseError {
     #[error("Expected {expected}, found {found}")]
-    UnexpectedToken {
-        expected: String,
-        found: String,
-    },
+    UnexpectedToken { expected: String, found: String },
 
     #[error("Unexpected end of file")]
     UnexpectedEof,

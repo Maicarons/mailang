@@ -1,5 +1,5 @@
-mod error;
 mod compiler;
+mod error;
 
-pub use error::CompilerError;
 pub use compiler::Compiler;
+pub use error::CompilerError;

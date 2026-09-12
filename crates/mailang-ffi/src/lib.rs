@@ -2,6 +2,11 @@
 //!
 //! All `extern "C"` entry points are wrapped in `catch_unwind` so a Rust panic
 //! cannot unwind across the FFI boundary.
+//!
+//! # Safety
+//! Callers must pass valid, non-null pointers for out-parameters and strings
+//! declared in `mailang.h`, and must free results with `mailang_free_string`.
+#![allow(clippy::missing_safety_doc)]
 
 use mailang_bytecode::Value;
 use std::ffi::{CStr, CString};
@@ -34,19 +39,39 @@ pub struct MailangValue {
 
 impl MailangValue {
     pub fn null() -> Self {
-        Self { tag: 0, i: 0, f: 0.0, s: ptr::null() }
+        Self {
+            tag: 0,
+            i: 0,
+            f: 0.0,
+            s: ptr::null(),
+        }
     }
 
     pub fn from_i64(v: i64) -> Self {
-        Self { tag: 2, i: v, f: 0.0, s: ptr::null() }
+        Self {
+            tag: 2,
+            i: v,
+            f: 0.0,
+            s: ptr::null(),
+        }
     }
 
     pub fn from_bool(v: bool) -> Self {
-        Self { tag: 1, i: v as i64, f: 0.0, s: ptr::null() }
+        Self {
+            tag: 1,
+            i: v as i64,
+            f: 0.0,
+            s: ptr::null(),
+        }
     }
 
     pub fn from_f64(v: f64) -> Self {
-        Self { tag: 3, i: 0, f: v, s: ptr::null() }
+        Self {
+            tag: 3,
+            i: 0,
+            f: v,
+            s: ptr::null(),
+        }
     }
 }
 
@@ -246,7 +271,11 @@ pub unsafe extern "C" fn mailang_get_global_int(
                 MAILANG_OK
             }
             other => {
-                let msg = format!("global '{}' is not an int (got {})", name, mailang_stdlib::value_to_string(&other));
+                let msg = format!(
+                    "global '{}' is not an int (got {})",
+                    name,
+                    mailang_stdlib::value_to_string(&other)
+                );
                 interp.last_error = CString::new(msg).ok();
                 MAILANG_ERR_EVAL
             }
@@ -406,6 +435,10 @@ pub unsafe extern "C" fn mailang_free_string(ptr: *mut c_char) {
 
 #[no_mangle]
 pub extern "C" fn mailang_version() -> *mut c_char {
-    catch_unwind(|| CString::new(env!("CARGO_PKG_VERSION")).unwrap_or_default().into_raw())
-        .unwrap_or(ptr::null_mut())
+    catch_unwind(|| {
+        CString::new(env!("CARGO_PKG_VERSION"))
+            .unwrap_or_default()
+            .into_raw()
+    })
+    .unwrap_or(ptr::null_mut())
 }

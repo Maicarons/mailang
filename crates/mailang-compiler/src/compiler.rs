@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::rc::Rc;
+use crate::error::CompilerError;
 use mailang_ast::*;
 use mailang_bytecode::*;
-use crate::error::CompilerError;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 struct Local {
     name: String,
@@ -32,6 +32,7 @@ struct FunctionCompiler {
 }
 
 /// Info about a class already compiled, used for inheritance and super() calls.
+#[allow(dead_code)]
 struct CompiledClass {
     name: String,
     superclass: Option<String>,
@@ -53,6 +54,7 @@ pub struct Compiler {
     bytecode: Bytecode,
     current: FunctionCompiler,
     function_compilers: Vec<FunctionCompiler>,
+    #[allow(dead_code)] // interned names live in bytecode.global_names
     globals: HashMap<String, u32>,
     loop_breaks: Vec<Vec<usize>>,
     loop_continues: Vec<Vec<usize>>,
@@ -183,6 +185,7 @@ impl Compiler {
         &self.bytecode.chunks[self.current.chunk_index]
     }
 
+    #[allow(dead_code)]
     fn current_chunk_mut(&mut self) -> &mut Chunk {
         &mut self.bytecode.chunks[self.current.chunk_index]
     }
@@ -196,11 +199,7 @@ impl Compiler {
         let mut count = 0;
         while let Some(local) = self.current.locals.last() {
             if local.depth > self.current.scope_depth {
-                if local.captured {
-                    self.emit(Opcode::Pop, None, 0);
-                } else {
-                    self.emit(Opcode::Pop, None, 0);
-                }
+                self.emit(Opcode::Pop, None, 0);
                 self.current.locals.pop();
                 count += 1;
             } else {
@@ -227,7 +226,7 @@ impl Compiler {
         let compiler_index = self.function_compilers.len() - 1;
         if let Some(local) = self.resolve_local_in(compiler_index, name) {
             self.function_compilers[compiler_index].locals[local as usize].captured = true;
-            return Some(self.add_upvalue(local, true)?);
+            return self.add_upvalue(local, true);
         }
 
         None
@@ -265,7 +264,7 @@ impl Compiler {
         match stmt {
             Stmt::Let {
                 name,
-                mutable,
+                mutable: _,
                 value,
                 ..
             } => {
@@ -276,16 +275,14 @@ impl Compiler {
                 }
                 self.define_variable(name)?;
             }
-            Stmt::Const {
-                name, value, ..
-            } => {
+            Stmt::Const { name, value, .. } => {
                 self.compile_expression(value)?;
                 self.define_variable(name)?;
             }
             Stmt::FunctionDef {
                 name,
                 params,
-                return_type,
+                return_type: _,
                 body,
             } => {
                 self.compile_function(name, params, body)?;
@@ -301,7 +298,7 @@ impl Compiler {
             Stmt::TraitDef { name, methods } => {
                 self.compile_trait(name, methods)?;
             }
-            Stmt::ModuleDef { name, body } => {
+            Stmt::ModuleDef { name: _, body } => {
                 self.begin_scope();
                 for stmt in body {
                     self.compile_statement(stmt)?;
@@ -314,7 +311,9 @@ impl Compiler {
                 // Assignments don't leave a value on the stack, so don't Pop
                 match expr {
                     Expr::Assign { .. } | Expr::CompoundAssign { .. } => {}
-                    _ => { self.emit(Opcode::Pop, None, 0); }
+                    _ => {
+                        self.emit(Opcode::Pop, None, 0);
+                    }
                 }
             }
             Stmt::Return(value) => {
@@ -368,7 +367,7 @@ impl Compiler {
                     }
                     self.end_scope();
 
-                    let jump_end = self.emit_jump(Opcode::Jump, 0);
+                    let _jump_end = self.emit_jump(Opcode::Jump, 0);
                     self.patch_jump(jump)?;
                     self.emit(Opcode::Pop, None, 0);
                 }
@@ -610,8 +609,7 @@ impl Compiler {
             Expr::BinaryOp { op, left, right } => {
                 // Fused immediate ops: `x - 1`, `n <= 1`, etc.
                 if let Expr::Literal(Literal::Int(n)) = &**right {
-                    let n = *n;
-                    if let Some(imm) = i32::try_from(n).ok() {
+                    if let Ok(imm) = i32::try_from(*n) {
                         let fused = match op {
                             BinaryOp::Add => Some(Opcode::AddImm),
                             BinaryOp::Sub => Some(Opcode::SubImm),
@@ -849,11 +847,7 @@ impl Compiler {
                     }
                 }
             }
-            Expr::CompoundAssign {
-                op,
-                target,
-                value,
-            } => {
+            Expr::CompoundAssign { op, target, value } => {
                 self.compile_expression(target)?;
                 self.compile_expression(value)?;
                 let opcode = match op {
@@ -1043,19 +1037,19 @@ impl Compiler {
                 // Result: [scrutinee, bool]
 
                 // Test 1: scrutinee >= start
-                self.emit(Opcode::Dup, None, 0);           // [scrutinee, scrutinee]
-                self.compile_expression(start_expr)?;       // [scrutinee, scrutinee, start]
-                self.emit(Opcode::Ge, None, 0);            // [scrutinee, bool1]
+                self.emit(Opcode::Dup, None, 0); // [scrutinee, scrutinee]
+                self.compile_expression(start_expr)?; // [scrutinee, scrutinee, start]
+                self.emit(Opcode::Ge, None, 0); // [scrutinee, bool1]
                 let jump_fail = self.emit_jump(Opcode::JumpIfFalse, 0); // peek bool1
 
                 // bool1 is true: pop it, test second condition
-                self.emit(Opcode::Pop, None, 0);           // [scrutinee]
-                self.emit(Opcode::Dup, None, 0);           // [scrutinee, scrutinee]
-                self.compile_expression(end_expr)?;         // [scrutinee, scrutinee, end]
+                self.emit(Opcode::Pop, None, 0); // [scrutinee]
+                self.emit(Opcode::Dup, None, 0); // [scrutinee, scrutinee]
+                self.compile_expression(end_expr)?; // [scrutinee, scrutinee, end]
                 if *inclusive {
-                    self.emit(Opcode::Le, None, 0);        // [scrutinee, bool2]
+                    self.emit(Opcode::Le, None, 0); // [scrutinee, bool2]
                 } else {
-                    self.emit(Opcode::Lt, None, 0);        // [scrutinee, bool2]
+                    self.emit(Opcode::Lt, None, 0); // [scrutinee, bool2]
                 }
                 let jump_done = self.emit_jump(Opcode::Jump, 0);
 
@@ -1110,7 +1104,7 @@ impl Compiler {
                 let index = self.add_constant(value)?;
                 self.emit(Opcode::Push, Some(index), 0); // [s, inner, lit]
                 self.emit(Opcode::Eq, None, 0); // [s, bool]
-                // If inner equality fails, overall match fails (bool already on stack).
+                                                // If inner equality fails, overall match fails (bool already on stack).
                 let jump_end = self.emit_jump(Opcode::Jump, 0);
                 self.patch_jump(jump_fail)?;
                 self.emit(Opcode::Pop, None, 0); // pop false from unwrap
@@ -1253,11 +1247,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_lambda(
-        &mut self,
-        params: &[Param],
-        body: &Expr,
-    ) -> Result<(), CompilerError> {
+    fn compile_lambda(&mut self, params: &[Param], body: &Expr) -> Result<(), CompilerError> {
         let chunk_index = self.bytecode.chunks.len();
         self.bytecode.chunks.push(Chunk::new("lambda".to_string()));
 
@@ -1428,16 +1418,14 @@ impl Compiler {
                 ClassMember::Property { .. } => continue,
             };
 
-            let (chunk_index, arity) =
-                self.compile_method(name, &method_name, &params, &body)?;
+            let (chunk_index, arity) = self.compile_method(name, &method_name, &params, &body)?;
             methods.push((method_name.clone(), chunk_index));
             method_info.insert(method_name, (chunk_index, arity));
         }
 
         // Inject trait default methods not overridden by the class.
         for (method_name, params, body) in injected_defaults {
-            let (chunk_index, arity) =
-                self.compile_method(name, &method_name, &params, &body)?;
+            let (chunk_index, arity) = self.compile_method(name, &method_name, &params, &body)?;
             methods.push((method_name.clone(), chunk_index));
             method_info.insert(method_name, (chunk_index, arity));
         }
@@ -1510,10 +1498,9 @@ impl Compiler {
     /// Compile `super(args...)`: call the superclass `init` with the current `this`,
     /// then store the returned (updated) instance back into local 0.
     fn compile_super_call(&mut self, args: &[Expr]) -> Result<(), CompilerError> {
-        let current_name = self
-            .current_class
-            .clone()
-            .ok_or_else(|| CompilerError::Internal("`super` used outside of a class".to_string()))?;
+        let current_name = self.current_class.clone().ok_or_else(|| {
+            CompilerError::Internal("`super` used outside of a class".to_string())
+        })?;
         let parent_name = self
             .class_info
             .get(&current_name)
@@ -1556,11 +1543,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_trait(
-        &mut self,
-        name: &str,
-        methods: &[TraitMethod],
-    ) -> Result<(), CompilerError> {
+    fn compile_trait(&mut self, name: &str, methods: &[TraitMethod]) -> Result<(), CompilerError> {
         if self.trait_info.contains_key(name) {
             return Err(CompilerError::DuplicateTrait(name.to_string()));
         }
@@ -1581,13 +1564,8 @@ impl Compiler {
                 }
             }
         }
-        self.trait_info.insert(
-            name.to_string(),
-            CompiledTrait {
-                required,
-                defaults,
-            },
-        );
+        self.trait_info
+            .insert(name.to_string(), CompiledTrait { required, defaults });
         Ok(())
     }
 }

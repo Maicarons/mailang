@@ -19,9 +19,7 @@ fn node_id(v: &Value) -> Option<NodeId> {
         Value::Array(a) => Some(NodeId(Rc::as_ptr(a) as *const u8 as usize)),
         Value::Map(m) => Some(NodeId(Rc::as_ptr(m) as *const u8 as usize)),
         Value::Tuple(t) => Some(NodeId(Rc::as_ptr(t) as *const u8 as usize)),
-        Value::Instance { fields, .. } => {
-            Some(NodeId(Rc::as_ptr(fields) as *const u8 as usize))
-        }
+        Value::Instance { fields, .. } => Some(NodeId(Rc::as_ptr(fields) as *const u8 as usize)),
         Value::Function(f) => Some(NodeId(Rc::as_ptr(f) as *const u8 as usize)),
         Value::Closure(c) => Some(NodeId(Rc::as_ptr(c) as *const u8 as usize)),
         Value::Class(c) => Some(NodeId(Rc::as_ptr(c) as *const u8 as usize)),
@@ -29,6 +27,7 @@ fn node_id(v: &Value) -> Option<NodeId> {
     }
 }
 
+#[allow(dead_code)]
 fn children(v: &Value) -> Vec<Value> {
     match v {
         Value::Array(a) => a.borrow().clone(),
@@ -42,11 +41,7 @@ fn children(v: &Value) -> Vec<Value> {
         }
         Value::Tuple(t) => t.borrow().clone(),
         Value::Instance { fields, .. } => fields.borrow().iter().map(|(_, v)| v.clone()).collect(),
-        Value::Class(c) => c
-            .properties
-            .iter()
-            .map(|(_, v)| v.clone())
-            .collect(),
+        Value::Class(c) => c.properties.iter().map(|(_, v)| v.clone()).collect(),
         Value::Ok(i) | Value::Err(i) | Value::Some(i) => vec![(**i).clone()],
         _ => Vec::new(),
     }
@@ -64,7 +59,11 @@ pub fn collect_cycles(roots: &mut [Value]) -> usize {
     broken
 }
 
-fn dfs_cut(value: &mut Value, color: &mut HashMap<NodeId, u8>, on_path: &mut HashSet<NodeId>) -> usize {
+fn dfs_cut(
+    value: &mut Value,
+    color: &mut HashMap<NodeId, u8>,
+    on_path: &mut HashSet<NodeId>,
+) -> usize {
     let mut broken = 0;
     let Some(id) = node_id(value) else { return 0 };
     if on_path.contains(&id) {

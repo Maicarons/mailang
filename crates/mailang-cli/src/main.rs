@@ -88,9 +88,7 @@ fn main() {
             file,
             bytecode: use_bytecode,
         }) => {
-            let base_dir = Path::new(&file)
-                .parent()
-                .unwrap_or(Path::new("."));
+            let base_dir = Path::new(&file).parent().unwrap_or(Path::new("."));
             let mut interp = MailangInterpreter::with_modules(base_dir);
 
             let is_bc = use_bytecode
@@ -132,9 +130,7 @@ fn main() {
             }
         }
         Some(Commands::Build { file, output }) => {
-            let base_dir = Path::new(&file)
-                .parent()
-                .unwrap_or(Path::new("."));
+            let base_dir = Path::new(&file).parent().unwrap_or(Path::new("."));
             let mut interp = MailangInterpreter::with_modules(base_dir);
 
             let out_path = output.unwrap_or_else(|| {

@@ -1,9 +1,9 @@
 //! Expression parsing for MaìLang (Pratt parsing)
 
+use super::Parser;
+use crate::error::ParseError;
 use mailang_ast::*;
 use mailang_lexer::Token;
-use crate::error::ParseError;
-use super::Parser;
 
 impl Parser {
     pub(crate) fn parse_expression(&mut self) -> Result<Expr, ParseError> {

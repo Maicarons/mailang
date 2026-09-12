@@ -1,7 +1,7 @@
 //! Type conversion built-in functions
 
-use mailang_bytecode::Value;
 use super::value_to_string;
+use mailang_bytecode::Value;
 
 pub fn builtin_to_string(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Str(value_to_string(&args[0]).into()))
@@ -18,7 +18,10 @@ pub fn builtin_parse_int(args: &[Value]) -> Result<Value, String> {
 
 pub fn builtin_parse_float(args: &[Value]) -> Result<Value, String> {
     match &args[0] {
-        Value::Str(s) => s.parse::<f64>().map(Value::Float).map_err(|e| e.to_string()),
+        Value::Str(s) => s
+            .parse::<f64>()
+            .map(Value::Float)
+            .map_err(|e| e.to_string()),
         Value::Int(n) => Ok(Value::Float(*n as f64)),
         Value::Float(n) => Ok(Value::Float(*n)),
         _ => Err("parse_float expects a string or number".to_string()),

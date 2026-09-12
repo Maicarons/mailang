@@ -1,9 +1,9 @@
+use mailang_ast::Program;
+use mailang_bytecode::Bytecode;
+use mailang_compiler::Compiler;
+use mailang_parser::Parser;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use mailang_ast::Program;
-use mailang_parser::Parser;
-use mailang_compiler::Compiler;
-use mailang_bytecode::Bytecode;
 
 /// Module information from mailib.ini
 #[derive(Debug, Clone, Default)]
@@ -12,7 +12,7 @@ pub struct ModuleInfo {
     pub version: String,
     pub description: String,
     pub author: String,
-    pub entry: String,  // entry file, default "lib.mai"
+    pub entry: String, // entry file, default "lib.mai"
 }
 
 /// Errors that can occur during module loading
@@ -43,10 +43,10 @@ pub fn extract_exports(program: &Program) -> Vec<String> {
         match stmt {
             mailang_ast::Stmt::FunctionDef { name, .. }
             | mailang_ast::Stmt::Let { name, .. }
-            | mailang_ast::Stmt::Const { name, .. } => {
-                if !name.starts_with('_') {
-                    names.push(name.clone());
-                }
+            | mailang_ast::Stmt::Const { name, .. }
+                if !name.starts_with('_') =>
+            {
+                names.push(name.clone());
             }
             _ => {}
         }
@@ -162,7 +162,7 @@ impl FileModuleLoader {
         }
 
         // Mode 3: Named module (e.g., "sys", "time")
-        return self.resolve_named(path);
+        self.resolve_named(path)
     }
 
     /// Resolve a relative path
@@ -261,20 +261,22 @@ impl FileModuleLoader {
 
     /// Load a module from a file path
     fn load_from_path(&self, path: &Path) -> Result<Program, ModuleError> {
-        let code = std::fs::read_to_string(path)
-            .map_err(|e| ModuleError::IoError(format!("Failed to read '{}': {}", path.display(), e)))?;
+        let code = std::fs::read_to_string(path).map_err(|e| {
+            ModuleError::IoError(format!("Failed to read '{}': {}", path.display(), e))
+        })?;
 
-        let mut parser = Parser::new(&code)
-            .map_err(|e| ModuleError::ParseError(e.to_string()))?;
+        let mut parser = Parser::new(&code).map_err(|e| ModuleError::ParseError(e.to_string()))?;
 
-        parser.parse_program()
+        parser
+            .parse_program()
             .map_err(|e| ModuleError::ParseError(e.to_string()))
     }
 
     /// Compile a program to bytecode
     fn compile_program(&self, program: &Program) -> Result<Bytecode, ModuleError> {
         let compiler = Compiler::new();
-        compiler.compile(program)
+        compiler
+            .compile(program)
             .map_err(|e| ModuleError::CompileError(e.to_string()))
     }
 }
@@ -292,7 +294,8 @@ impl ModuleLoader for FileModuleLoader {
         }
 
         // Resolve the module path
-        let file_path = self.resolve_path(path)
+        let file_path = self
+            .resolve_path(path)
             .ok_or_else(|| ModuleError::NotFound(path.to_string()))?;
 
         // Parse module info if it's in a directory

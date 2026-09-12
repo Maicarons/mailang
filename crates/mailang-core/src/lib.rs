@@ -1,21 +1,21 @@
-pub use mailang_lexer as lexer;
-pub use mailang_parser as parser;
-pub use mailang_ast as ast;
-pub use mailang_compiler as compiler;
-pub use mailang_bytecode as bytecode;
-pub use mailang_vm as vm;
-pub use mailang_stdlib as stdlib;
-pub use mailang_module as module;
 pub use mailang_analyzer as analyzer;
+pub use mailang_ast as ast;
+pub use mailang_bytecode as bytecode;
+pub use mailang_compiler as compiler;
+pub use mailang_lexer as lexer;
+pub use mailang_module as module;
+pub use mailang_parser as parser;
+pub use mailang_stdlib as stdlib;
+pub use mailang_vm as vm;
 
 mod format;
 pub use format::format_source;
 
 use mailang_analyzer::Analyzer;
 use mailang_compiler::Compiler;
+use mailang_module::{create_loader, FileModuleLoader};
 use mailang_parser::Parser;
 use mailang_vm::{HostFn, Vm};
-use mailang_module::{ModuleLoader, FileModuleLoader, create_loader};
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
@@ -146,9 +146,7 @@ impl MailangInterpreter {
 
         // Set base directory for module resolution if not already set
         if self.module_loader.is_none() {
-            let base_dir = Path::new(path)
-                .parent()
-                .unwrap_or(Path::new("."));
+            let base_dir = Path::new(path).parent().unwrap_or(Path::new("."));
             self.module_loader = Some(create_loader(base_dir));
         }
 
@@ -174,9 +172,7 @@ impl MailangInterpreter {
         let code = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
         if self.module_loader.is_none() {
-            let base_dir = Path::new(path)
-                .parent()
-                .unwrap_or(Path::new("."));
+            let base_dir = Path::new(path).parent().unwrap_or(Path::new("."));
             self.module_loader = Some(create_loader(base_dir));
         }
         self.compile(&code)
@@ -204,6 +200,7 @@ impl MailangInterpreter {
             module_name: String,
             module_program: mailang_ast::Program,
             exports: Vec<String>,
+            #[allow(dead_code)]
             selective: bool,
         }
         let mut pending: Vec<PendingImport> = Vec::new();
@@ -282,9 +279,8 @@ impl MailangInterpreter {
         // Phase 2: analyze modules and main (no loader borrow).
         let mut linked: Vec<(String, mailang_ast::Program, Vec<String>)> = Vec::new();
         for p in pending {
-            self.analyze_program(&p.module_program).map_err(|e| {
-                format!("Module '{}' failed analysis: {}", p.module_name, e)
-            })?;
+            self.analyze_program(&p.module_program)
+                .map_err(|e| format!("Module '{}' failed analysis: {}", p.module_name, e))?;
             linked.push((p.module_name, p.module_program, p.exports));
         }
 
