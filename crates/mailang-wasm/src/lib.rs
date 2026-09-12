@@ -70,7 +70,7 @@ impl WasmInterpreter {
 
     /// Get the version of the MaìLang interpreter.
     pub fn version() -> String {
-        "0.1.0".to_string()
+        env!("CARGO_PKG_VERSION").to_string()
     }
 
     /// Get supported features as a comma-separated string.

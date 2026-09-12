@@ -1,12 +1,12 @@
-# 快速开始
+# 快速开�?
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) · [Playground](https://maicarons.github.io/mailang/playground)
 
 ## 系统要求
 
 - **操作系统**：Windows、macOS、Linux
-- **Rust**：1.70+（用于从源码构建）
-- **内存**：最少 256MB
+- **Rust**�?.70+（用于从源码构建�?
+- **内存**：最�?256MB
 
 ## 安装
 
@@ -16,7 +16,7 @@
 cargo install mailang-cli
 ```
 
-### 方式二：从源码构建
+### 方式二：从源码构�?
 
 ```bash
 git clone https://github.com/Maicarons/mailang.git
@@ -24,11 +24,11 @@ cd mailang
 cargo build --release
 ```
 
-构建完成后，二进制文件位于 `target/release/mailang`。
+构建完成后，二进制文件位�?`target/release/mailang`�?
 
 ### 方式三：下载预编译二进制
 
-从 [GitHub Releases](https://github.com/Maicarons/mailang/releases) 下载对应平台的二进制文件。
+�?[GitHub Releases](https://github.com/Maicarons/mailang/releases) 下载对应平台的二进制文件�?
 
 ## 验证安装
 
@@ -41,18 +41,18 @@ mailang --version
 
 ### 创建文件
 
-创建 `hello.mai`：
+创建 `hello.mai`�?
 
 ```
-// 这是 MaìLang 的 Hello World
-println("你好，MaìLang！🌍")
+// 这是 MaìLang �?Hello World
+println("你好，MaìLang！�?)
 ```
 
 ### 运行
 
 ```bash
 mailang run hello.mai
-# 输出：你好，MaìLang！🌍
+# 输出：你好，MaìLang！�?
 ```
 
 ## REPL 交互模式
@@ -63,7 +63,7 @@ REPL（Read-Eval-Print Loop）是学习和调试的最佳方式：
 mailang
 ```
 
-进入 REPL 后，可以逐行输入代码：
+进入 REPL 后，可以逐行输入代码�?
 
 ```
 MaìLang REPL v0.1.0
@@ -82,7 +82,7 @@ Hello, MaìLang!
 
 ```bash
 mailang eval 'println(42 * 2)'
-# 输出：84
+# 输出�?4
 ```
 
 ## 基本语法速览
@@ -90,7 +90,7 @@ mailang eval 'println(42 * 2)'
 ### 变量
 
 ```
-let x = 42              // 不可变变量
+let x = 42              // 不可变变�?
 var y = 100             // 可变变量
 const PI = 3.14159      // 常量
 let name: str = "麦语"  // 显式类型
@@ -105,11 +105,11 @@ fn add(a: int, b: int) -> int {
 
 // 默认参数
 fn greet(name = "世界") -> str {
-    return "你好，{name}！"
+    return "你好，{name}�?
 }
 ```
 
-### 控制流
+### 控制�?
 
 ```
 // if-elif-else
@@ -173,8 +173,8 @@ match divide(10.0, 3.0) {
 }
 ```
 
-## 下一步
+## 下一�?
 
-- [语法指南](/guide/syntax) - 完整语法参考
+- [语法指南](/guide/syntax) - 完整语法参�?
 - [面向对象](/guide/oop) - 类、继承、trait
 - [标准库](/guide/stdlib) - 内置模块

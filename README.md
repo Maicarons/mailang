@@ -3,29 +3,30 @@
 [![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.2.0)
 
 A modern programming language designed for IoT and cross-platform development, written in Rust.
 
 **Repository**: [github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
 **Documentation**: [Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
-**Releases**: [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
+**Releases**: [v0.2.0](https://github.com/Maicarons/mailang/releases/tag/v0.2.0)
 
 ## Features
 
-- **Object-Oriented Programming** - Classes, inheritance, constructors, `super()` calls
-- **Closures** - First-class functions with upvalue capture
-- **Pattern Matching** - Literals, wildcards, or-patterns, guard expressions
+- **Object-Oriented Programming** - Classes, inheritance, constructors, `super()`, traits
+- **Closures & Pattern Matching** - First-class functions; literals, ranges, `Ok`/`Err`/`Some`
 - **UTF-8 Native** - Full Unicode support for identifiers and strings
-- **Stack-based Bytecode VM** - Fast execution with slot-based locals
-- **12 Language FFI** - Call MaìLang from C, Python, JavaScript, Java, Go, and more
-- **WebAssembly** - Run in browsers and edge environments
-- **IoT Ready** - Three-tier feature gating for embedded devices
+- **Stack-based Bytecode VM** - Slot locals, TCO, CallDirect, ~4× faster recursive fib vs 0.1
+- **Embeddable** - C FFI host functions, no_std bytecode crate, `.mailangbc` artifacts
+- **WebAssembly** - Run in browsers and Node
+- **IoT Ready** - Simulated HAL builtins, embedded size CI
+- **Tooling** - Analyzer, LSP, `mailang fmt`, module system v2
 
 ## Project Tags
 
 | Tag | Description |
 |-----|-------------|
+| [`v0.2.0`](https://github.com/Maicarons/mailang/releases/tag/v0.2.0) | Phases B–F (language, IoT, FFI, tooling, performance) |
 | [`v0.1.0`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) | Phase 1 complete release |
 | [`v0.1.0-lexer`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer) | Unicode-aware lexer |
 | [`v0.1.0-parser`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser) | Recursive descent + Pratt parser |

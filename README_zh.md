@@ -3,29 +3,30 @@
 [![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.2.0)
 
 一个为 IoT 和跨平台开发设计的现代编程语言，使用 Rust 编写。
 
 **仓库地址**：[github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
 **在线文档**：[Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
-**版本发布**：[v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
+**版本发布**：[v0.2.0](https://github.com/Maicarons/mailang/releases/tag/v0.2.0)
 
 ## 特性
 
-- **面向对象编程** - 类、继承、构造函数、`super()` 调用
-- **闭包** - 一等公民函数，支持 upvalue 捕获
-- **模式匹配** - 字面量、通配符、or-pattern、守卫表达式
-- **UTF-8 原生支持** - 完整 Unicode 支持，标识符和字符串可使用任何文字
-- **栈式字节码 VM** - 基于 slot 的高性能执行
-- **12 种语言 FFI** - 从 C、Python、JavaScript、Java、Go 等调用 MaìLang
-- **WebAssembly** - 在浏览器和边缘环境中运行
-- **IoT 就绪** - 三级特性门控，支持嵌入式设备
+- **面向对象编程** - 类、继承、构造函数、`super()`、Trait
+- **闭包与模式匹配** - 一等函数；字面量、范围、`Ok`/`Err`/`Some`
+- **UTF-8 原生支持** - 完整 Unicode 支持
+- **栈式字节码 VM** - slot 局部变量、TCO、CallDirect，递归 fib 约为 0.1 的 4 倍
+- **可嵌入** - C FFI 宿主函数、no_std 字节码 crate、`.mailangbc` 产物
+- **WebAssembly** - 浏览器与 Node
+- **IoT 就绪** - 模拟 HAL 内置、嵌入式体积 CI
+- **工具链** - Analyzer、LSP、`mailang fmt`、模块系统 v2
 
 ## 项目标签
 
 | 标签 | 说明 |
 |------|------|
+| [`v0.2.0`](https://github.com/Maicarons/mailang/releases/tag/v0.2.0) | Phase B–F（语言 / IoT / FFI / 工具 / 性能） |
 | [`v0.1.0`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) | Phase 1 完整发布 |
 | [`v0.1.0-lexer`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer) | Unicode-aware 词法分析器 |
 | [`v0.1.0-parser`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser) | 递归下降 + Pratt 语法分析器 |

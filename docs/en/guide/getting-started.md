@@ -34,7 +34,7 @@ Download from [GitHub Releases](https://github.com/Maicarons/mailang/releases).
 
 ```bash
 mailang --version
-# Output: mailang 0.1.0
+# Output: mailang 0.2.0
 ```
 
 ## Hello World

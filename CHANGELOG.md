@@ -4,6 +4,50 @@ All notable changes to MaìLang will be documented in this file.
 
 Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 
+## [0.2.0] - 2026-09-12
+
+Phases B–F: language completeness, IoT surface, embeddability, tooling, and performance.
+
+### Added — Language
+- Trait system with `implements` and default method injection
+- Generic type annotations (`Result<T, E>`, `Option<T>`)
+- Match: `Ok`/`Err`/`Some`/`None` patterns, ranges (`1..10`, `1..=10`), comma-separated arms
+- Hex / octal / binary integer literals (`0x10`, `0o17`, `0b1010`)
+- Block comments `/* */`
+- Self tail-call optimization (deep recursion without stack overflow)
+
+### Added — IoT & Embedded
+- `mailang-bytecode` is `no_std` + `alloc` (serde optional; host only)
+- Versioned `.mailangbc` binary format (magic `MAILBC01`, little-endian)
+- CLI: `mailang build` / `mailang run file.mailangbc`
+- Simulated HAL: `gpio_write`, `gpio_read`, `delay_ms`, `adc_read`
+- Embedded size reporting (`benchmark/measure_size.py`, CI no_std jobs)
+
+### Added — FFI & WASM
+- C API: `mailang_register_host_fn`, global get/set (int/str), structured error codes
+- `catch_unwind` on all `extern "C"` entry points
+- Header: `crates/mailang-ffi/include/mailang.h`
+- Verified bindings: C (MinGW), Python (ctypes), Go (cgo), Node.js (WASM)
+- Host callbacks/globals survive `eval` VM rebuilds
+
+### Added — Tooling
+- Semantic analyzer wired into `eval`/`compile` (undefined variables fail early)
+- Analyzer diagnostics with source line/col (`mailang_analyzer::diagnose`)
+- LSP: diagnostics, completions, go-to-definition, hover (`mailang lsp`)
+- Formatter: `mailang fmt` / `mailang fmt --check`
+- Module system v2: independent parse/analyze, export tables, bytecode linking (no AST injection)
+
+### Added — Performance & GC
+- Value heap payloads wrapped in `Rc` (Function/Closure/Class)
+- Hot-path int/compare/call specialization; fused `*Imm` opcodes
+- `CallDirect` for known top-level functions
+- Release profile: LTO + `panic = "abort"`
+- **Fibonacci(30) ~137 ms (~4.25× Phase A baseline)**
+- Rc cycle collection (`Vm::collect_cycles`)
+
+### Testing
+- 72+ integration tests covering Phase B–F features
+
 ## [0.1.0] - 2026-06-17
 
 ### Added — Core Language

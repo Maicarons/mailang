@@ -406,6 +406,6 @@ pub unsafe extern "C" fn mailang_free_string(ptr: *mut c_char) {
 
 #[no_mangle]
 pub extern "C" fn mailang_version() -> *mut c_char {
-    catch_unwind(|| CString::new("0.1.0").unwrap_or_default().into_raw())
+    catch_unwind(|| CString::new(env!("CARGO_PKG_VERSION")).unwrap_or_default().into_raw())
         .unwrap_or(ptr::null_mut())
 }

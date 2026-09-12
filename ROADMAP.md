@@ -1,8 +1,8 @@
 # MaìLang 下一步更新方案（v0.2.0）
 
-> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.0](https://github.com/Maicarons/mailang/releases/tag/v0.2.0) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
 >
-> 更新日期：2026-09-12（Phase B 收尾完成后）
+> 更新日期：2026-09-12（Phase B–F 完成，v0.2.0 发布准备）
 > 研究方法：运行时行为验证 + 代码审计 + 竞品对比
 
 ---
