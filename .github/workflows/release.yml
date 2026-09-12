@@ -40,7 +40,6 @@ jobs:
             target: x86_64-apple-darwin
             bin: mailang
             archive: mailang-x86_64-apple-darwin.tar.gz
-            extra: --target x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -54,7 +53,8 @@ jobs:
         run: cross build --release -p mailang-cli --target ${{ matrix.target }}
       - name: Build release
         if: '!matrix.cross'
-        run: cargo build --release -p mailang-cli ${{ matrix.extra || '' }}
+        # Always pass --target so the binary lands in target/<triple>/release/
+        run: cargo build --release -p mailang-cli --target ${{ matrix.target }}
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
