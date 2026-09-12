@@ -675,8 +675,6 @@ impl Compiler {
                     if self.resolve_local(name).is_none() {
                         if let Some(&(chunk, arity)) = self.known_functions.get(name) {
                             if arity == args.len() && chunk <= 0xFFFF && arity <= 0xFFFF {
-                                // Placeholder slot so Return's truncate math stays valid.
-                                self.emit_push_constant(Value::Null, 0)?;
                                 for arg in args {
                                     self.compile_expression(arg)?;
                                 }

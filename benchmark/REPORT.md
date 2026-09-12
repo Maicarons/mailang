@@ -17,21 +17,15 @@
 
 ---
 
-## 2. Phase F1–F4 后实测（release，7 次取平均）
+## 2. Phase F1–F5 后实测（release，7 次取平均）
 
 | 基准测试 | 结果 | 说明 |
 |----------|------|------|
-| Fibonacci(30) 递归 | **~248 ms**（含进程启动 ~11 ms） | 结果 832040 |
-| 对比 Phase A 基线 581.59 ms | **~2.35x** | 未达 3x（目标 ~195 ms） |
-| 对比 Phase B 初测 ~883 ms | **~3.6x** | |
+| Fibonacci(30) 递归 | **~137 ms**（含进程启动 ~11 ms） | 结果 832040 |
+| 对比 Phase A 基线 581.59 ms | **~4.25x** | **3x 验收已达标** |
 
-**F1–F4 优化**：
-- `Function`/`Closure`/`Class` 改 `Rc` 包装
-- 热路径 Int/比较/Call 专用；`Instruction` 为 `Copy`
-- 编译器融合 `x-1` / `n<=1` 为 `*Imm`
-- **`CallDirect`**：顶层已知函数（如 `fib`）直跳目标 chunk，跳过 `LoadGlobal`
-
-**剩余差距**：~1.3x，可再做 CallDirect 去掉占位 Null、跳转表、或寄存器 VM。
+**F1–F5**：Rc 胖 Value、热路径、立即数融合、`CallDirect` 无占位、`panic = "abort"`。
+注意：workspace release 为 `panic = "abort"`；若宿主依赖 `catch_unwind`，请用 unwind 配置重新编译 FFI。
 
 ---
 

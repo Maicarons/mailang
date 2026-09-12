@@ -15,6 +15,8 @@ struct CallFrame {
     ip: usize,
     stack_base: usize,
     upvalues: Vec<usize>,
+    /// True for CallDirect: no function slot below `stack_base`.
+    direct: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -501,6 +503,7 @@ impl Vm {
                             ip: self.ip,
                             stack_base: func_index + 1,
                             upvalues: Vec::new(),
+                            direct: false,
                         });
                         self.chunk_index = chunk_index;
                         self.ip = 0;
@@ -519,6 +522,7 @@ impl Vm {
                                 ip: self.ip,
                                 stack_base: func_index + 1,
                                 upvalues: Vec::new(),
+                                direct: false,
                             };
                             self.call_stack.push(frame);
                             self.chunk_index = f.chunk_index;
@@ -533,6 +537,7 @@ impl Vm {
                                 ip: self.ip,
                                 stack_base: func_index + 1,
                                 upvalues: c.upvalues.clone(),
+                                direct: false,
                             };
                             self.call_stack.push(frame);
                             self.chunk_index = c.function_index;
@@ -568,6 +573,7 @@ impl Vm {
                                     ip: self.ip,
                                     stack_base: func_index + 1,
                                     upvalues: Vec::new(),
+                                    direct: false,
                                 };
                                 self.call_stack.push(frame);
                                 self.chunk_index = chunk_index;
@@ -751,6 +757,7 @@ impl Vm {
                                     ip: self.ip,
                                     stack_base: func_index + 1,
                                     upvalues: Vec::new(),
+                                    direct: false,
                                 };
                                 self.call_stack.push(frame);
                                 self.chunk_index = chunk_index;
@@ -768,25 +775,31 @@ impl Vm {
                     let packed = operand.unwrap_or(0);
                     let chunk_index = (packed >> 16) as usize;
                     let arg_count = (packed & 0xFFFF) as usize;
-                    let func_index = self.stack.len().checked_sub(arg_count + 1)
+                    // Stack: [args...] �?stack_base is the first argument.
+                    let stack_base = self.stack.len().checked_sub(arg_count)
                         .ok_or_else(|| VmError::StackUnderflow)?;
                     self.call_stack.push(CallFrame {
                         chunk_index: self.chunk_index,
                         ip: self.ip,
-                        stack_base: func_index + 1,
+                        stack_base,
                         upvalues: Vec::new(),
+                        direct: true,
                     });
                     self.chunk_index = chunk_index;
                     self.ip = 0;
                 }
                 Opcode::Return => {
-                    let value = self.pop()?;
+                    let value = self.stack.pop().ok_or(VmError::StackUnderflow)?;
                     if let Some(frame) = self.call_stack.pop() {
-                        let base = frame.stack_base.saturating_sub(1);
+                        let base = if frame.direct {
+                            frame.stack_base
+                        } else {
+                            frame.stack_base.saturating_sub(1)
+                        };
                         self.stack.truncate(base);
                         self.chunk_index = frame.chunk_index;
                         self.ip = frame.ip;
-                        self.push(value)?;
+                        self.stack.push(value);
                     } else {
                         return Ok(value);
                     }
@@ -910,6 +923,7 @@ impl Vm {
                                         ip: self.ip,
                                         stack_base: obj_index + 1,
                                         upvalues: Vec::new(),
+                                        direct: false,
                                     };
                                     self.call_stack.push(frame);
                                     self.chunk_index = chunk_index;
@@ -945,6 +959,7 @@ impl Vm {
                                         ip: self.ip,
                                         stack_base: obj_index + 1,
                                         upvalues: Vec::new(),
+                                        direct: false,
                                     };
                                     self.call_stack.push(frame);
                                     self.chunk_index = f.chunk_index;
@@ -1136,6 +1151,7 @@ impl Vm {
             ip: 0,
             stack_base: 0,
             upvalues: Vec::new(),
+            direct: false,
         })
     }
 

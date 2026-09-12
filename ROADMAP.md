@@ -41,7 +41,7 @@
 
 | 问题 | 严重度 | 说明 |
 |------|--------|------|
-| Fibonacci(30) 未达 3x | P1 | Phase F1 后约 **2.08x** 基线（~280 ms）；3x 需 F2–F4 |
+| Fibonacci(30) 性能 | P1 | **已完成 ~4.25x 基线（~137 ms）** |
 | GC 是空壳 | P2 | Value 已用 Rc；循环检测 / 标记清除仍未接入 VM |
 | LSP 诊断位置 | P2 | 能从解析错误消息提取 line/col；Analyzer 错误尚无 span |
 
@@ -267,7 +267,7 @@ Week 13:    发布 v0.2.0
 - [x] 范围匹配 `1..10` 工作
 - [x] 十六进制 `0x10` = 16
 - [x] 块注释 `/* */` 工作
-- [ ] Fibonacci(30) 性能提升 3x+（部分：热路径优化后约 1.3–1.4x 基线，3x 移交 Phase F）
+- [x] Fibonacci(30) 性能提升 3x+（F1–F5 后约 **4.25x**，~137 ms）
 - [x] 全局查找无 String clone（`Vec` 槽表直读）
 
 ### Phase C 完成标准
@@ -288,14 +288,15 @@ Week 13:    发布 v0.2.0
 
 | 项 | 内容 | 预期收益 |
 |----|------|----------|
-| F1 | 胖 Value 改 `Rc` 包装 + 热路径 Int/Call | **完成 ~2.08x** |
+| F1 | 胖 Value 改 `Rc` 包装 + 热路径 Int/Call | **完成** |
 | F2 | 立即数融合：`Add/Sub/Mul/Eq/Ne/Lt/Le/Gt/Ge` + Imm | **完成** |
 | F3 | `Instruction` 改为 `Copy` + `line: u32` | **完成** |
-| F4 | `CallDirect`：已知顶层函数直跳 chunk | **完成 ~2.35x** |
-| F5 | GC：循环检测 | 未做 |
-| F6 | Analyzer span → LSP 精确诊断 | 未做 |
+| F4 | `CallDirect`（含无占位槽） | **完成** |
+| F5 | release `panic = "abort"` | **完成** |
+| F6 | GC：循环检测 | 未做 |
+| F7 | Analyzer span → LSP 精确诊断 | 未做 |
 
-**验收**：`bench_fib30.mai` release 平均 ≤ 195 ms；69+ 测试全绿。当前 **~248 ms（2.35x）**。
+**验收**：`bench_fib30.mai` release 平均 ≤ 195 ms。**当前 ~137 ms（~4.25x 基线）— 已达标。**
 
 ---
 

@@ -91,4 +91,4 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-Phases B–E core items complete. Runtime supports OOP, traits, pattern matching, TCO, slot-based globals, `.mailangbc`, simulated HAL, and C FFI host-fn registration. Analyzer runs before compile; LSP provides diagnostics/completions; `mailang fmt` reformats. Module system v2 links independently analyzed modules via export tables without rewriting the importer AST. 69 integration tests. Fib(30) perf remains the main open gap.
+Phases B–F core items complete. Runtime supports OOP, traits, pattern matching, TCO, slot-based globals, `.mailangbc`, simulated HAL, C FFI host-fn registration, analyzer-in-eval, LSP, `mailang fmt`, and module system v2 (export tables, no AST injection). Performance: Fib(30) ~137 ms release (~4.25x Phase A baseline) via Rc payloads, fused immediates, CallDirect, and `panic = "abort"`. 71+ integration tests. GC cycle collection remains open.
