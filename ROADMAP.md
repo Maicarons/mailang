@@ -1,8 +1,8 @@
-# MaìLang 下一步更新方案（v0.2.2）
+# MaìLang 下一步更新方案（v0.2.3 / 规划 v0.3）
 
-> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.2](https://github.com/Maicarons/mailang/releases/tag/v0.2.2)
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.3](https://github.com/Maicarons/mailang/releases/tag/v0.2.3)
 >
-> 更新日期：2026-09-12（Phase B–F 完成，v0.2.2 发布）
+> 更新日期：2026-09-12（Phase B–F 完成；Phase G 调研）
 > 研究方法：运行时行为验证 + 代码审计 + 竞品对比
 
 ---
@@ -37,15 +37,15 @@
 | C FFI | ✅ | eval/eval_file |
 | WASM + Playground | ✅ | VitePress 部署 |
 
-### 1.2 仍需处理
+### 1.2 下一阶段入口（Phase G）
 
 | 问题 | 严重度 | 说明 |
 |------|--------|------|
-| Fibonacci(30) 性能 | P1 | **已完成 ~4.25x 基线（~137 ms）** |
-| GC 环收集 | P2 | **已完成**（`collect_cycles` 断 Rc 回边） |
-| LSP 诊断位置 | P2 | **已完成**（解析错误 line/col + Analyzer span） |
-
-已关闭：Analyzer 已接入 eval；LSP 已有诊断/补全/跳转（不再是仅 initialize 的桩）。
+| `?` 操作符未实现 | P0 | Lexer 有 `Token::Question`，解析/编译未接 |
+| Array/Map 方法缺失 | P0 | `a.push(3)` 无法调用 |
+| 类型诊断偏弱 | P1 | 标注类型未参与调用检查 |
+| Playground wasm 未含最新 OOP 修复 | P1 | 需 `build:wasm` 刷新 |
+| crates.io 未发布 | P1 | 缺 `CARGO_REGISTRY_TOKEN` |
 
 ---
 
@@ -301,4 +301,70 @@ Week 13:    发布 v0.2.2
 
 ---
 
-*本报告基于 Phase A 完成后的运行时验证，所有发现均经实际运行确认。*
+## 十、Phase G 升级计划（语言完整度 / DX / 生态 → v0.3）
+
+> 调研日期：2026-09-12。Phase B–F 已闭环；下列项来自运行时探测与代码审计，按投入产出排序。
+
+### G1. 错误传播 `?` 操作符（P0）
+
+- **现状**：Lexer 已产出 `Token::Question`，Parser/Compiler/VM 未接；`Ok(x)?` 报 `Expected expression`
+- **目标**：`expr?` — `Ok(v)` 解包为 `v`；`Err(e)` 提前 `return Err(e)`
+- **验收**：`error_handling.mai` 改写为 `?` 链式风格并跑通
+
+### G2. 集合方法 API（P0）
+
+- **现状**：`a.push(3)` → `Cannot invoke method 'push' on non-object`
+- **目标**（Array / Map）：
+  - Array：`push` `pop` `len`（已有属性）`insert` `contains` `join`
+  - Map：`keys` `values` `has` `remove`
+- **验收**：stdlib 级测试 + 文档示例
+
+### G3. Analyzer 类型检查强化（P1）
+
+- **现状**：能查未定义名；类型字段多数未参与检查
+- **目标**：对已标注参数/返回值做调用 arity 与基础类型不匹配诊断；LSP 标红
+- **验收**：`fn f(a: int) {} f("x")` 在 eval 前失败
+
+### G4. 字符串与 IO 标准库补全（P1）
+
+- 方法风格：`s.split(sep)` `s.trim()` `s.replace(a,b)` `s.starts_with` `s.ends_with`
+- 文件：`read_file` `write_file`（受 host/FFI 门控）
+
+### G5. Playground / WASM 产品化（P1）
+
+- 重建 wasm-pack 产物（含继承构造修复）
+- 示例一键切换（OOP / match / traits / IoT HAL）
+- 错误信息展示行列
+
+### G6. 工程化收尾（P1）
+
+| 项 | 说明 |
+|----|------|
+| crates.io | 配置 `CARGO_REGISTRY_TOKEN` 后重跑 publish |
+| 版本一致 | README 文档版 vs 包版本统一策略（文档跟最新 tag） |
+| Dependabot | 已清零；保持 weekly 分组 |
+| 头文件 | CI 校验 `mailang.h` 与 `mailang-ffi` 同步（cbindgen） |
+
+### G7. 解释器深度（P2，可选）
+
+- 寄存器 VM / 专用 Int 栈（继续压 Fib）
+- 模式匹配：数组/元组解构
+- 异步 / 协程（仅当有明确 IoT 场景）
+
+### 建议节奏（v0.3）
+
+```
+Week 1:   G1 `?` + G2 集合方法（语言可用性质变）
+Week 2:   G3 类型诊断 + G4 字符串/文件 API
+Week 3:   G5 playground + G6 工程化
+Week 4:   回归、文档、发布 v0.3.0
+```
+
+**v0.3 验收（建议）**
+- [ ] `Ok/Err` 可用 `?` 传播
+- [ ] Array/Map 方法齐全且有测试
+- [ ] 标注类型不匹配在 eval/LSP 可见
+- [ ] Playground wasm 与 CLI 行为一致
+- [ ] CI 全绿 + Release 带二进制 +（可选）crates.io
+
+---
