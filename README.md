@@ -3,13 +3,13 @@
 [![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.2.0)
+[![Version](https://img.shields.io/badge/version-0.2.2-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.2.2)
 
 A modern programming language designed for IoT and cross-platform development, written in Rust.
 
 **Repository**: [github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
 **Documentation**: [Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
-**Releases**: [v0.2.0](https://github.com/Maicarons/mailang/releases/tag/v0.2.0)
+**Releases**: [v0.2.2](https://github.com/Maicarons/mailang/releases/tag/v0.2.2)
 
 ## Features
 
@@ -21,24 +21,6 @@ A modern programming language designed for IoT and cross-platform development, w
 - **WebAssembly** - Run in browsers and Node
 - **IoT Ready** - Simulated HAL builtins, embedded size CI
 - **Tooling** - Analyzer, LSP, `mailang fmt`, module system v2
-
-## Project Tags
-
-| Tag | Description |
-|-----|-------------|
-| [`v0.2.0`](https://github.com/Maicarons/mailang/releases/tag/v0.2.0) | Phases B–F (language, IoT, FFI, tooling, performance) |
-| [`v0.1.0`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0) | Phase 1 complete release |
-| [`v0.1.0-lexer`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer) | Unicode-aware lexer |
-| [`v0.1.0-parser`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser) | Recursive descent + Pratt parser |
-| [`v0.1.0-vm`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-vm) | Stack-based bytecode VM |
-| [`v0.1.0-oop`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-oop) | Class system with inheritance |
-| [`v0.1.0-closures`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-closures) | Upvalue capture for closures |
-| [`v0.1.0-pattern-match`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-pattern-match) | Pattern matching engine |
-| [`v0.1.0-ffi`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-ffi) | C FFI layer |
-| [`v0.1.0-wasm`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-wasm) | WebAssembly bindings |
-| [`v0.1.0-stdlib`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-stdlib) | Standard library |
-| [`v0.1.0-cli`](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-cli) | CLI with REPL |
-| [`phase-a-complete`](https://github.com/Maicarons/mailang/releases/tag/phase-a-complete) | Phase A milestone |
 
 ## Quick Start
 

@@ -4,6 +4,17 @@ All notable changes to MaìLang will be documented in this file.
 
 Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 
+## [0.2.2] - 2026-09-12
+
+### Fixed
+- Subclasses without their own `init` now inherit the parent constructor (`Dog("Rex")` sets `name`)
+- CI triggers on `master`; workspace `--exclude` requires `--workspace`
+- Release packaging uses `--target` so archives include the `mailang` binary
+- docs/playground npm security overrides (vite/esbuild/nanoid/postcss)
+
+### Changed
+- README drops the Project Tags table; docs present **v0.2.2** as the current release
+
 ## [0.2.0] - 2026-09-12
 
 Phases B–F: language completeness, IoT surface, embeddability, tooling, and performance.

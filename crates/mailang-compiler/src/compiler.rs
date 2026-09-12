@@ -1430,6 +1430,21 @@ impl Compiler {
             method_info.insert(method_name, (chunk_index, arity));
         }
 
+        // Subclass without its own constructor inherits the parent's `init`
+        // so `Child(args)` still initializes inherited fields.
+        if !declared_methods.contains_key("init") {
+            if let Some(parent) = superclass.as_ref() {
+                if let Some((chunk, arity)) = self
+                    .class_info
+                    .get(parent)
+                    .and_then(|p| p.methods.get("init").copied())
+                {
+                    methods.push(("init".to_string(), chunk));
+                    method_info.insert("init".to_string(), (chunk, arity));
+                }
+            }
+        }
+
         self.current_class = prev_class;
 
         // Update class metadata with compiled method info.

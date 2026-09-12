@@ -1,8 +1,8 @@
-# MaìLang 下一步更新方案（v0.2.0）
+# MaìLang 下一步更新方案（v0.2.2）
 
-> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.0](https://github.com/Maicarons/mailang/releases/tag/v0.2.0) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.2](https://github.com/Maicarons/mailang/releases/tag/v0.2.2)
 >
-> 更新日期：2026-09-12（Phase B–F 完成，v0.2.0 发布准备）
+> 更新日期：2026-09-12（Phase B–F 完成，v0.2.2 发布）
 > 研究方法：运行时行为验证 + 代码审计 + 竞品对比
 
 ---
@@ -254,7 +254,7 @@ Week 5-6:   Value→Rc + 全局槽表 + 尾调用优化
 Week 7-8:   no_std + 字节码格式 + 体积测量（Phase C）
 Week 9-10:  C API 扩展 + FFI 验证（Phase D）
 Week 11-12: LSP 核心 + 格式化器 + 模块系统 v2（Phase E）
-Week 13:    发布 v0.2.0
+Week 13:    发布 v0.2.2
 ```
 
 ---

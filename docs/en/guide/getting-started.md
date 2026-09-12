@@ -1,6 +1,6 @@
 # Getting Started
 
-> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [v0.2.0](https://github.com/Maicarons/mailang/releases/tag/v0.2.0) · [Playground](https://maicarons.github.io/mailang/playground)
+> **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [v0.2.2](https://github.com/Maicarons/mailang/releases/tag/v0.2.2) · [Playground](https://maicarons.github.io/mailang/playground)
 
 ## System Requirements
 
@@ -34,7 +34,7 @@ Download from [GitHub Releases](https://github.com/Maicarons/mailang/releases).
 
 ```bash
 mailang --version
-# Output: mailang 0.2.0
+# Output: mailang 0.2.2
 ```
 
 ## Hello World
@@ -74,7 +74,7 @@ mailang
 ```
 
 ```
-MaìLang REPL v0.2.0
+MaìLang REPL v0.2.2
 Type 'exit' or 'quit' to exit.
 > 1 + 2
 3

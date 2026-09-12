@@ -167,7 +167,7 @@ fn main() {
 }
 
 fn run_repl(interp: &mut MailangInterpreter) {
-    println!("MaìLang REPL v0.2.0");
+    println!("MaìLang REPL v{}", env!("CARGO_PKG_VERSION"));
     println!("Type 'exit' or 'quit' to exit.");
     let stdin = io::stdin();
     let mut stdout = io::stdout();

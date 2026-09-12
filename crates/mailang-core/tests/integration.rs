@@ -525,6 +525,30 @@ fn test_module_linked_eval() {
     assert_eq!(interp.eval(src).unwrap(), "42");
 }
 
+#[test]
+fn test_subclass_inherits_parent_init() {
+    // Child with only an override must still run parent constructor.
+    let src = r#"
+class Animal {
+    let name
+    fn init(name) {
+        this.name = name
+    }
+    fn speak() {
+        return "{this.name} speaks"
+    }
+}
+class Dog extends Animal {
+    fn speak() {
+        return "{this.name} barks!"
+    }
+}
+let dog = Dog("Rex")
+dog.speak()
+"#;
+    assert_eq!(eval(src), "Rex barks!");
+}
+
 // ===== Phase F: cycle GC =====
 
 #[test]
