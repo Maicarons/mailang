@@ -5,6 +5,16 @@ use mailang_lexer::Token;
 use crate::error::ParseError;
 use super::Parser;
 
+fn pattern_to_expr(p: &Pattern) -> Result<Expr, ParseError> {
+    match p {
+        Pattern::Literal(lit) => Ok(Expr::Literal(lit.clone())),
+        Pattern::Identifier(name) => Ok(Expr::Identifier(name.clone())),
+        _ => Err(ParseError::ExpectedExpression(
+            "Cannot convert pattern to expression for range".to_string(),
+        )),
+    }
+}
+
 impl Parser {
     pub(crate) fn parse_primary(&mut self) -> Result<Expr, ParseError> {
         match self.peek() {
@@ -223,6 +233,39 @@ impl Parser {
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern, ParseError> {
+        let first = self.parse_pattern_atom()?;
+
+        // Check for range pattern: start..end or start..=end
+        if self.peek() == &Token::DotDot {
+            self.advance();
+            let inclusive = if self.peek() == &Token::Assign {
+                self.advance();
+                true
+            } else {
+                false
+            };
+            let end = self.parse_pattern_atom()?;
+            // Convert to range using expressions
+            let start_expr = pattern_to_expr(&first)?;
+            let end_expr = pattern_to_expr(&end)?;
+            let _ = inclusive; // TODO: support ..= (inclusive range)
+            return Ok(Pattern::Range(Box::new(start_expr), Box::new(end_expr)));
+        }
+
+        // Check for or-pattern: a | b | c
+        if self.peek() == &Token::Pipe {
+            let mut patterns = vec![first];
+            while self.peek() == &Token::Pipe {
+                self.advance();
+                patterns.push(self.parse_pattern_atom()?);
+            }
+            return Ok(Pattern::Or(patterns));
+        }
+
+        Ok(first)
+    }
+
+    fn parse_pattern_atom(&mut self) -> Result<Pattern, ParseError> {
         match self.peek() {
             Token::Integer(n) => {
                 let n = *n;

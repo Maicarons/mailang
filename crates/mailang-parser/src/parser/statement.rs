@@ -177,7 +177,40 @@ impl Parser {
                 "str" => Ok(TypeAnnotation::Str),
                 "char" => Ok(TypeAnnotation::Char),
                 "null" => Ok(TypeAnnotation::Option(Box::new(TypeAnnotation::Infer))),
-                _ => Ok(TypeAnnotation::Custom(name)),
+                "Result" => {
+                    // Result<T, E>
+                    self.expect(&Token::Less)?;
+                    let ok_type = self.parse_type_annotation()?;
+                    self.expect(&Token::Comma)?;
+                    let err_type = self.parse_type_annotation()?;
+                    self.expect(&Token::Greater)?;
+                    Ok(TypeAnnotation::Result(Box::new(ok_type), Box::new(err_type)))
+                }
+                "Option" => {
+                    // Option<T>
+                    self.expect(&Token::Less)?;
+                    let inner = self.parse_type_annotation()?;
+                    self.expect(&Token::Greater)?;
+                    Ok(TypeAnnotation::Option(Box::new(inner)))
+                }
+                _ => {
+                    // Check for generic type: Name<T, ...>
+                    if self.peek() == &Token::Less {
+                        self.advance(); // consume <
+                        let mut type_args = Vec::new();
+                        type_args.push(self.parse_type_annotation()?);
+                        while self.peek() == &Token::Comma {
+                            self.advance();
+                            type_args.push(self.parse_type_annotation()?);
+                        }
+                        self.expect(&Token::Greater)?;
+                        // Represent generic as Custom with encoded args
+                        let args_str: Vec<String> = type_args.iter().map(|t| format!("{:?}", t)).collect();
+                        Ok(TypeAnnotation::Custom(format!("{}<{}>", name, args_str.join(","))))
+                    } else {
+                        Ok(TypeAnnotation::Custom(name))
+                    }
+                }
             },
             Token::LeftBracket => {
                 let inner = self.parse_type_annotation()?;

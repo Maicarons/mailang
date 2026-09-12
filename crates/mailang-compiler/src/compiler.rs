@@ -924,9 +924,35 @@ impl Compiler {
                 self.emit_push_constant(Value::Bool(false), 0)?;
                 self.patch_jump(jump_end)?;
             }
-            Pattern::Tuple(_) | Pattern::Array(_) | Pattern::Range(_, _) => {
+            Pattern::Range(start_expr, end_expr) => {
+                // Stack on entry: [scrutinee]
+                // Test: start <= scrutinee && scrutinee < end
+                // Result: [scrutinee, bool]
+
+                // Test 1: scrutinee >= start
+                self.emit(Opcode::Dup, None, 0);           // [scrutinee, scrutinee]
+                self.compile_expression(start_expr)?;       // [scrutinee, scrutinee, start]
+                self.emit(Opcode::Ge, None, 0);            // [scrutinee, bool1]
+                let jump_fail = self.emit_jump(Opcode::JumpIfFalse, 0); // peek bool1
+
+                // bool1 is true: pop it, test second condition
+                self.emit(Opcode::Pop, None, 0);           // [scrutinee]
+                self.emit(Opcode::Dup, None, 0);           // [scrutinee, scrutinee]
+                self.compile_expression(end_expr)?;         // [scrutinee, scrutinee, end]
+                self.emit(Opcode::Lt, None, 0);            // [scrutinee, bool2]
+                // bool2 is the final result
+                let jump_done = self.emit_jump(Opcode::Jump, 0);
+
+                // Fail path: pop bool1 (from JumpIfFalse peek), pop scrutinee, push false
+                self.patch_jump(jump_fail)?;
+                self.emit(Opcode::Pop, None, 0);           // pop bool1
+                self.emit(Opcode::Pop, None, 0);           // pop scrutinee
+                self.emit_push_constant(Value::Bool(false), 0)?;
+
+                self.patch_jump(jump_done)?;
+            }
+            Pattern::Tuple(_) | Pattern::Array(_) => {
                 // Not yet fully implemented — always match for now
-                // so existing code doesn't break
                 self.emit_push_constant(Value::Bool(true), 0)?;
             }
         }

@@ -64,18 +64,15 @@ impl Lexer {
         let start_line = self.line;
         let start_col = self.column;
         self.advance(); // skip *
-        self.advance(); // skip *
+        self.advance(); // skip /
 
         let mut depth = 1;
         while depth > 0 {
             match self.peek() {
-                Some('*') if self.peek_at(1) == Some('*') => {
+                Some('*') if self.peek_at(1) == Some('/') => {
                     self.advance();
                     self.advance();
                     depth -= 1;
-                }
-                Some('*') if self.peek_at(1) == Some('/') => {
-                    return Err(LexerError::UnexpectedCharacter('*', self.line, self.column));
                 }
                 Some('/') if self.peek_at(1) == Some('*') => {
                     self.advance();
@@ -239,7 +236,70 @@ impl Lexer {
             self.advance();
         }
 
-        // Read digits
+        // Check for hex/octal/binary prefixes
+        if self.peek() == Some('0') {
+            if let Some(next) = self.peek_at(1) {
+                match next {
+                    'x' | 'X' => {
+                        self.advance(); // 0
+                        self.advance(); // x
+                        let mut hex = String::new();
+                        while let Some(ch) = self.peek() {
+                            if ch.is_ascii_hexdigit() {
+                                hex.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                        let val = i64::from_str_radix(&hex, 16)
+                            .map_err(|_| LexerError::InvalidNumber(start_line, start_col))?;
+                        return Ok(Token::Integer(val));
+                    }
+                    'o' | 'O' => {
+                        self.advance(); // 0
+                        self.advance(); // o
+                        let mut oct = String::new();
+                        while let Some(ch) = self.peek() {
+                            if ('0'..='7').contains(&ch) {
+                                oct.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                        let val = i64::from_str_radix(&oct, 8)
+                            .map_err(|_| LexerError::InvalidNumber(start_line, start_col))?;
+                        return Ok(Token::Integer(val));
+                    }
+                    'b' | 'B' => {
+                        self.advance(); // 0
+                        self.advance(); // b
+                        let mut bin = String::new();
+                        while let Some(ch) = self.peek() {
+                            if ch == '0' || ch == '1' {
+                                bin.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                        let val = i64::from_str_radix(&bin, 2)
+                            .map_err(|_| LexerError::InvalidNumber(start_line, start_col))?;
+                        return Ok(Token::Integer(val));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Read decimal digits
         while let Some(ch) = self.peek() {
             if ch.is_ascii_digit() {
                 num_str.push(ch);
