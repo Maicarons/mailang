@@ -876,6 +876,10 @@ impl Compiler {
             Expr::None => {
                 self.emit_push_constant(Value::Null, 0)?;
             }
+            Expr::Try(inner) => {
+                self.compile_expression(inner)?;
+                self.emit(Opcode::Try, None, 0);
+            }
             Expr::StringInterpolation(parts) => {
                 // Compile first part
                 if let Some(first) = parts.first() {

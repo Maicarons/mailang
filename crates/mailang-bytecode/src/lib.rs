@@ -118,6 +118,8 @@ pub enum Opcode {
     UnwrapOk,
     UnwrapErr,
     UnwrapSome,
+    /// `?` — Ok/Some → inner; Err/Null early-return from current frame.
+    Try,
 
     // Special
     Nop,
@@ -202,9 +204,10 @@ impl Opcode {
             64 => Opcode::UnwrapOk,
             65 => Opcode::UnwrapErr,
             66 => Opcode::UnwrapSome,
-            67 => Opcode::Nop,
-            68 => Opcode::Halt,
-            69 => Opcode::CallDirect,
+            67 => Opcode::Try,
+            68 => Opcode::Nop,
+            69 => Opcode::Halt,
+            70 => Opcode::CallDirect,
             _ => return None,
         })
     }

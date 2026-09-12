@@ -117,6 +117,8 @@ impl Vm {
         builtins.insert("time_sleep".to_string(), |args| {
             mailang_stdlib::builtin_time_sleep(args)
         });
+        builtins.insert("read_file".to_string(), mailang_stdlib::builtin_read_file);
+        builtins.insert("write_file".to_string(), mailang_stdlib::builtin_write_file);
         // Simulated IoT HAL
         builtins.insert("gpio_write".to_string(), |args| {
             mailang_stdlib::hal::builtin_gpio_write(args)
@@ -761,6 +763,55 @@ impl Vm {
                         }
                     }
                 }
+                Opcode::Try => {
+                    // `expr?`: Ok/Some → inner; Err/Null → early return from this frame.
+                    let value = self.pop()?;
+                    match value {
+                        Value::Ok(inner) | Value::Some(inner) => {
+                            self.push(*inner)?;
+                        }
+                        Value::Err(e) => {
+                            self.push(Value::Err(e))?;
+                            // Same as Return
+                            let ret = self.pop()?;
+                            if let Some(frame) = self.call_stack.pop() {
+                                let base = if frame.direct {
+                                    frame.stack_base
+                                } else {
+                                    frame.stack_base.saturating_sub(1)
+                                };
+                                self.stack.truncate(base);
+                                self.chunk_index = frame.chunk_index;
+                                self.ip = frame.ip;
+                                self.push(ret)?;
+                            } else {
+                                return Ok(ret);
+                            }
+                        }
+                        Value::Null => {
+                            // None? early-returns null
+                            if let Some(frame) = self.call_stack.pop() {
+                                let base = if frame.direct {
+                                    frame.stack_base
+                                } else {
+                                    frame.stack_base.saturating_sub(1)
+                                };
+                                self.stack.truncate(base);
+                                self.chunk_index = frame.chunk_index;
+                                self.ip = frame.ip;
+                                self.push(Value::Null)?;
+                            } else {
+                                return Ok(Value::Null);
+                            }
+                        }
+                        other => {
+                            return Err(VmError::TypeError(format!(
+                                "cannot use `?` on non-Result/Option value ({})",
+                                mailang_stdlib::value_to_string(&other)
+                            )));
+                        }
+                    }
+                }
                 Opcode::TailCall => {
                     let arg_count = operand.unwrap_or(0) as usize;
                     let func_index =
@@ -1068,6 +1119,38 @@ impl Vm {
                         .checked_sub(arg_count + 1)
                         .ok_or(VmError::StackUnderflow)?;
                     let object = self.stack[obj_index].clone();
+
+                    // Builtin collection / string methods (no user-defined dispatch).
+                    {
+                        let args: Vec<Value> = self.stack[obj_index + 1..].to_vec();
+                        match &object {
+                            Value::Array(arr) => {
+                                let result = invoke_array_method(arr, &method_name, &args)?;
+                                self.stack.truncate(obj_index);
+                                self.push(result)?;
+                                continue;
+                            }
+                            Value::Map(entries) => {
+                                // Prefer map-field functions over builtins.
+                                let has_field = entries.borrow().iter().any(|(k, _)| {
+                                    matches!(k, Value::Str(s) if s.as_ref() == method_name.as_str())
+                                });
+                                if !has_field {
+                                    let result = invoke_map_method(entries, &method_name, &args)?;
+                                    self.stack.truncate(obj_index);
+                                    self.push(result)?;
+                                    continue;
+                                }
+                            }
+                            Value::Str(s) => {
+                                let result = invoke_str_method(s, &method_name, &args)?;
+                                self.stack.truncate(obj_index);
+                                self.push(result)?;
+                                continue;
+                            }
+                            _ => {}
+                        }
+                    }
 
                     match &object {
                         Value::Instance { class_index, .. } => {
@@ -1543,5 +1626,147 @@ impl Vm {
                 "Bitwise XOR requires integers".to_string(),
             )),
         }
+    }
+}
+
+fn invoke_array_method(
+    arr: &Rc<RefCell<Vec<Value>>>,
+    name: &str,
+    args: &[Value],
+) -> Result<Value, VmError> {
+    match name {
+        "push" => {
+            let v = args.first().cloned().unwrap_or(Value::Null);
+            arr.borrow_mut().push(v);
+            Ok(Value::Null)
+        }
+        "pop" => Ok(arr.borrow_mut().pop().unwrap_or(Value::Null)),
+        "insert" => {
+            let idx = match args.first() {
+                Some(Value::Int(n)) => *n,
+                _ => return Err(VmError::TypeError("insert(index, value)".into())),
+            };
+            let v = args.get(1).cloned().unwrap_or(Value::Null);
+            let mut a = arr.borrow_mut();
+            let i = if idx < 0 { 0 } else { idx as usize };
+            let i = i.min(a.len());
+            a.insert(i, v);
+            Ok(Value::Null)
+        }
+        "contains" => {
+            let needle = args.first().cloned().unwrap_or(Value::Null);
+            Ok(Value::Bool(arr.borrow().iter().any(|x| x == &needle)))
+        }
+        "join" => {
+            let sep = match args.first() {
+                Some(Value::Str(s)) => s.to_string(),
+                _ => ",".to_string(),
+            };
+            let parts: Vec<String> = arr
+                .borrow()
+                .iter()
+                .map(mailang_stdlib::value_to_string)
+                .collect();
+            Ok(Value::Str(parts.join(&sep).into()))
+        }
+        "reverse" => {
+            arr.borrow_mut().reverse();
+            Ok(Value::Null)
+        }
+        "clear" => {
+            arr.borrow_mut().clear();
+            Ok(Value::Null)
+        }
+        _ => Err(VmError::UndefinedFunction(format!("Array.{name}"))),
+    }
+}
+
+fn invoke_map_method(
+    entries: &Rc<RefCell<Vec<(Value, Value)>>>,
+    name: &str,
+    args: &[Value],
+) -> Result<Value, VmError> {
+    match name {
+        "keys" => {
+            let keys: Vec<Value> = entries.borrow().iter().map(|(k, _)| k.clone()).collect();
+            Ok(Value::Array(Rc::new(RefCell::new(keys))))
+        }
+        "values" => {
+            let vals: Vec<Value> = entries.borrow().iter().map(|(_, v)| v.clone()).collect();
+            Ok(Value::Array(Rc::new(RefCell::new(vals))))
+        }
+        "has" => {
+            let k = args.first().cloned().unwrap_or(Value::Null);
+            Ok(Value::Bool(
+                entries.borrow().iter().any(|(key, _)| key == &k),
+            ))
+        }
+        "remove" => {
+            let k = args.first().cloned().unwrap_or(Value::Null);
+            entries.borrow_mut().retain(|(key, _)| key != &k);
+            Ok(Value::Null)
+        }
+        "clear" => {
+            entries.borrow_mut().clear();
+            Ok(Value::Null)
+        }
+        _ => Err(VmError::UndefinedFunction(format!("Map.{name}"))),
+    }
+}
+
+fn invoke_str_method(s: &Rc<str>, name: &str, args: &[Value]) -> Result<Value, VmError> {
+    let text = s.as_ref();
+    match name {
+        "starts_with" => {
+            let p = match args.first() {
+                Some(Value::Str(p)) => p.as_ref(),
+                _ => return Err(VmError::TypeError("starts_with(str)".into())),
+            };
+            Ok(Value::Bool(text.starts_with(p)))
+        }
+        "ends_with" => {
+            let p = match args.first() {
+                Some(Value::Str(p)) => p.as_ref(),
+                _ => return Err(VmError::TypeError("ends_with(str)".into())),
+            };
+            Ok(Value::Bool(text.ends_with(p)))
+        }
+        "contains" => {
+            let p = match args.first() {
+                Some(Value::Str(p)) => p.as_ref(),
+                _ => return Err(VmError::TypeError("contains(str)".into())),
+            };
+            Ok(Value::Bool(text.contains(p)))
+        }
+        "trim" => Ok(Value::Str(text.trim().into())),
+        "to_upper" | "to_uppercase" => Ok(Value::Str(text.to_uppercase().into())),
+        "to_lower" | "to_lowercase" => Ok(Value::Str(text.to_lowercase().into())),
+        "split" => {
+            let sep = match args.first() {
+                Some(Value::Str(p)) => p.as_ref(),
+                _ => return Err(VmError::TypeError("split(str)".into())),
+            };
+            let parts: Vec<Value> = text.split(sep).map(|p| Value::Str(p.into())).collect();
+            Ok(Value::Array(Rc::new(RefCell::new(parts))))
+        }
+        "replace" => {
+            let from = match args.first() {
+                Some(Value::Str(p)) => p.as_ref(),
+                _ => return Err(VmError::TypeError("replace(a, b)".into())),
+            };
+            let to = match args.get(1) {
+                Some(Value::Str(p)) => p.as_ref(),
+                _ => "",
+            };
+            Ok(Value::Str(text.replace(from, to).into()))
+        }
+        "repeat" => {
+            let n = match args.first() {
+                Some(Value::Int(n)) if *n >= 0 => *n as usize,
+                _ => return Err(VmError::TypeError("repeat(n)".into())),
+            };
+            Ok(Value::Str(text.repeat(n).into()))
+        }
+        _ => Err(VmError::UndefinedFunction(format!("str.{name}"))),
     }
 }

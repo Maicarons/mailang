@@ -362,6 +362,10 @@ impl Parser {
                         index: Box::new(index),
                     };
                 }
+                Token::Question => {
+                    self.advance();
+                    expr = Expr::Try(Box::new(expr));
+                }
                 _ => break,
             }
         }

@@ -91,4 +91,4 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-**v0.2.2** (Phases B–F complete). Runtime supports OOP (including inherited constructors), traits, pattern matching, TCO, slot-based globals, `.mailangbc`, simulated HAL, C FFI host-fn registration, analyzer-in-eval (with source spans), LSP, `mailang fmt`, module system v2, and Rc cycle collection. Fib(30) ~137 ms release (~4.25× Phase A baseline). 73+ integration tests.
+**v0.2.4** (Phases B–G core items). Runtime supports OOP (inherited constructors), traits, pattern matching, `?`, TCO, collections/str methods, `read_file`/`write_file`, `.mailangbc`, HAL, C FFI, analyzer/LSP/fmt, module v2, and Rc cycle collection. Fib(30) ~137 ms (~4.25× baseline). 81+ integration tests.

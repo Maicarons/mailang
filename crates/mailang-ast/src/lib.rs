@@ -136,6 +136,8 @@ pub enum Expr {
     Err(Box<Expr>),
     Some(Box<Expr>),
     None,
+    /// `expr?` — unwrap Ok/Some or early-return Err/None from the enclosing function.
+    Try(Box<Expr>),
     StringInterpolation(Vec<StringPart>),
 }
 

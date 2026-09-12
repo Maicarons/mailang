@@ -2,7 +2,17 @@ use crate::error::AnalyzerError;
 use mailang_ast::*;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+/// Loose compatibility: Any/Unknown match anything; Int ⊂ Float.
+fn types_compatible(expected: &Type, found: &Type) -> bool {
+    match (expected, found) {
+        (Type::Any, _) | (_, Type::Any) => true,
+        (Type::Unknown, _) | (_, Type::Unknown) => true,
+        (Type::Float, Type::Int) => true,
+        _ => expected == found,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)] // richer type model used as the analyzer grows
 pub enum Type {
     Int,
@@ -85,6 +95,8 @@ struct FunctionInfo {
     name: String,
     params: Vec<(String, Type)>,
     return_type: Type,
+    /// False for host/stdlib builtins (arity is dynamic).
+    declared: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -147,6 +159,7 @@ impl Analyzer {
                 name: name.to_string(),
                 params: Vec::new(),
                 return_type: Type::Any,
+                declared: false,
             },
         );
     }
@@ -186,6 +199,8 @@ impl Analyzer {
             "gpio_read",
             "delay_ms",
             "adc_read",
+            "read_file",
+            "write_file",
         ];
         for name in BUILTINS {
             self.register_builtin(name);
@@ -345,6 +360,7 @@ impl Analyzer {
                             .map(|(p, t)| (p.name.clone(), t.clone()))
                             .collect(),
                         return_type: ret_type,
+                        declared: true,
                     },
                 );
 
@@ -495,6 +511,7 @@ impl Analyzer {
                                 .map(|(p, t)| (p.name.clone(), t.clone()))
                                 .collect(),
                             return_type: ret_type,
+                            declared: true,
                         },
                     );
                 }
@@ -580,6 +597,7 @@ impl Analyzer {
                                 .map(|(p, t)| (p.name.clone(), t.clone()))
                                 .collect(),
                             return_type: ret_type,
+                            declared: true,
                         },
                     );
                 }
@@ -612,6 +630,7 @@ impl Analyzer {
                                 .map(|(p, t)| (p.name.clone(), t.clone()))
                                 .collect(),
                             return_type: ret_type,
+                            declared: true,
                         },
                     );
 
@@ -664,6 +683,31 @@ impl Analyzer {
                 self.analyze_expression(callee);
                 for arg in args {
                     self.analyze_expression(arg);
+                }
+                // Arity / simple type check for named user functions with annotations.
+                if let Expr::Identifier(fname) = &**callee {
+                    if let Some(info) = self.functions.get(fname) {
+                        if info.declared {
+                            let expected = info.params.len();
+                            if expected != args.len() {
+                                self.errors.push(AnalyzerError::WrongArgumentCount {
+                                    name: fname.clone(),
+                                    expected,
+                                    found: args.len(),
+                                });
+                            } else {
+                                for ((pname, pty), arg) in info.params.iter().zip(args.iter()) {
+                                    let aty = self.infer_type(arg);
+                                    if !types_compatible(pty, &aty) {
+                                        self.errors.push(AnalyzerError::TypeMismatch {
+                                            expected: format!("{}: {}", pname, pty),
+                                            found: format!("{}", aty),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Expr::MethodCall {
@@ -761,6 +805,9 @@ impl Analyzer {
                 self.analyze_expression(value);
             }
             Expr::None => {}
+            Expr::Try(inner) => {
+                self.analyze_expression(inner);
+            }
             Expr::StringInterpolation(parts) => {
                 for part in parts {
                     if let StringPart::Expr(expr) = part {

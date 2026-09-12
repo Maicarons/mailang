@@ -51,3 +51,27 @@ pub fn builtin_input(args: &[Value]) -> Result<Value, String> {
         .map_err(|e| e.to_string())?;
     Ok(Value::Str(input.trim_end().into()))
 }
+
+/// `read_file(path)` → str contents (host filesystem).
+pub fn builtin_read_file(args: &[Value]) -> Result<Value, String> {
+    let path = match args.first() {
+        Some(Value::Str(p)) => p.to_string(),
+        _ => return Err("read_file(path): path must be a string".into()),
+    };
+    let data = std::fs::read_to_string(&path).map_err(|e| format!("read_file: {e}"))?;
+    Ok(Value::Str(data.into()))
+}
+
+/// `write_file(path, contents)` → null.
+pub fn builtin_write_file(args: &[Value]) -> Result<Value, String> {
+    let path = match args.first() {
+        Some(Value::Str(p)) => p.to_string(),
+        _ => return Err("write_file(path, contents): path must be a string".into()),
+    };
+    let data = match args.get(1) {
+        Some(v) => value_to_string(v),
+        None => String::new(),
+    };
+    std::fs::write(&path, data).map_err(|e| format!("write_file: {e}"))?;
+    Ok(Value::Null)
+}

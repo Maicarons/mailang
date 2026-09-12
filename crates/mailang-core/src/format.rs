@@ -460,6 +460,10 @@ fn format_expr(expr: &Expr, out: &mut String) {
             out.push(')');
         }
         Expr::None => out.push_str("None"),
+        Expr::Try(inner) => {
+            format_expr(inner, out);
+            out.push('?');
+        }
         Expr::Lambda { params, body } => {
             out.push_str("fn(");
             out.push_str(&params_str(params));

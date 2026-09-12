@@ -14,7 +14,8 @@ A modern programming language designed for IoT and cross-platform development, w
 ## Features
 
 - **Object-Oriented Programming** - Classes, inheritance, constructors, `super()`, traits
-- **Closures & Pattern Matching** - First-class functions; literals, ranges, `Ok`/`Err`/`Some`
+- **Closures & Pattern Matching** - First-class functions; literals, ranges, `Ok`/`Err`/`Some`, `?` operator
+- **Collections** - Array/Map/str methods (`push`, `keys`, `split`, …)
 - **UTF-8 Native** - Full Unicode support for identifiers and strings
 - **Stack-based Bytecode VM** - Slot locals, TCO, CallDirect, ~4× faster recursive fib vs 0.1
 - **Embeddable** - C FFI host functions, no_std bytecode crate, `.mailangbc` artifacts

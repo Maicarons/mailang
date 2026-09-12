@@ -4,6 +4,21 @@ All notable changes to MaìLang will be documented in this file.
 
 Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 
+## [0.2.4] - 2026-09-12
+
+Phase G: language completeness and DX.
+
+### Added
+- **`?` operator** — `Ok`/`Some` unwrap, `Err`/`None` early-return from the enclosing function
+- **Array methods**: `push` `pop` `insert` `contains` `join` `reverse` `clear`
+- **Map methods**: `keys` `values` `has` `remove` `clear`
+- **String methods**: `trim` `split` `replace` `starts_with` `ends_with` `contains` `to_upper` `to_lower` `repeat`
+- **File builtins**: `read_file(path)` `write_file(path, contents)` (host FS)
+- Analyzer: arity mismatch and simple type mismatch for declared functions with annotations
+
+### Fixed
+- Subclasses without `init` inherit the parent constructor (`Dog("Rex")` → `Rex barks!`)
+
 ## [0.2.2] - 2026-09-12
 
 ### Fixed

@@ -305,30 +305,37 @@ Week 13:    发布 v0.2.2
 
 > 调研日期：2026-09-12。Phase B–F 已闭环；下列项来自运行时探测与代码审计，按投入产出排序。
 
-### G1. 错误传播 `?` 操作符（P0）
+### G1. 错误传播 `?` 操作符（P0） — **完成**
 
-- **现状**：Lexer 已产出 `Token::Question`，Parser/Compiler/VM 未接；`Ok(x)?` 报 `Expected expression`
-- **目标**：`expr?` — `Ok(v)` 解包为 `v`；`Err(e)` 提前 `return Err(e)`
-- **验收**：`error_handling.mai` 改写为 `?` 链式风格并跑通
+- **验收**：`Ok`/`Some` 解包；`Err`/`None` 提前 return（`test_try_operator_*`）
 
-### G2. 集合方法 API（P0）
+### G2. 集合方法 API（P0） — **完成**
 
-- **现状**：`a.push(3)` → `Cannot invoke method 'push' on non-object`
-- **目标**（Array / Map）：
-  - Array：`push` `pop` `len`（已有属性）`insert` `contains` `join`
-  - Map：`keys` `values` `has` `remove`
-- **验收**：stdlib 级测试 + 文档示例
+- Array：`push` `pop` `insert` `contains` `join` `reverse` `clear`
+- Map：`keys` `values` `has` `remove` `clear`
+- String：`trim` `split` `replace` `starts_with` `ends_with` `contains` `to_upper` `to_lower` `repeat`
 
-### G3. Analyzer 类型检查强化（P1）
+### G3. Analyzer 类型检查强化（P1） — **基本完成**
 
-- **现状**：能查未定义名；类型字段多数未参与检查
-- **目标**：对已标注参数/返回值做调用 arity 与基础类型不匹配诊断；LSP 标红
-- **验收**：`fn f(a: int) {} f("x")` 在 eval 前失败
+- 已声明函数：arity + 参数类型兼容（Int⊂Float、Any/Unknown）
+- 内置/宿主函数不做 arity 强制（动态）
 
-### G4. 字符串与 IO 标准库补全（P1）
+### G4. 字符串与 IO 标准库补全（P1） — **完成**
 
-- 方法风格：`s.split(sep)` `s.trim()` `s.replace(a,b)` `s.starts_with` `s.ends_with`
-- 文件：`read_file` `write_file`（受 host/FFI 门控）
+- `read_file` / `write_file`
+
+### G5. Playground / WASM 产品化（P1） — 部分
+
+- CLI 行为已修；playground 需本地 `npm run build:wasm` 刷新产物
+
+### G6. 工程化收尾（P1） — 部分
+
+- crates.io：见下方「发布到 crates.io」
+- 版本：工作区跟随最新 tag
+
+### G7. 解释器深度（P2，可选） — 未做
+
+- 寄存器 VM / 专用 Int 栈；数组/元组解构
 
 ### G5. Playground / WASM 产品化（P1）
 

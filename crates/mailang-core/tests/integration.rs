@@ -604,3 +604,97 @@ fn test_analyzer_diagnostic_position() {
     assert_eq!(diags[0].line, 1);
     assert_eq!(diags[0].col, 0);
 }
+
+// ===== Phase G: ? operator, collections, types =====
+
+#[test]
+fn test_try_operator_ok() {
+    let src = r#"
+fn div(a, b) {
+    if b == 0.0 {
+        return Err("div0")
+    }
+    return Ok(a / b)
+}
+fn calc() {
+    let x = div(10.0, 2.0)?
+    return Ok(x * 2.0)
+}
+calc()
+"#;
+    assert_eq!(eval(src), "Ok(10)");
+}
+
+#[test]
+fn test_try_operator_err_propagates() {
+    let src = r#"
+fn div(a, b) {
+    if b == 0.0 {
+        return Err("div0")
+    }
+    return Ok(a / b)
+}
+fn calc() {
+    let x = div(1.0, 0.0)?
+    return Ok(x)
+}
+calc()
+"#;
+    assert_eq!(eval(src), "Err(div0)");
+}
+
+#[test]
+fn test_array_methods() {
+    assert_eq!(eval("let a = [1]\na.push(2)\na.join(\",\")"), "1,2");
+    assert_eq!(eval("let a = [1, 2]\na.contains(2)"), "true");
+    assert_eq!(eval("let a = [1]\na.pop()"), "1");
+}
+
+#[test]
+fn test_map_methods() {
+    assert_eq!(eval("let m = {\"a\": 1}\nm.has(\"a\")"), "true");
+    assert_eq!(eval("let m = {\"a\": 1}\nm.keys()[0]"), "a");
+}
+
+#[test]
+fn test_str_methods() {
+    assert_eq!(eval("\"  hi  \".trim()"), "hi");
+    assert_eq!(eval("\"a,b\".split(\",\")[1]"), "b");
+    assert_eq!(eval("\"hi\".to_upper()"), "HI");
+}
+
+#[test]
+fn test_analyzer_arity_error() {
+    let src = "fn add(a: int, b: int) -> int {\n    return a + b\n}\nadd(1)\n";
+    let mut parser = mailang_core::parser::Parser::new(src).unwrap();
+    let program = parser.parse_program().unwrap();
+    let mut analyzer = mailang_core::analyzer::Analyzer::new();
+    let errs = analyzer.analyze(&program).unwrap_err();
+    assert!(
+        errs.iter()
+            .any(|e| e.to_string().contains("Wrong number of arguments")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn test_analyzer_type_mismatch() {
+    let src = "fn add(a: int, b: int) -> int {\n    return a + b\n}\nadd(1, \"x\")\n";
+    let mut parser = mailang_core::parser::Parser::new(src).unwrap();
+    let program = parser.parse_program().unwrap();
+    let mut analyzer = mailang_core::analyzer::Analyzer::new();
+    let errs = analyzer.analyze(&program).unwrap_err();
+    assert!(
+        errs.iter().any(|e| e.to_string().contains("Type mismatch")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn test_read_write_file_roundtrip() {
+    let path = std::env::temp_dir().join("mailang_g4_test.txt");
+    let p = path.display().to_string().replace('\\', "/");
+    let src = format!("write_file(\"{p}\", \"hello-g4\")\nread_file(\"{p}\")");
+    assert_eq!(eval(&src), "hello-g4");
+    let _ = std::fs::remove_file(&path);
+}
