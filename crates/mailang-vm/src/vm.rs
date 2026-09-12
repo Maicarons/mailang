@@ -764,6 +764,21 @@ impl Vm {
                         }
                     }
                 }
+                Opcode::CallDirect => {
+                    let packed = operand.unwrap_or(0);
+                    let chunk_index = (packed >> 16) as usize;
+                    let arg_count = (packed & 0xFFFF) as usize;
+                    let func_index = self.stack.len().checked_sub(arg_count + 1)
+                        .ok_or_else(|| VmError::StackUnderflow)?;
+                    self.call_stack.push(CallFrame {
+                        chunk_index: self.chunk_index,
+                        ip: self.ip,
+                        stack_base: func_index + 1,
+                        upvalues: Vec::new(),
+                    });
+                    self.chunk_index = chunk_index;
+                    self.ip = 0;
+                }
                 Opcode::Return => {
                     let value = self.pop()?;
                     if let Some(frame) = self.call_stack.pop() {

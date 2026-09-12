@@ -60,6 +60,8 @@ pub struct Compiler {
     class_info: HashMap<String, CompiledClass>,
     trait_info: HashMap<String, CompiledTrait>,
     current_class: Option<String>,
+    /// Top-level function name -> (chunk_index, arity) for CallDirect.
+    known_functions: HashMap<String, (usize, usize)>,
 }
 
 impl Compiler {
@@ -82,6 +84,7 @@ impl Compiler {
             class_info: HashMap::new(),
             trait_info: HashMap::new(),
             current_class: None,
+            known_functions: HashMap::new(),
         }
     }
 
@@ -668,6 +671,21 @@ impl Compiler {
                     if name == "super" {
                         return self.compile_super_call(args);
                     }
+                    // CallDirect: known top-level function, not shadowed by a local.
+                    if self.resolve_local(name).is_none() {
+                        if let Some(&(chunk, arity)) = self.known_functions.get(name) {
+                            if arity == args.len() && chunk <= 0xFFFF && arity <= 0xFFFF {
+                                // Placeholder slot so Return's truncate math stays valid.
+                                self.emit_push_constant(Value::Null, 0)?;
+                                for arg in args {
+                                    self.compile_expression(arg)?;
+                                }
+                                let packed = ((chunk as u32) << 16) | (arity as u32);
+                                self.emit(Opcode::CallDirect, Some(packed), 0);
+                                return Ok(());
+                            }
+                        }
+                    }
                 }
                 self.compile_expression(callee)?;
                 for arg in args {
@@ -1186,6 +1204,9 @@ impl Compiler {
     ) -> Result<(), CompilerError> {
         let chunk_index = self.bytecode.chunks.len();
         self.bytecode.chunks.push(Chunk::new(name.to_string()));
+        // Register before compiling the body so recursive calls can CallDirect.
+        self.known_functions
+            .insert(name.to_string(), (chunk_index, params.len()));
 
         let compiler = FunctionCompiler {
             chunk_index,

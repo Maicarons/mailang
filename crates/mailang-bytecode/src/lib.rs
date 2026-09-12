@@ -119,6 +119,9 @@ pub enum Opcode {
     // Special
     Nop,
     Halt,
+    /// Direct call to a known chunk. operand = (chunk_index << 16) | arity.
+    /// Stack: [func_slot_placeholder, args...]
+    CallDirect,
 }
 
 impl Opcode {
@@ -198,6 +201,7 @@ impl Opcode {
             66 => Opcode::UnwrapSome,
             67 => Opcode::Nop,
             68 => Opcode::Halt,
+            69 => Opcode::CallDirect,
             _ => return None,
         })
     }
