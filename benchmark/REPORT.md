@@ -17,15 +17,23 @@
 
 ---
 
-## 2. Phase B 后实测（release，7 次取平均）
+## 2. Phase E 后热路径优化实测（release，7 次取平均）
 
 | 基准测试 | 结果 | 说明 |
 |----------|------|------|
-| Fibonacci(30) 递归 | ~883 ms（含进程启动） | 结果 832040；未达 3x 目标 |
+| Fibonacci(30) 递归 | **~423 ms**（含进程启动 ~11 ms） | 结果 832040 |
+| 对比 Phase A 基线 581.59 ms | **~1.37x** | 未达 3x |
+| 对比 Phase B 初测 ~883 ms | **~2.1x** | `current_frame` 整帧 clone 已消除 |
 | TCO 深递归 count(50000) | 通过 | 无栈溢出 |
-| 单次进程开销（eval 1+1） | ~11 ms | 启动+解析+编译 |
+| 单次进程开销（eval 1+1） | ~11 ms | 启动+解析+编译+分析 |
 
-**结论**：Value→Rc、全局槽表、数组原地写、TCO 均已落地；Fib(30) 整数递归的瓶颈不在堆克隆，而在调用帧与指令分派，3x 提升需 Phase F 级优化（内联缓存 / 寄存器 VM / 专用 Int 路径）。
+**已做热路径优化**：
+- `LoadLocal`/`StoreLocal` 不再 clone 整个 `CallFrame`（含 `upvalues` Vec）
+- Int 标量 Load/Store 与 Add/Sub/Mul/Eq/Ne/Lt/Le/Gt/Ge 走专用路径
+- `Call` 对 `Value::Function` 不 clone，直接改写 `chunk_index`/`ip`
+- `JumpIfFalse` 对 Bool/Null/Int(0) 短路
+
+**结论**：栈式解释器在整数递归上的剩余成本是指令分派与 `Value` 栈布局；3x 需 Phase F（寄存器 VM / 专用 Int 寄存器 / 超级指令）。
 
 ---
 

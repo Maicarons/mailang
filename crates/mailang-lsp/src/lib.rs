@@ -29,62 +29,79 @@ fn offset_to_position(text: &str, offset: usize) -> Position {
     Position::new(line, col)
 }
 
+fn parse_line_col(message: &str) -> Option<(u32, u32)> {
+    // Patterns: "at line 3, column 5" or "line 3, col 5"
+    let lower = message.to_lowercase();
+    let line_idx = lower.find("line ")?;
+    let rest = &lower[line_idx + 5..];
+    let line: u32 = rest
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()?;
+    let col: u32 = if let Some(ci) = rest.find("column ") {
+        rest[ci + 7..]
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse()
+            .ok()
+    } else if let Some(ci) = rest.find("col ") {
+        rest[ci + 4..]
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse()
+            .ok()
+    } else {
+        Some(0)
+    }?;
+    // AST/parser lines are 1-based; LSP is 0-based
+    Some((line.saturating_sub(1u32), col.saturating_sub(1u32)))
+}
+
+fn diag_at(message: &str, severity: DiagnosticSeverity) -> Diagnostic {
+    let (line, col) = parse_line_col(message).unwrap_or((0, 0));
+    let end_col = col + 1;
+    Diagnostic {
+        range: Range::new(Position::new(line, col), Position::new(line, end_col)),
+        severity: Some(severity),
+        message: message.to_string(),
+        source: Some("mailang".into()),
+        ..Default::default()
+    }
+}
+
 fn collect_diagnostics(source: &str) -> Vec<Diagnostic> {
     let mut parser = match Parser::new(source) {
         Ok(p) => p,
-        Err(e) => {
-            return vec![Diagnostic {
-                range: Range::new(Position::new(0, 0), Position::new(0, 1)),
-                severity: Some(DiagnosticSeverity::ERROR),
-                message: e.to_string(),
-                ..Default::default()
-            }];
-        }
+        Err(e) => return vec![diag_at(&e.to_string(), DiagnosticSeverity::ERROR)],
     };
     let program = match parser.parse_program() {
         Ok(p) => p,
-        Err(e) => {
-            return vec![Diagnostic {
-                range: Range::new(Position::new(0, 0), Position::new(0, 1)),
-                severity: Some(DiagnosticSeverity::ERROR),
-                message: e.to_string(),
-                ..Default::default()
-            }];
-        }
+        Err(e) => return vec![diag_at(&e.to_string(), DiagnosticSeverity::ERROR)],
     };
 
     let mut analyzer = Analyzer::new();
     match analyzer.analyze(&program) {
-        Ok(()) => {
-            // Surface unused-variable hints as Information
-            analyzer
-                .diagnostics()
-                .into_iter()
-                .filter_map(|e| match e {
-                    mailang_analyzer::AnalyzerError::UnusedVariable(name) => Some(Diagnostic {
-                        range: Range::new(Position::new(0, 0), Position::new(0, 1)),
-                        severity: Some(DiagnosticSeverity::INFORMATION),
-                        message: format!("unused variable '{}'", name),
-                        ..Default::default()
-                    }),
-                    other => Some(Diagnostic {
-                        range: Range::new(Position::new(0, 0), Position::new(0, 1)),
-                        severity: Some(DiagnosticSeverity::WARNING),
-                        message: other.to_string(),
-                        ..Default::default()
-                    }),
-                })
-                .collect()
-        }
+        Ok(()) => analyzer
+            .diagnostics()
+            .into_iter()
+            .filter_map(|e| match e {
+                mailang_analyzer::AnalyzerError::UnusedVariable(name) => Some(diag_at(
+                    &format!("unused variable '{}'", name),
+                    DiagnosticSeverity::INFORMATION,
+                )),
+                other => Some(diag_at(
+                    &other.to_string(),
+                    DiagnosticSeverity::WARNING,
+                )),
+            })
+            .collect(),
         Err(errs) => errs
             .into_iter()
-            .map(|e| Diagnostic {
-                range: Range::new(Position::new(0, 0), Position::new(0, 1)),
-                severity: Some(DiagnosticSeverity::ERROR),
-                message: e.to_string(),
-                source: Some("mailang".into()),
-                ..Default::default()
-            })
+            .map(|e| diag_at(&e.to_string(), DiagnosticSeverity::ERROR))
             .collect(),
     }
 }
@@ -138,7 +155,7 @@ fn word_completions(source: &str, _position: Position) -> Vec<CompletionItem> {
     items
 }
 
-fn find_definition(source: &str, position: Position) -> Option<Location> {
+fn find_definition(source: &str, position: Position, doc_uri: &Url) -> Option<Location> {
     let lines: Vec<&str> = source.lines().collect();
     let line = lines.get(position.line as usize)?;
     let chars: Vec<char> = line.chars().collect();
@@ -183,9 +200,8 @@ fn find_definition(source: &str, position: Position) -> Option<Location> {
                 } else {
                     4
                 };
-            let uri = Url::parse("file:///memory.mai").unwrap();
             return Some(Location {
-                uri,
+                uri: doc_uri.clone(),
                 range: Range::new(
                     Position::new(i as u32, name_col),
                     Position::new(i as u32, name_col + word.chars().count() as u32),
@@ -267,7 +283,7 @@ impl LanguageServer for Backend {
         let uri = &params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
         if let Some(text) = self.documents.get(uri) {
-            if let Some(loc) = find_definition(&text, pos) {
+            if let Some(loc) = find_definition(&text, pos, uri) {
                 return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
             }
         }

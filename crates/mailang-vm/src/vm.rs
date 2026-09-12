@@ -164,31 +164,55 @@ impl Vm {
                     self.push(value)?;
                 }
                 Opcode::LoadLocal => {
-                    let index = operand.ok_or_else(|| VmError::Internal("LoadLocal missing operand".to_string()))? as usize;
-                    let base = self.current_frame().stack_base;
-                    let value = self.stack.get(base + index).cloned()
-                        .ok_or_else(|| VmError::Internal("Invalid local index".to_string()))?;
-                    self.push(value)?;
+                    let index = operand.unwrap_or(0) as usize;
+                    let base = self
+                        .call_stack
+                        .last()
+                        .map(|f| f.stack_base)
+                        .unwrap_or(0);
+                    // Fast path for Copy scalars avoids a full Value clone.
+                    match self.stack.get(base + index) {
+                        Some(Value::Int(n)) => self.stack.push(Value::Int(*n)),
+                        Some(Value::Bool(b)) => self.stack.push(Value::Bool(*b)),
+                        Some(Value::Float(f)) => self.stack.push(Value::Float(*f)),
+                        Some(Value::Char(c)) => self.stack.push(Value::Char(*c)),
+                        Some(Value::Null) => self.stack.push(Value::Null),
+                        Some(v) => {
+                            let v = v.clone();
+                            self.stack.push(v);
+                        }
+                        None => return Err(VmError::Internal("Invalid local index".to_string())),
+                    }
                 }
                 Opcode::StoreLocal => {
-                    let index = operand.ok_or_else(|| VmError::Internal("StoreLocal missing operand".to_string()))? as usize;
-                    let value = self.pop()?;
-                    let base = self.current_frame().stack_base;
+                    let index = operand.unwrap_or(0) as usize;
+                    let value = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let base = self
+                        .call_stack
+                        .last()
+                        .map(|f| f.stack_base)
+                        .unwrap_or(0);
                     if base + index >= self.stack.len() {
                         self.stack.resize(base + index + 1, Value::Null);
                     }
                     self.stack[base + index] = value;
                 }
                 Opcode::LoadGlobal => {
-                    let slot = operand.ok_or_else(|| VmError::Internal("LoadGlobal missing operand".to_string()))? as usize;
-                    let value = self.globals.get(slot)
-                        .cloned()
-                        .unwrap_or(Value::Null);
-                    self.push(value)?;
+                    let slot = operand.unwrap_or(0) as usize;
+                    match self.globals.get(slot) {
+                        Some(Value::Int(n)) => self.stack.push(Value::Int(*n)),
+                        Some(Value::Bool(b)) => self.stack.push(Value::Bool(*b)),
+                        Some(Value::Float(f)) => self.stack.push(Value::Float(*f)),
+                        Some(v) => {
+                            let v = v.clone();
+                            self.stack.push(v);
+                        }
+                        None => self.stack.push(Value::Null),
+                    }
                 }
                 Opcode::StoreGlobal => {
-                    let slot = operand.ok_or_else(|| VmError::Internal("StoreGlobal missing operand".to_string()))? as usize;
-                    let value = self.pop()?;
+                    let slot = operand.unwrap_or(0) as usize;
+                    let value = self.stack.pop().ok_or(VmError::StackUnderflow)?;
                     if slot >= self.globals.len() {
                         self.globals.resize(slot + 1, Value::Null);
                     }
@@ -196,38 +220,55 @@ impl Vm {
                 }
                 Opcode::LoadUpvalue => {
                     let index = operand.unwrap_or(0) as usize;
-                    let frame = self.current_frame();
-                    let store_idx = frame.upvalues.get(index).copied()
-                        .ok_or_else(|| VmError::Internal(format!("Invalid upvalue index {}", index)))?;
+                    let store_idx = self
+                        .call_stack
+                        .last()
+                        .and_then(|f| f.upvalues.get(index).copied())
+                        .ok_or_else(|| VmError::Internal("Invalid upvalue index".to_string()))?;
                     let value = self.upvalue_store.get(store_idx).cloned()
-                        .ok_or_else(|| VmError::Internal(format!("Invalid upvalue store index {}", store_idx)))?;
-                    self.push(value)?;
+                        .ok_or_else(|| VmError::Internal("Invalid upvalue store index".to_string()))?;
+                    self.stack.push(value);
                 }
                 Opcode::StoreUpvalue => {
                     let index = operand.unwrap_or(0) as usize;
-                    let value = self.pop()?;
-                    let frame = self.current_frame();
-                    let store_idx = frame.upvalues.get(index).copied()
-                        .ok_or_else(|| VmError::Internal(format!("Invalid upvalue index {}", index)))?;
+                    let value = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let store_idx = self
+                        .call_stack
+                        .last()
+                        .and_then(|f| f.upvalues.get(index).copied())
+                        .ok_or_else(|| VmError::Internal("Invalid upvalue index".to_string()))?;
                     if store_idx >= self.upvalue_store.len() {
-                        return Err(VmError::Internal(format!("Invalid upvalue store index {}", store_idx)));
+                        return Err(VmError::Internal("Invalid upvalue store index".to_string()));
                     }
                     self.upvalue_store[store_idx] = value;
                 }
                 Opcode::Add => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(self.add_values(left, right)?)?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    // Hot path: integer add
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Int(a.wrapping_add(*b)));
+                    } else {
+                        self.stack.push(self.add_values(left, right)?);
+                    }
                 }
                 Opcode::Sub => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(self.sub_values(left, right)?)?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Int(a.wrapping_sub(*b)));
+                    } else {
+                        self.stack.push(self.sub_values(left, right)?);
+                    }
                 }
                 Opcode::Mul => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(self.mul_values(left, right)?)?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Int(a.wrapping_mul(*b)));
+                    } else {
+                        self.push(self.mul_values(left, right)?)?;
+                    }
                 }
                 Opcode::Div => {
                     let right = self.pop()?;
@@ -291,34 +332,60 @@ impl Vm {
                     }
                 }
                 Opcode::Eq => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(Value::Bool(self.values_equal(&left, &right)))?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Bool(a == b));
+                    } else if let (Value::Bool(a), Value::Bool(b)) = (&left, &right) {
+                        self.stack.push(Value::Bool(a == b));
+                    } else {
+                        self.stack.push(Value::Bool(self.values_equal(&left, &right)));
+                    }
                 }
                 Opcode::Ne => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(Value::Bool(!self.values_equal(&left, &right)))?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Bool(a != b));
+                    } else {
+                        self.stack.push(Value::Bool(!self.values_equal(&left, &right)));
+                    }
                 }
                 Opcode::Lt => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(Value::Bool(self.compare_values(&left, &right)? < 0))?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Bool(a < b));
+                    } else {
+                        self.stack.push(Value::Bool(self.compare_values(&left, &right)? < 0));
+                    }
                 }
                 Opcode::Le => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(Value::Bool(self.compare_values(&left, &right)? <= 0))?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Bool(a <= b));
+                    } else {
+                        self.stack.push(Value::Bool(self.compare_values(&left, &right)? <= 0));
+                    }
                 }
                 Opcode::Gt => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(Value::Bool(self.compare_values(&left, &right)? > 0))?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Bool(a > b));
+                    } else {
+                        self.stack.push(Value::Bool(self.compare_values(&left, &right)? > 0));
+                    }
                 }
                 Opcode::Ge => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    self.push(Value::Bool(self.compare_values(&left, &right)? >= 0))?;
+                    let right = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+                        self.stack.push(Value::Bool(a >= b));
+                    } else {
+                        self.stack.push(Value::Bool(self.compare_values(&left, &right)? >= 0));
+                    }
                 }
                 Opcode::And => {
                     let right = self.pop()?;
@@ -341,9 +408,15 @@ impl Vm {
                     self.ip = target;
                 }
                 Opcode::JumpIfFalse => {
-                    let target = operand.ok_or_else(|| VmError::Internal("JumpIfFalse missing target".to_string()))? as usize;
-                    let condition = self.peek()?;
-                    if !self.is_truthy(condition) {
+                    let target = operand.unwrap_or(0) as usize;
+                    let jump = match self.stack.last() {
+                        Some(Value::Bool(false)) => true,
+                        Some(Value::Null) => true,
+                        Some(Value::Int(0)) => true,
+                        Some(v) => !self.is_truthy(v),
+                        None => return Err(VmError::StackUnderflow),
+                    };
+                    if jump {
                         self.ip = target;
                     }
                 }
@@ -361,6 +434,25 @@ impl Vm {
                             "Stack underflow in Call: stack_len={}, arg_count={}",
                             self.stack.len(), arg_count
                         )))?;
+
+                    // Fast path: plain function without cloning the Value.
+                    if let Value::Function { arity, chunk_index, .. } = &self.stack[func_index] {
+                        let arity = *arity;
+                        let chunk_index = *chunk_index;
+                        if arity != arg_count {
+                            return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
+                        }
+                        self.call_stack.push(CallFrame {
+                            chunk_index: self.chunk_index,
+                            ip: self.ip,
+                            stack_base: func_index + 1,
+                            upvalues: Vec::new(),
+                        });
+                        self.chunk_index = chunk_index;
+                        self.ip = 0;
+                        continue;
+                    }
+
                     let func = self.stack[func_index].clone();
 
                     match func {
@@ -954,7 +1046,7 @@ impl Vm {
     }
 
     fn push(&mut self, value: Value) -> Result<(), VmError> {
-        if self.stack.len() >= 10000 {
+        if self.stack.len() >= 100_000 {
             return Err(VmError::StackOverflow);
         }
         self.stack.push(value);

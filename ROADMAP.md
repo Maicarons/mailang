@@ -41,10 +41,11 @@
 
 | 问题 | 严重度 | 说明 |
 |------|--------|------|
-| Fibonacci(30) 未达 3x | P1 | 整数递归瓶颈不在 Value clone；需调用帧/指令分派优化 |
-| Analyzer 未接入管道 | P1 | 代码存在但从未被调用 |
-| GC 是空壳 | P2 | 84 行，VM 从未使用 |
-| LSP 是桩 | P2 | 仅 initialize/shutdown |
+| Fibonacci(30) 未达 3x | P1 | 热路径已优化至约 1.3–1.4x 基线；3x 需 Phase F 寄存器 VM / 专用 Int 栈 |
+| GC 是空壳 | P2 | Value 已用 Rc；循环检测 / 标记清除仍未接入 VM |
+| LSP 诊断位置 | P2 | 能从解析错误消息提取 line/col；Analyzer 错误尚无 span |
+
+已关闭：Analyzer 已接入 eval；LSP 已有诊断/补全/跳转（不再是仅 initialize 的桩）。
 
 ---
 
@@ -266,7 +267,7 @@ Week 13:    发布 v0.2.0
 - [x] 范围匹配 `1..10` 工作
 - [x] 十六进制 `0x10` = 16
 - [x] 块注释 `/* */` 工作
-- [ ] Fibonacci(30) 性能提升 3x+（未达标：当前约与基线持平，整数递归瓶颈不在 clone）
+- [ ] Fibonacci(30) 性能提升 3x+（部分：热路径优化后约 1.3–1.4x 基线，3x 移交 Phase F）
 - [x] 全局查找无 String clone（`Vec` 槽表直读）
 
 ### Phase C 完成标准
@@ -278,6 +279,23 @@ Week 13:    发布 v0.2.0
 - [x] C API 支持宿主函数注册（`mailang_register_host_fn` + 全局读写 + catch_unwind）
 - [x] 4+ 语言绑定可运行：C (MinGW) / Python ctypes / Go cgo / Node.js (WASM)
 - [x] WASM Node/浏览器路径：`wasm-pack` 产物约 566 KiB；`eval` 返回表达式结果
+
+---
+
+## 九、Phase F 升级计划（性能 / v0.3）
+
+### 目标：Fib(30) 达到基线 3x+（≤ ~195 ms）
+
+| 项 | 内容 | 预期收益 |
+|----|------|----------|
+| F1 | 专用 Int 操作数栈（`Vec<i64>` + 标记），避免胖 `Value` 拷贝 | 2–3x |
+| F2 | 超级指令：合并 fib 等高频序列 | 1.2–1.5x |
+| F3 | 指令精简：`u8 opcode + u32 operand`，热路径不带 line | 1.1–1.2x |
+| F4 | 跳转表分派（计算 goto） | 1.1–1.3x |
+| F5 | GC：循环检测 | 正确性 |
+| F6 | Analyzer span → LSP 精确诊断 | DX |
+
+**验收**：`bench_fib30.mai` release 平均 ≤ 195 ms；69+ 测试全绿。
 
 ---
 
