@@ -500,7 +500,9 @@ name = "mailang-ffi"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "mailang-bytecode",
  "mailang-core",
+ "mailang-stdlib",
 ]
 
 [[package]]

@@ -91,4 +91,4 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-Phases B and C largely complete. Language runtime supports OOP, closures, pattern matching (including `Ok`/`Err`/`Some` and ranges), traits with defaults, TCO, and slot-based globals (64 integration tests). `mailang-bytecode` is `no_std`+`alloc` and ships a versioned `.mailangbc` binary format with CLI `build`/`run`. Simulated GPIO/Delay/ADC HAL builtins are available. Analyzer and GC remain stubs. Fib(30) integer recursion is still the main perf gap.
+Phases B–D largely complete. Language runtime supports OOP, closures, pattern matching (including `Ok`/`Err`/`Some` and ranges), traits with defaults, TCO, slot-based globals, and a versioned `.mailangbc` format (64 integration tests). C FFI exports host-fn registration, global get/set, and panic-safe entry points; verified from C, Python, Go, and Node (WASM). Simulated GPIO/Delay/ADC HAL builtins are available. Analyzer and GC remain stubs. Fib(30) integer recursion is still the main perf gap.

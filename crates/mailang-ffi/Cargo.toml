@@ -10,4 +10,6 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 mailang-core = { path = "../mailang-core" }
+mailang-bytecode = { path = "../mailang-bytecode" }
+mailang-stdlib = { path = "../mailang-stdlib" }
 libc = "0.2"

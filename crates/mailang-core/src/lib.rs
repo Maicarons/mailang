@@ -9,13 +9,19 @@ pub use mailang_module as module;
 
 use mailang_compiler::Compiler;
 use mailang_parser::Parser;
-use mailang_vm::Vm;
+use mailang_vm::{HostFn, Vm};
 use mailang_module::{ModuleLoader, FileModuleLoader, create_loader};
+use std::collections::HashMap;
 use std::path::Path;
+use std::rc::Rc;
 
 pub struct MailangInterpreter {
     vm: Vm,
     module_loader: Option<FileModuleLoader>,
+    /// Kept so host callbacks survive `eval` rebuilding the VM.
+    host_fns: HashMap<String, HostFn>,
+    /// Globals set by the host; re-applied after each `eval`.
+    host_globals: HashMap<String, mailang_bytecode::Value>,
 }
 
 impl MailangInterpreter {
@@ -23,6 +29,8 @@ impl MailangInterpreter {
         Self {
             vm: Vm::new(mailang_bytecode::Bytecode::new()),
             module_loader: None,
+            host_fns: HashMap::new(),
+            host_globals: HashMap::new(),
         }
     }
 
@@ -31,12 +39,45 @@ impl MailangInterpreter {
         Self {
             vm: Vm::new(mailang_bytecode::Bytecode::new()),
             module_loader: Some(create_loader(base_dir)),
+            host_fns: HashMap::new(),
+            host_globals: HashMap::new(),
         }
     }
 
     /// Set the module loader
     pub fn set_module_loader(&mut self, loader: FileModuleLoader) {
         self.module_loader = Some(loader);
+    }
+
+    /// Register a host function callable from MaìLang source.
+    pub fn register_host_fn(
+        &mut self,
+        name: impl Into<String>,
+        f: impl Fn(&[mailang_bytecode::Value]) -> Result<mailang_bytecode::Value, String> + 'static,
+    ) {
+        let name = name.into();
+        let f: HostFn = Rc::new(f);
+        self.host_fns.insert(name.clone(), f.clone());
+        self.vm.register_host_fn(name, f);
+    }
+
+    fn reapply_host_fns(&mut self, mut vm: Vm) -> Vm {
+        for (name, f) in &self.host_fns {
+            vm.register_host_fn(name.clone(), f.clone());
+        }
+        for (name, value) in &self.host_globals {
+            vm.set_global(name, value.clone());
+        }
+        vm
+    }
+
+    pub fn get_global(&mut self, name: &str) -> mailang_bytecode::Value {
+        self.vm.get_global(name)
+    }
+
+    pub fn set_global(&mut self, name: &str, value: mailang_bytecode::Value) {
+        self.host_globals.insert(name.to_string(), value.clone());
+        self.vm.set_global(name, value);
     }
 
     pub fn eval(&mut self, code: &str) -> Result<String, String> {
@@ -53,7 +94,8 @@ impl MailangInterpreter {
         let compiler = Compiler::new();
         let bytecode = compiler.compile(&processed_program).map_err(|e| e.to_string())?;
 
-        self.vm = Vm::new(bytecode);
+        let vm = Vm::new(bytecode);
+        self.vm = self.reapply_host_fns(vm);
         let result = self.vm.run().map_err(|e| e.to_string())?;
         Ok(mailang_stdlib::value_to_string(&result))
     }
@@ -103,7 +145,8 @@ impl MailangInterpreter {
 
     /// Run previously compiled bytecode.
     pub fn run_bytecode(&mut self, bytecode: mailang_bytecode::Bytecode) -> Result<String, String> {
-        self.vm = Vm::new(bytecode);
+        let vm = Vm::new(bytecode);
+        self.vm = self.reapply_host_fns(vm);
         let result = self.vm.run().map_err(|e| e.to_string())?;
         Ok(mailang_stdlib::value_to_string(&result))
     }

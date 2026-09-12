@@ -15,27 +15,23 @@ impl WasmInterpreter {
     }
 
     /// Evaluate MaìLang code and return the output.
-    /// Returns the result as a string, or an error message prefixed with "Error: ".
+    /// Returns captured println lines, or the expression result if none.
     pub fn eval(&mut self, code: &str) -> String {
-        // Enable output capture
         mailang_stdlib::set_println_captured(true);
 
         let result = match self.inner.eval(code) {
-            Ok(_) => {
-                // Get captured output from stdlib
-                let output = mailang_stdlib::get_captured_output();
-                if output.is_empty() {
-                    String::new()
+            Ok(value_str) => {
+                let captured = mailang_stdlib::get_captured_output();
+                if captured.is_empty() {
+                    value_str
                 } else {
-                    output.join("\n")
+                    captured.join("\n")
                 }
             }
             Err(e) => format!("Error: {}", e),
         };
 
-        // Disable output capture
         mailang_stdlib::set_println_captured(false);
-
         result
     }
 

@@ -5,6 +5,9 @@ use mailang_bytecode::{Bytecode, Opcode, Value};
 use crate::error::VmError;
 
 type BuiltinFn = fn(&[Value]) -> Result<Value, String>;
+/// Host-registered callback (FFI / embedders). `Rc` so it can be re-applied
+/// when a new VM is created after each `eval`.
+pub type HostFn = Rc<dyn Fn(&[Value]) -> Result<Value, String>>;
 
 #[derive(Debug, Clone)]
 struct CallFrame {
@@ -28,6 +31,7 @@ pub struct Vm {
     /// Global variables indexed by interned slot (no name lookup on hot path).
     globals: Vec<Value>,
     builtins: HashMap<String, BuiltinFn>,
+    host_fns: HashMap<String, HostFn>,
     call_stack: Vec<CallFrame>,
     ip: usize,
     chunk_index: usize,
@@ -87,12 +91,52 @@ impl Vm {
             stack: Vec::with_capacity(256),
             globals,
             builtins,
+            host_fns: HashMap::new(),
             call_stack: Vec::new(),
             ip: 0,
             chunk_index: 0,
             class_table: Vec::new(),
             upvalue_store: Vec::new(),
         }
+    }
+
+    /// Register a host callback callable from MaìLang as `name(...)`.
+    pub fn register_host_fn(&mut self, name: impl Into<String>, f: HostFn) {
+        let name = name.into();
+        self.host_fns.insert(name.clone(), f);
+        // Also ensure a global slot exists and holds a Builtin callable.
+        let slot = self.bytecode.intern_global(&name) as usize;
+        if slot >= self.globals.len() {
+            self.globals.resize(slot + 1, Value::Null);
+        }
+        self.globals[slot] = Value::Builtin {
+            name: name.as_str().into(),
+            arity: 0,
+        };
+    }
+
+    fn global_slot(&mut self, name: &str) -> usize {
+        if let Some(pos) = self.bytecode.global_names.iter().position(|n| n == name) {
+            return pos;
+        }
+        let slot = self.bytecode.intern_global(name) as usize;
+        if slot >= self.globals.len() {
+            self.globals.resize(slot + 1, Value::Null);
+        }
+        slot
+    }
+
+    pub fn get_global(&mut self, name: &str) -> Value {
+        let slot = self.global_slot(name);
+        self.globals.get(slot).cloned().unwrap_or(Value::Null)
+    }
+
+    pub fn set_global(&mut self, name: &str, value: Value) {
+        let slot = self.global_slot(name);
+        if slot >= self.globals.len() {
+            self.globals.resize(slot + 1, Value::Null);
+        }
+        self.globals[slot] = value;
     }
 
     pub fn run(&mut self) -> Result<Value, VmError> {
@@ -389,13 +433,16 @@ impl Vm {
                         Value::Builtin { name, .. } => {
                             let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
                             self.stack.truncate(func_index);
-                            if let Some(builtin_fn) = self.builtins.get(name.as_ref()) {
-                                match builtin_fn(&args) {
-                                    Ok(result) => self.push(result)?,
-                                    Err(e) => return Err(VmError::RuntimeError(e)),
-                                }
+                            let call_result = if let Some(host) = self.host_fns.get(name.as_ref()) {
+                                host(&args)
+                            } else if let Some(builtin_fn) = self.builtins.get(name.as_ref()) {
+                                builtin_fn(&args)
                             } else {
                                 return Err(VmError::UndefinedFunction(name.to_string()));
+                            };
+                            match call_result {
+                                Ok(result) => self.push(result)?,
+                                Err(e) => return Err(VmError::RuntimeError(e)),
                             }
                         }
                         _ => {
@@ -1078,17 +1125,5 @@ impl Vm {
             (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a ^ b)),
             _ => Err(VmError::TypeError("Bitwise XOR requires integers".to_string())),
         }
-    }
-
-    pub fn set_global(&mut self, name: String, value: Value) {
-        let slot = if let Some(pos) = self.bytecode.global_names.iter().position(|n| n == &name) {
-            pos
-        } else {
-            self.bytecode.intern_global(&name) as usize
-        };
-        if slot >= self.globals.len() {
-            self.globals.resize(slot + 1, Value::Null);
-        }
-        self.globals[slot] = value;
     }
 }
