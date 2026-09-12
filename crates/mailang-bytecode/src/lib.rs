@@ -59,6 +59,16 @@ pub enum Opcode {
     Le,
     Gt,
     Ge,
+    // Fused int immediate ops (hot path: n-1, n<=1, ...)
+    AddImm,
+    SubImm,
+    MulImm,
+    EqImm,
+    NeImm,
+    LtImm,
+    LeImm,
+    GtImm,
+    GeImm,
 
     // Logical
     And,
@@ -147,38 +157,47 @@ impl Opcode {
             25 => Opcode::Le,
             26 => Opcode::Gt,
             27 => Opcode::Ge,
-            28 => Opcode::And,
-            29 => Opcode::Or,
-            30 => Opcode::Not,
-            31 => Opcode::Jump,
-            32 => Opcode::JumpIfFalse,
-            33 => Opcode::JumpIfTrue,
-            34 => Opcode::Call,
-            35 => Opcode::TailCall,
-            36 => Opcode::Return,
-            37 => Opcode::GetProperty,
-            38 => Opcode::SetProperty,
-            39 => Opcode::Invoke,
-            40 => Opcode::BuildArray,
-            41 => Opcode::BuildMap,
-            42 => Opcode::IndexGet,
-            43 => Opcode::IndexSet,
-            44 => Opcode::CreateClass,
-            45 => Opcode::CreateInstance,
-            46 => Opcode::GetMethod,
-            47 => Opcode::MatchPattern,
-            48 => Opcode::MakeClosure,
-            49 => Opcode::Throw,
-            50 => Opcode::TryBegin,
-            51 => Opcode::TryEnd,
-            52 => Opcode::WrapOk,
-            53 => Opcode::WrapErr,
-            54 => Opcode::WrapSome,
-            55 => Opcode::UnwrapOk,
-            56 => Opcode::UnwrapErr,
-            57 => Opcode::UnwrapSome,
-            58 => Opcode::Nop,
-            59 => Opcode::Halt,
+            28 => Opcode::AddImm,
+            29 => Opcode::SubImm,
+            30 => Opcode::MulImm,
+            31 => Opcode::EqImm,
+            32 => Opcode::NeImm,
+            33 => Opcode::LtImm,
+            34 => Opcode::LeImm,
+            35 => Opcode::GtImm,
+            36 => Opcode::GeImm,
+            37 => Opcode::And,
+            38 => Opcode::Or,
+            39 => Opcode::Not,
+            40 => Opcode::Jump,
+            41 => Opcode::JumpIfFalse,
+            42 => Opcode::JumpIfTrue,
+            43 => Opcode::Call,
+            44 => Opcode::TailCall,
+            45 => Opcode::Return,
+            46 => Opcode::GetProperty,
+            47 => Opcode::SetProperty,
+            48 => Opcode::Invoke,
+            49 => Opcode::BuildArray,
+            50 => Opcode::BuildMap,
+            51 => Opcode::IndexGet,
+            52 => Opcode::IndexSet,
+            53 => Opcode::CreateClass,
+            54 => Opcode::CreateInstance,
+            55 => Opcode::GetMethod,
+            56 => Opcode::MatchPattern,
+            57 => Opcode::MakeClosure,
+            58 => Opcode::Throw,
+            59 => Opcode::TryBegin,
+            60 => Opcode::TryEnd,
+            61 => Opcode::WrapOk,
+            62 => Opcode::WrapErr,
+            63 => Opcode::WrapSome,
+            64 => Opcode::UnwrapOk,
+            65 => Opcode::UnwrapErr,
+            66 => Opcode::UnwrapSome,
+            67 => Opcode::Nop,
+            68 => Opcode::Halt,
             _ => return None,
         })
     }
@@ -281,12 +300,13 @@ impl PartialEq for Value {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// Compact, `Copy` instruction — fetched by value on the hot path.
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
 pub struct Instruction {
     pub opcode: Opcode,
     pub operand: Option<u32>,
-    pub line: usize,
+    pub line: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -306,7 +326,7 @@ impl Chunk {
         }
     }
 
-    pub fn emit(&mut self, opcode: Opcode, operand: Option<u32>, line: usize) {
+    pub fn emit(&mut self, opcode: Opcode, operand: Option<u32>, line: u32) {
         self.instructions.push(Instruction {
             opcode,
             operand,

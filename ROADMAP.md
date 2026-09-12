@@ -288,14 +288,14 @@ Week 13:    发布 v0.2.0
 
 | 项 | 内容 | 预期收益 |
 |----|------|----------|
-| F1 | 胖 Value 改 `Rc` 包装（Function/Closure/Class） + 热路径 Int/Call | **已完成 ~2.08x** |
-| F2 | 超级指令：合并 fib 等高频序列 | 1.2–1.5x |
-| F3 | 指令精简：`u8 opcode + u32 operand`，热路径不带 line | 1.1–1.2x |
-| F4 | 跳转表分派（计算 goto） | 1.1–1.3x |
-| F5 | GC：循环检测 | 正确性 |
-| F6 | Analyzer span → LSP 精确诊断 | DX |
+| F1 | 胖 Value 改 `Rc` 包装 + 热路径 Int/Call | **完成 ~2.08x** |
+| F2 | 立即数融合：`Add/Sub/Mul/Eq/Ne/Lt/Le/Gt/Ge` + Imm | **完成 ~2.13x** |
+| F3 | `Instruction` 改为 `Copy` + `line: u32` | **完成** |
+| F4 | 跳转表分派（计算 goto） | 未做 |
+| F5 | GC：循环检测 | 未做 |
+| F6 | Analyzer span → LSP 精确诊断 | 未做 |
 
-**验收**：`bench_fib30.mai` release 平均 ≤ 195 ms；69+ 测试全绿。当前 ~280 ms。
+**验收**：`bench_fib30.mai` release 平均 ≤ 195 ms；69+ 测试全绿。当前 **~273 ms（2.13x）**。
 
 ---
 

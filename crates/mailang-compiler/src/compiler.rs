@@ -158,11 +158,11 @@ impl Compiler {
         Ok(())
     }
 
-    fn emit(&mut self, opcode: Opcode, operand: Option<u32>, line: usize) {
+    fn emit(&mut self, opcode: Opcode, operand: Option<u32>, line: u32) {
         self.bytecode.chunks[self.current.chunk_index].emit(opcode, operand, line);
     }
 
-    fn emit_push_constant(&mut self, value: Value, line: usize) -> Result<(), CompilerError> {
+    fn emit_push_constant(&mut self, value: Value, line: u32) -> Result<(), CompilerError> {
         let idx = self.add_constant(value)?;
         self.emit(Opcode::Push, Some(idx), line);
         Ok(())
@@ -605,6 +605,29 @@ impl Compiler {
                 }
             }
             Expr::BinaryOp { op, left, right } => {
+                // Fused immediate ops: `x - 1`, `n <= 1`, etc.
+                if let Expr::Literal(Literal::Int(n)) = &**right {
+                    let n = *n;
+                    if let Some(imm) = i32::try_from(n).ok() {
+                        let fused = match op {
+                            BinaryOp::Add => Some(Opcode::AddImm),
+                            BinaryOp::Sub => Some(Opcode::SubImm),
+                            BinaryOp::Mul => Some(Opcode::MulImm),
+                            BinaryOp::Eq => Some(Opcode::EqImm),
+                            BinaryOp::Ne => Some(Opcode::NeImm),
+                            BinaryOp::Lt => Some(Opcode::LtImm),
+                            BinaryOp::Le => Some(Opcode::LeImm),
+                            BinaryOp::Gt => Some(Opcode::GtImm),
+                            BinaryOp::Ge => Some(Opcode::GeImm),
+                            _ => None,
+                        };
+                        if let Some(opc) = fused {
+                            self.compile_expression(left)?;
+                            self.emit(opc, Some(imm as u32), 0);
+                            return Ok(());
+                        }
+                    }
+                }
                 self.compile_expression(left)?;
                 self.compile_expression(right)?;
                 let opcode = match op {

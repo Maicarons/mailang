@@ -461,7 +461,7 @@ pub fn decode(data: &[u8]) -> Result<Bytecode, BytecodeFormatError> {
             } else {
                 None
             };
-            let line = r.u32()? as usize;
+            let line = r.u32()?;
             instructions.push(Instruction {
                 opcode,
                 operand,

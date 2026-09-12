@@ -17,18 +17,21 @@
 
 ---
 
-## 2. Phase F1 后实测（release，7 次取平均）
+## 2. Phase F1–F3 后实测（release，7 次取平均）
 
 | 基准测试 | 结果 | 说明 |
 |----------|------|------|
-| Fibonacci(30) 递归 | **~280 ms**（含进程启动 ~11 ms） | 结果 832040 |
-| 对比 Phase A 基线 581.59 ms | **~2.08x** | 未达 3x，已大幅接近 |
+| Fibonacci(30) 递归 | **~273 ms**（含进程启动 ~11 ms） | 结果 832040 |
+| 对比 Phase A 基线 581.59 ms | **~2.13x** | 未达 3x（目标 ~195 ms） |
 | 对比 Phase B 初测 ~883 ms | **~3.2x** | |
-| 对比热路径阶段 ~423 ms | **~1.5x** | 胖 Value 改 Rc 包装 |
 
-**F1 优化**：`Function`/`Closure`/`Class` 改为 `Rc<FunctionObj>` 等，缩小栈上 `Value`，clone 为 refcount bump 而非深分配。
+**F1–F3 优化**：
+- `Function`/`Closure`/`Class` 改 `Rc` 包装（Box 会 clone 分配，Rc 只 bump refcount）
+- `LoadLocal` 不再 clone 整帧；Int 标量与比较走专用路径
+- `Instruction` 改为 `Copy`，`line: u32`
+- 编译器融合 `x-1` / `n<=1` 等为 `SubImm`/`LeImm` 等立即数指令
 
-**剩余差距**：3x 目标 ~195 ms，还差约 1.4x，需 F2 超级指令 / F3 紧凑指令 / F4 跳转表。
+**剩余差距**：~1.4x，需 F4 跳转表 / 寄存器 VM / 更多超级指令。
 
 ---
 

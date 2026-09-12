@@ -145,7 +145,7 @@ impl Vm {
             if self.ip >= instructions.len() {
                 return Err(VmError::Internal("IP out of bounds".to_string()));
             }
-            let instruction = &instructions[self.ip];
+            let instruction = instructions[self.ip];
             self.ip += 1;
             let opcode = instruction.opcode;
             let operand = instruction.operand;
@@ -385,6 +385,60 @@ impl Vm {
                         self.stack.push(Value::Bool(a >= b));
                     } else {
                         self.stack.push(Value::Bool(self.compare_values(&left, &right)? >= 0));
+                    }
+                }
+                Opcode::AddImm | Opcode::SubImm | Opcode::MulImm => {
+                    let imm = operand.unwrap_or(0) as i32 as i64;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    match left {
+                        Value::Int(a) => {
+                            let r = match opcode {
+                                Opcode::AddImm => a.wrapping_add(imm),
+                                Opcode::SubImm => a.wrapping_sub(imm),
+                                _ => a.wrapping_mul(imm),
+                            };
+                            self.stack.push(Value::Int(r));
+                        }
+                        other => {
+                            let lit = Value::Int(imm);
+                            let v = match opcode {
+                                Opcode::AddImm => self.add_values(other, lit)?,
+                                Opcode::SubImm => self.sub_values(other, lit)?,
+                                _ => self.mul_values(other, lit)?,
+                            };
+                            self.stack.push(v);
+                        }
+                    }
+                }
+                Opcode::EqImm | Opcode::NeImm | Opcode::LtImm | Opcode::LeImm
+                | Opcode::GtImm | Opcode::GeImm => {
+                    let imm = operand.unwrap_or(0) as i32 as i64;
+                    let left = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    match left {
+                        Value::Int(a) => {
+                            let b = match opcode {
+                                Opcode::EqImm => a == imm,
+                                Opcode::NeImm => a != imm,
+                                Opcode::LtImm => a < imm,
+                                Opcode::LeImm => a <= imm,
+                                Opcode::GtImm => a > imm,
+                                _ => a >= imm,
+                            };
+                            self.stack.push(Value::Bool(b));
+                        }
+                        other => {
+                            let lit = Value::Int(imm);
+                            let c = self.compare_values(&other, &lit)?;
+                            let b = match opcode {
+                                Opcode::EqImm => c == 0,
+                                Opcode::NeImm => c != 0,
+                                Opcode::LtImm => c < 0,
+                                Opcode::LeImm => c <= 0,
+                                Opcode::GtImm => c > 0,
+                                _ => c >= 0,
+                            };
+                            self.stack.push(Value::Bool(b));
+                        }
                     }
                 }
                 Opcode::And => {
