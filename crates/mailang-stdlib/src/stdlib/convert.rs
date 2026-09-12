@@ -4,7 +4,7 @@ use mailang_bytecode::Value;
 use super::value_to_string;
 
 pub fn builtin_to_string(args: &[Value]) -> Result<Value, String> {
-    Ok(Value::Str(value_to_string(&args[0])))
+    Ok(Value::Str(value_to_string(&args[0]).into()))
 }
 
 pub fn builtin_parse_int(args: &[Value]) -> Result<Value, String> {

@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
+use std::rc::Rc;
 use mailang_ast::*;
 use mailang_bytecode::*;
 use crate::error::CompilerError;
@@ -405,7 +406,7 @@ impl Compiler {
                         self.emit(Opcode::LoadLocal, Some(index_local), 0);
                         self.emit(Opcode::LoadLocal, Some(array_local), 0);
                         // Get array length - use GetProperty with "len"
-                        let len_const = self.add_constant(Value::Str("len".to_string()))?;
+                        let len_const = self.add_constant(Value::Str("len".into()))?;
                         self.emit(Opcode::GetProperty, Some(len_const), 0);
                         self.emit(Opcode::Lt, None, 0);
                         let jump_end = self.emit_jump(Opcode::JumpIfFalse, 0);
@@ -509,7 +510,7 @@ impl Compiler {
                     Literal::Int(n) => Value::Int(*n),
                     Literal::Float(n) => Value::Float(*n),
                     Literal::Bool(b) => Value::Bool(*b),
-                    Literal::Str(s) => Value::Str(s.clone()),
+                    Literal::Str(s) => Value::Str(s.clone().into()),
                     Literal::Char(c) => Value::Char(*c),
                     Literal::Null => Value::Null,
                 };
@@ -522,7 +523,7 @@ impl Compiler {
                 } else if let Some(upvalue) = self.resolve_upvalue(name) {
                     self.emit(Opcode::LoadUpvalue, Some(upvalue), 0);
                 } else {
-                    let index = self.add_constant(Value::Str(name.clone()))?;
+                    let index = self.add_constant(Value::Str(name.clone().into()))?;
                     self.emit(Opcode::LoadGlobal, Some(index), 0);
                 }
             }
@@ -583,14 +584,14 @@ impl Compiler {
                 for arg in args {
                     self.compile_expression(arg)?;
                 }
-                let method_index = self.add_constant(Value::Str(method.clone()))?;
+                let method_index = self.add_constant(Value::Str(method.clone().into()))?;
                 // Pack arg count in upper 16 bits, method-name constant index in lower 16.
                 let packed = ((args.len() as u32) << 16) | (method_index & 0xFFFF);
                 self.emit(Opcode::Invoke, Some(packed), 0);
             }
             Expr::PropertyAccess { object, property } => {
                 self.compile_expression(object)?;
-                let prop_index = self.add_constant(Value::Str(property.clone()))?;
+                let prop_index = self.add_constant(Value::Str(property.clone().into()))?;
                 self.emit(Opcode::GetProperty, Some(prop_index), 0);
             }
             Expr::Index { object, index } => {
@@ -705,14 +706,14 @@ impl Compiler {
                         // Stack order for SetProperty: [object, value] (value on top)
                         self.compile_expression(object)?;
                         self.compile_expression(value)?;
-                        let prop_index = self.add_constant(Value::Str(property.clone()))?;
+                        let prop_index = self.add_constant(Value::Str(property.clone().into()))?;
                         self.emit(Opcode::SetProperty, Some(prop_index), 0);
                         // SetProperty leaves the new object on stack; store it back
                         if let Expr::Identifier(name) = &**object {
                             if let Some(local) = self.resolve_local(name) {
                                 self.emit(Opcode::StoreLocal, Some(local), 0);
                             } else {
-                                let idx = self.add_constant(Value::Str(name.clone()))?;
+                                let idx = self.add_constant(Value::Str(name.clone().into()))?;
                                 self.emit(Opcode::StoreGlobal, Some(idx), 0);
                             }
                         } else {
@@ -752,17 +753,17 @@ impl Compiler {
             }
             Expr::Ok(value) => {
                 self.compile_expression(value)?;
-                self.emit_push_constant(Value::Str("Ok".to_string()), 0)?;
+                self.emit_push_constant(Value::Str("Ok".into()), 0)?;
                 self.emit(Opcode::BuildArray, Some(2), 0);
             }
             Expr::Err(value) => {
                 self.compile_expression(value)?;
-                self.emit_push_constant(Value::Str("Err".to_string()), 0)?;
+                self.emit_push_constant(Value::Str("Err".into()), 0)?;
                 self.emit(Opcode::BuildArray, Some(2), 0);
             }
             Expr::Some(value) => {
                 self.compile_expression(value)?;
-                self.emit_push_constant(Value::Str("Some".to_string()), 0)?;
+                self.emit_push_constant(Value::Str("Some".into()), 0)?;
                 self.emit(Opcode::BuildArray, Some(2), 0);
             }
             Expr::None => {
@@ -773,7 +774,7 @@ impl Compiler {
                 if let Some(first) = parts.first() {
                     match first {
                         StringPart::Text(text) => {
-                            let index = self.add_constant(Value::Str(text.clone()))?;
+                            let index = self.add_constant(Value::Str(text.clone().into()))?;
                             self.emit(Opcode::Push, Some(index), 0);
                         }
                         StringPart::Expr(expr) => {
@@ -785,7 +786,7 @@ impl Compiler {
                 for part in parts.iter().skip(1) {
                     match part {
                         StringPart::Text(text) => {
-                            let index = self.add_constant(Value::Str(text.clone()))?;
+                            let index = self.add_constant(Value::Str(text.clone().into()))?;
                             self.emit(Opcode::Push, Some(index), 0);
                         }
                         StringPart::Expr(expr) => {
@@ -811,13 +812,13 @@ impl Compiler {
                 } else if let Some(upvalue) = self.resolve_upvalue(name) {
                     self.emit(Opcode::StoreUpvalue, Some(upvalue), 0);
                 } else {
-                    let index = self.add_constant(Value::Str(name.clone()))?;
+                    let index = self.add_constant(Value::Str(name.clone().into()))?;
                     self.emit(Opcode::StoreGlobal, Some(index), 0);
                 }
             }
             Expr::PropertyAccess { object, property } => {
                 self.compile_expression(object)?;
-                let prop_index = self.add_constant(Value::Str(property.clone()))?;
+                let prop_index = self.add_constant(Value::Str(property.clone().into()))?;
                 self.emit(Opcode::SetProperty, Some(prop_index), 0);
                 // SetProperty leaves the (possibly new) object on the stack.
                 // Store it back into the binding so mutations stick for locals/globals.
@@ -826,7 +827,7 @@ impl Compiler {
                         if let Some(local) = self.resolve_local(name) {
                             self.emit(Opcode::StoreLocal, Some(local), 0);
                         } else {
-                            let index = self.add_constant(Value::Str(name.clone()))?;
+                            let index = self.add_constant(Value::Str(name.clone().into()))?;
                             self.emit(Opcode::StoreGlobal, Some(index), 0);
                         }
                     }
@@ -857,7 +858,7 @@ impl Compiler {
                     Literal::Int(n) => Value::Int(*n),
                     Literal::Float(n) => Value::Float(*n),
                     Literal::Bool(b) => Value::Bool(*b),
-                    Literal::Str(s) => Value::Str(s.clone()),
+                    Literal::Str(s) => Value::Str(s.clone().into()),
                     Literal::Char(c) => Value::Char(*c),
                     Literal::Null => Value::Null,
                 };
@@ -876,7 +877,7 @@ impl Compiler {
                 // Store a copy of the scrutinee as a global, then push true.
                 // [s] -> [s, s] -> [s] (one copy stored) -> [s, true]
                 self.emit(Opcode::Dup, None, 0);
-                let index = self.add_constant(Value::Str(name.clone()))?;
+                let index = self.add_constant(Value::Str(name.clone().into()))?;
                 self.emit(Opcode::StoreGlobal, Some(index), 0);
                 self.emit_push_constant(Value::Bool(true), 0)?;
             }
@@ -973,12 +974,12 @@ impl Compiler {
                 return Err(CompilerError::TooManyLocals);
             }
             self.current.locals.push(Local {
-                name: name.to_string(),
+                name: name.into(),
                 depth: self.current.scope_depth,
                 captured: false,
             });
         } else {
-            let index = self.add_constant(Value::Str(name.to_string()))?;
+            let index = self.add_constant(Value::Str(name.to_string().into()))?;
             self.emit(Opcode::StoreGlobal, Some(index), 0);
         }
         Ok(())
@@ -1036,7 +1037,7 @@ impl Compiler {
         self.current = old_compiler;
 
         let func_index = self.add_constant(Value::Function {
-            name: name.to_string(),
+            name: name.into(),
             arity: params.len(),
             chunk_index,
         })?;
@@ -1099,7 +1100,7 @@ impl Compiler {
         self.current = old_compiler;
 
         let func_index = self.add_constant(Value::Function {
-            name: "lambda".to_string(),
+            name: "lambda".into(),
             arity: params.len(),
             chunk_index,
         })?;
@@ -1144,7 +1145,7 @@ impl Compiler {
                         Literal::Int(n) => Value::Int(*n),
                         Literal::Float(n) => Value::Float(*n),
                         Literal::Bool(b) => Value::Bool(*b),
-                        Literal::Str(s) => Value::Str(s.clone()),
+                        Literal::Str(s) => Value::Str(s.clone().into()),
                         Literal::Char(c) => Value::Char(*c),
                         Literal::Null => Value::Null,
                     },
@@ -1158,7 +1159,7 @@ impl Compiler {
         self.class_info.insert(
             name.to_string(),
             CompiledClass {
-                name: name.to_string(),
+                name: name.into(),
                 superclass: superclass.clone(),
                 methods: HashMap::new(),
                 properties: properties.clone(),
@@ -1207,10 +1208,10 @@ impl Compiler {
         }
 
         let class_const = self.add_constant(Value::Class {
-            name: name.to_string(),
-            methods: methods.clone(),
+            name: name.into(),
+            methods: Rc::new(methods.clone()),
             superclass: superclass.clone(),
-            properties,
+            properties: Rc::new(properties),
         })?;
         self.emit(Opcode::CreateClass, Some(class_const), 0);
         self.define_variable(name)?;
@@ -1295,7 +1296,7 @@ impl Compiler {
         // Push parent init as a Function value, then `this` + user args.
         self.emit_push_constant(
             Value::Function {
-                name: format!("{}.init", parent_name),
+                name: format!("{}.init", parent_name).into(),
                 arity: init_arity,
                 chunk_index: init_chunk,
             },

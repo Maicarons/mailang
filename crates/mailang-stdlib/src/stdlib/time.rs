@@ -56,7 +56,7 @@ pub fn builtin_time_second(_args: &[Value]) -> Result<Value, String> {
 pub fn builtin_time_date(_args: &[Value]) -> Result<Value, String> {
     let secs = get_epoch_secs()?;
     let (year, month, day) = epoch_to_ymd(secs);
-    Ok(Value::Str(format!("{:04}-{:02}-{:02}", year, month, day)))
+    Ok(Value::Str(format!("{:04}-{:02}-{:02}", year, month, day).into()))
 }
 
 pub fn builtin_time_datetime(_args: &[Value]) -> Result<Value, String> {
@@ -66,7 +66,7 @@ pub fn builtin_time_datetime(_args: &[Value]) -> Result<Value, String> {
     Ok(Value::Str(format!(
         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
         year, month, day, hour, minute, second
-    )))
+    ).into()))
 }
 
 pub fn builtin_time_elapsed(args: &[Value]) -> Result<Value, String> {

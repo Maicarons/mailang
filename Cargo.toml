@@ -28,6 +28,6 @@ description = "MaìLang - A modern programming language for IoT and cross-platfo
 
 [workspace.dependencies]
 thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
 unicode-xid = "0.2"

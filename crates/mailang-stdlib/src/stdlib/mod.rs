@@ -1,4 +1,4 @@
-//! MaìLang standard library
+﻿//! MaìLang standard library
 //!
 //! This module provides built-in functions for MaìLang.
 
@@ -76,7 +76,7 @@ pub fn value_to_string(v: &Value) -> String {
         Value::Bool(b) => b.to_string(),
         Value::Int(n) => n.to_string(),
         Value::Float(n) => n.to_string(),
-        Value::Str(s) => s.clone(),
+        Value::Str(s) => s.to_string(),
         Value::Char(c) => c.to_string(),
         Value::Array(arr) => {
             let items: Vec<String> = arr.iter().map(value_to_string).collect();

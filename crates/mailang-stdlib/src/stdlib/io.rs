@@ -47,5 +47,5 @@ pub fn builtin_input(args: &[Value]) -> Result<Value, String> {
     }
     let mut input = String::new();
     io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
-    Ok(Value::Str(input.trim_end().to_string()))
+    Ok(Value::Str(input.trim_end().into()))
 }

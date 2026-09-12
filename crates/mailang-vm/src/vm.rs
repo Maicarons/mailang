@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use mailang_bytecode::{Bytecode, Opcode, Value};
 use crate::error::VmError;
 
@@ -12,14 +14,11 @@ struct CallFrame {
     upvalues: Vec<usize>,
 }
 
-/// Runtime metadata for a registered class.
 #[derive(Debug, Clone)]
 struct RegisteredClass {
     name: String,
     superclass: Option<String>,
-    /// method name -> (chunk_index, arity including `this`)
     methods: Vec<(String, usize, usize)>,
-    /// (property name, default value)
     properties: Vec<(String, Value)>,
 }
 
@@ -53,99 +52,39 @@ impl Vm {
     }
 
     fn register_stdlib_builtins(&mut self) {
-        // Register built-in functions
-        self.builtins.insert("println".to_string(), |args| {
-            mailang_stdlib::builtin_println(args)
-        });
-        self.builtins.insert("print".to_string(), |args| {
-            mailang_stdlib::builtin_print(args)
-        });
-        self.builtins.insert("input".to_string(), |args| {
-            mailang_stdlib::builtin_input(args)
-        });
-        self.builtins.insert("sqrt".to_string(), |args| {
-            mailang_stdlib::builtin_sqrt(args)
-        });
-        self.builtins.insert("abs".to_string(), |args| {
-            mailang_stdlib::builtin_abs(args)
-        });
-        self.builtins.insert("sin".to_string(), |args| {
-            mailang_stdlib::builtin_sin(args)
-        });
-        self.builtins.insert("cos".to_string(), |args| {
-            mailang_stdlib::builtin_cos(args)
-        });
-        self.builtins.insert("floor".to_string(), |args| {
-            mailang_stdlib::builtin_floor(args)
-        });
-        self.builtins.insert("ceil".to_string(), |args| {
-            mailang_stdlib::builtin_ceil(args)
-        });
-        self.builtins.insert("round".to_string(), |args| {
-            mailang_stdlib::builtin_round(args)
-        });
-        self.builtins.insert("min".to_string(), |args| {
-            mailang_stdlib::builtin_min(args)
-        });
-        self.builtins.insert("max".to_string(), |args| {
-            mailang_stdlib::builtin_max(args)
-        });
-        self.builtins.insert("len".to_string(), |args| {
-            mailang_stdlib::builtin_len(args)
-        });
-        self.builtins.insert("to_string".to_string(), |args| {
-            mailang_stdlib::builtin_to_string(args)
-        });
-        self.builtins.insert("parse_int".to_string(), |args| {
-            mailang_stdlib::builtin_parse_int(args)
-        });
-        self.builtins.insert("parse_float".to_string(), |args| {
-            mailang_stdlib::builtin_parse_float(args)
-        });
+        self.builtins.insert("println".to_string(), |args| mailang_stdlib::builtin_println(args));
+        self.builtins.insert("print".to_string(), |args| mailang_stdlib::builtin_print(args));
+        self.builtins.insert("input".to_string(), |args| mailang_stdlib::builtin_input(args));
+        self.builtins.insert("sqrt".to_string(), |args| mailang_stdlib::builtin_sqrt(args));
+        self.builtins.insert("abs".to_string(), |args| mailang_stdlib::builtin_abs(args));
+        self.builtins.insert("sin".to_string(), |args| mailang_stdlib::builtin_sin(args));
+        self.builtins.insert("cos".to_string(), |args| mailang_stdlib::builtin_cos(args));
+        self.builtins.insert("floor".to_string(), |args| mailang_stdlib::builtin_floor(args));
+        self.builtins.insert("ceil".to_string(), |args| mailang_stdlib::builtin_ceil(args));
+        self.builtins.insert("round".to_string(), |args| mailang_stdlib::builtin_round(args));
+        self.builtins.insert("min".to_string(), |args| mailang_stdlib::builtin_min(args));
+        self.builtins.insert("max".to_string(), |args| mailang_stdlib::builtin_max(args));
+        self.builtins.insert("len".to_string(), |args| mailang_stdlib::builtin_len(args));
+        self.builtins.insert("to_string".to_string(), |args| mailang_stdlib::builtin_to_string(args));
+        self.builtins.insert("parse_int".to_string(), |args| mailang_stdlib::builtin_parse_int(args));
+        self.builtins.insert("parse_float".to_string(), |args| mailang_stdlib::builtin_parse_float(args));
+        self.builtins.insert("time_now".to_string(), |args| mailang_stdlib::builtin_time_now(args));
+        self.builtins.insert("time_now_secs".to_string(), |args| mailang_stdlib::builtin_time_now_secs(args));
+        self.builtins.insert("time_year".to_string(), |args| mailang_stdlib::builtin_time_year(args));
+        self.builtins.insert("time_month".to_string(), |args| mailang_stdlib::builtin_time_month(args));
+        self.builtins.insert("time_day".to_string(), |args| mailang_stdlib::builtin_time_day(args));
+        self.builtins.insert("time_hour".to_string(), |args| mailang_stdlib::builtin_time_hour(args));
+        self.builtins.insert("time_minute".to_string(), |args| mailang_stdlib::builtin_time_minute(args));
+        self.builtins.insert("time_second".to_string(), |args| mailang_stdlib::builtin_time_second(args));
+        self.builtins.insert("time_date".to_string(), |args| mailang_stdlib::builtin_time_date(args));
+        self.builtins.insert("time_datetime".to_string(), |args| mailang_stdlib::builtin_time_datetime(args));
+        self.builtins.insert("time_elapsed".to_string(), |args| mailang_stdlib::builtin_time_elapsed(args));
+        self.builtins.insert("time_sleep".to_string(), |args| mailang_stdlib::builtin_time_sleep(args));
 
-        // Time functions
-        self.builtins.insert("time_now".to_string(), |args| {
-            mailang_stdlib::builtin_time_now(args)
-        });
-        self.builtins.insert("time_now_secs".to_string(), |args| {
-            mailang_stdlib::builtin_time_now_secs(args)
-        });
-        self.builtins.insert("time_year".to_string(), |args| {
-            mailang_stdlib::builtin_time_year(args)
-        });
-        self.builtins.insert("time_month".to_string(), |args| {
-            mailang_stdlib::builtin_time_month(args)
-        });
-        self.builtins.insert("time_day".to_string(), |args| {
-            mailang_stdlib::builtin_time_day(args)
-        });
-        self.builtins.insert("time_hour".to_string(), |args| {
-            mailang_stdlib::builtin_time_hour(args)
-        });
-        self.builtins.insert("time_minute".to_string(), |args| {
-            mailang_stdlib::builtin_time_minute(args)
-        });
-        self.builtins.insert("time_second".to_string(), |args| {
-            mailang_stdlib::builtin_time_second(args)
-        });
-        self.builtins.insert("time_date".to_string(), |args| {
-            mailang_stdlib::builtin_time_date(args)
-        });
-        self.builtins.insert("time_datetime".to_string(), |args| {
-            mailang_stdlib::builtin_time_datetime(args)
-        });
-        self.builtins.insert("time_elapsed".to_string(), |args| {
-            mailang_stdlib::builtin_time_elapsed(args)
-        });
-        self.builtins.insert("time_sleep".to_string(), |args| {
-            mailang_stdlib::builtin_time_sleep(args)
-        });
-
-        // Also register as globals so they can be called
         for (name, _) in &self.builtins {
             self.globals.insert(name.clone(), Value::Builtin {
-                name: name.clone(),
-                arity: 0, // Will be checked at call time
+                name: name.as_str().into(),
+                arity: 0,
             });
         }
     }
@@ -156,10 +95,8 @@ impl Vm {
             if self.ip >= instructions.len() {
                 return Err(VmError::Internal("IP out of bounds".to_string()));
             }
-
             let instruction = &instructions[self.ip];
             self.ip += 1;
-
             let opcode = instruction.opcode;
             let operand = instruction.operand;
 
@@ -167,15 +104,11 @@ impl Vm {
                 Opcode::Push => {
                     let index = operand.ok_or_else(|| VmError::Internal("Push missing operand".to_string()))? as usize;
                     let value = self.bytecode.chunks[self.chunk_index]
-                        .constants
-                        .get(index)
-                        .cloned()
+                        .constants.get(index).cloned()
                         .ok_or_else(|| VmError::Internal("Invalid constant index".to_string()))?;
                     self.push(value)?;
                 }
-                Opcode::Pop => {
-                    self.pop()?;
-                }
+                Opcode::Pop => { self.pop()?; }
                 Opcode::Dup => {
                     let value = self.peek()?.clone();
                     self.push(value)?;
@@ -183,9 +116,7 @@ impl Vm {
                 Opcode::LoadLocal => {
                     let index = operand.ok_or_else(|| VmError::Internal("LoadLocal missing operand".to_string()))? as usize;
                     let base = self.current_frame().stack_base;
-                    let value = self.stack
-                        .get(base + index)
-                        .cloned()
+                    let value = self.stack.get(base + index).cloned()
                         .ok_or_else(|| VmError::Internal("Invalid local index".to_string()))?;
                     self.push(value)?;
                 }
@@ -201,19 +132,16 @@ impl Vm {
                 Opcode::LoadGlobal => {
                     let index = operand.ok_or_else(|| VmError::Internal("LoadGlobal missing operand".to_string()))? as usize;
                     let name = match &self.bytecode.chunks[self.chunk_index].constants[index] {
-                        Value::Str(s) => s.clone(),
+                        Value::Str(s) => s.to_string(),
                         _ => return Err(VmError::Internal("Expected string constant".to_string())),
                     };
-                    let value = self.globals
-                        .get(&name)
-                        .cloned()
-                        .unwrap_or(Value::Null);
+                    let value = self.globals.get(&name).cloned().unwrap_or(Value::Null);
                     self.push(value)?;
                 }
                 Opcode::StoreGlobal => {
                     let index = operand.ok_or_else(|| VmError::Internal("StoreGlobal missing operand".to_string()))? as usize;
                     let name = match &self.bytecode.chunks[self.chunk_index].constants[index] {
-                        Value::Str(s) => s.clone(),
+                        Value::Str(s) => s.to_string(),
                         _ => return Err(VmError::Internal("Expected string constant".to_string())),
                     };
                     let value = self.pop()?;
@@ -391,10 +319,7 @@ impl Vm {
                     match func {
                         Value::Function { arity, chunk_index, .. } => {
                             if arity != arg_count {
-                                return Err(VmError::WrongArgumentCount {
-                                    expected: arity,
-                                    found: arg_count,
-                                });
+                                return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
                             }
                             let frame = CallFrame {
                                 chunk_index: self.chunk_index,
@@ -408,10 +333,7 @@ impl Vm {
                         }
                         Value::Closure { function_index, arity, upvalues } => {
                             if arity != arg_count {
-                                return Err(VmError::WrongArgumentCount {
-                                    expected: arity,
-                                    found: arg_count,
-                                });
+                                return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
                             }
                             let frame = CallFrame {
                                 chunk_index: self.chunk_index,
@@ -424,41 +346,30 @@ impl Vm {
                             self.ip = 0;
                         }
                         Value::Class { name, methods, superclass, properties } => {
-                            // Calling a class = instantiate it
-                            // Register class in class_table if not already there
                             let class_idx = self.class_table.len();
                             self.class_table.push(RegisteredClass {
-                                name: name.clone(),
+                                name: name.to_string(),
                                 superclass: superclass.clone(),
                                 methods: methods.iter().map(|(n, ci)| (n.clone(), *ci, 0usize)).collect(),
-                                properties: properties.clone(),
+                                properties: properties.as_ref().clone(),
                             });
 
-                            // Create instance with default properties
                             let mut fields: Vec<(String, Value)> = Vec::new();
-                            for (pname, pdefault) in &properties {
+                            for (pname, pdefault) in properties.iter() {
                                 fields.push((pname.clone(), pdefault.clone()));
                             }
                             let instance = Value::Instance {
                                 class_index: class_idx,
-                                fields,
+                                fields: Rc::new(RefCell::new(fields)),
                             };
-
-                            // Replace the class value on the stack with the instance
                             self.stack[func_index] = instance.clone();
 
-                            // Find init method
                             let init_chunk = methods.iter()
                                 .find(|(n, _)| n == "init")
                                 .map(|(_, ci)| *ci);
 
                             if let Some(chunk_index) = init_chunk {
-                                // Insert instance copy so stack layout matches function convention:
-                                // [instance, instance, arg1, arg2, ...]
-                                // stack_base = func_index + 1 (points to second instance = `this`)
-                                // Return handler does stack_base - 1 = func_index, truncating correctly
                                 self.stack.insert(func_index, instance.clone());
-
                                 let frame = CallFrame {
                                     chunk_index: self.chunk_index,
                                     ip: self.ip,
@@ -469,20 +380,19 @@ impl Vm {
                                 self.chunk_index = chunk_index;
                                 self.ip = 0;
                             } else {
-                                // No init method, just return the instance
                                 self.stack.truncate(func_index + 1);
                             }
                         }
                         Value::Builtin { name, .. } => {
                             let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
                             self.stack.truncate(func_index);
-                            if let Some(builtin_fn) = self.builtins.get(&name) {
+                            if let Some(builtin_fn) = self.builtins.get(name.as_ref()) {
                                 match builtin_fn(&args) {
                                     Ok(result) => self.push(result)?,
                                     Err(e) => return Err(VmError::RuntimeError(e)),
                                 }
                             } else {
-                                return Err(VmError::UndefinedFunction(name));
+                                return Err(VmError::UndefinedFunction(name.to_string()));
                             }
                         }
                         _ => {
@@ -493,7 +403,6 @@ impl Vm {
                 Opcode::Return => {
                     let value = self.pop()?;
                     if let Some(frame) = self.call_stack.pop() {
-                        // stack_base points to first arg; function is at stack_base - 1
                         let base = frame.stack_base.saturating_sub(1);
                         self.stack.truncate(base);
                         self.chunk_index = frame.chunk_index;
@@ -506,16 +415,16 @@ impl Vm {
                 Opcode::GetProperty => {
                     let prop_index = operand.ok_or_else(|| VmError::Internal("GetProperty missing operand".to_string()))? as usize;
                     let prop_name = match &self.bytecode.chunks[self.chunk_index].constants[prop_index] {
-                        Value::Str(s) => s.clone(),
+                        Value::Str(s) => s.to_string(),
                         _ => return Err(VmError::Internal("Expected string constant".to_string())),
                     };
                     let object = self.pop()?;
-                    match object {
+                    match &object {
                         Value::Map(entries) => {
                             let mut found = false;
-                            for (k, v) in &entries {
+                            for (k, v) in entries.iter() {
                                 if let Value::Str(s) = k {
-                                    if s == &prop_name {
+                                    if s.as_ref() == prop_name.as_str() {
                                         self.push(v.clone())?;
                                         found = true;
                                         break;
@@ -528,7 +437,7 @@ impl Vm {
                         }
                         Value::Instance { fields, .. } => {
                             let mut found = false;
-                            for (name, value) in &fields {
+                            for (name, value) in fields.borrow().iter() {
                                 if name == &prop_name {
                                     self.push(value.clone())?;
                                     found = true;
@@ -557,15 +466,15 @@ impl Vm {
                 Opcode::SetProperty => {
                     let prop_index = operand.ok_or_else(|| VmError::Internal("SetProperty missing operand".to_string()))? as usize;
                     let prop_name = match &self.bytecode.chunks[self.chunk_index].constants[prop_index] {
-                        Value::Str(s) => s.clone(),
+                        Value::Str(s) => s.to_string(),
                         _ => return Err(VmError::Internal("Expected string constant".to_string())),
                     };
                     let value = self.pop()?;
                     let object = self.pop()?;
-                    match object {
-                        Value::Instance { class_index, mut fields } => {
+                    match &object {
+                        Value::Instance { class_index, fields } => {
                             let mut found = false;
-                            for (name, v) in &mut fields {
+                            for (name, v) in fields.borrow_mut().iter_mut() {
                                 if name == &prop_name {
                                     *v = value.clone();
                                     found = true;
@@ -573,20 +482,21 @@ impl Vm {
                                 }
                             }
                             if !found {
-                                fields.push((prop_name, value.clone()));
+                                fields.borrow_mut().push((prop_name, value.clone()));
                             }
-                            self.push(Value::Instance { class_index, fields })?;
+                            self.push(Value::Instance { class_index: *class_index, fields: fields.clone() })?;
                         }
-                        Value::Map(mut entries) => {
-                            entries.retain(|(k, _)| {
+                        Value::Map(entries) => {
+                            let mut new_entries = entries.as_ref().clone();
+                            new_entries.retain(|(k, _)| {
                                 if let Value::Str(s) = k {
-                                    s != &prop_name
+                                    s.as_ref() != prop_name.as_str()
                                 } else {
                                     true
                                 }
                             });
-                            entries.push((Value::Str(prop_name), value));
-                            self.push(Value::Map(entries))?;
+                            new_entries.push((Value::Str(prop_name.as_str().into()), value));
+                            self.push(Value::Map(Rc::new(new_entries)))?;
                         }
                         _ => return Err(VmError::TypeError("Cannot set property of non-object".to_string())),
                     }
@@ -596,11 +506,10 @@ impl Vm {
                     let arg_count = (packed >> 16) as usize;
                     let method_const_idx = (packed & 0xFFFF) as usize;
                     let method_name = match &self.bytecode.chunks[self.chunk_index].constants[method_const_idx] {
-                        Value::Str(s) => s.clone(),
+                        Value::Str(s) => s.to_string(),
                         _ => return Err(VmError::Internal("Expected string constant for method name".to_string())),
                     };
 
-                    // Stack: [object, arg1, arg2, ...]
                     let obj_index = self.stack.len().checked_sub(arg_count + 1)
                         .ok_or_else(|| VmError::StackUnderflow)?;
                     let object = self.stack[obj_index].clone();
@@ -614,11 +523,7 @@ impl Vm {
                                 .cloned();
                             match method {
                                 Some((_, chunk_index, _)) => {
-                                    // Insert instance copy so stack layout matches function convention:
-                                    // [instance, instance, arg1, arg2, ...]
-                                    // stack_base = obj_index + 1 (points to second instance = `this`)
                                     self.stack.insert(obj_index, object.clone());
-
                                     let frame = CallFrame {
                                         chunk_index: self.chunk_index,
                                         ip: self.ip,
@@ -635,12 +540,10 @@ impl Vm {
                             }
                         }
                         Value::Map(entries) => {
-                            // Method call on map - try to find a function value
                             let mut found = false;
-                            for (k, v) in entries {
+                            for (k, v) in entries.iter() {
                                 if let Value::Str(s) = k {
-                                    if s == &method_name {
-                                        // Replace object with the function value
+                                    if s.as_ref() == method_name.as_str() {
                                         self.stack[obj_index] = v.clone();
                                         found = true;
                                         break;
@@ -650,15 +553,11 @@ impl Vm {
                             if !found {
                                 return Err(VmError::UndefinedFunction(method_name));
                             }
-                            // Now call the function that's at obj_index
                             let func = self.stack[obj_index].clone();
                             match func {
                                 Value::Function { arity, chunk_index, .. } => {
                                     if arity != arg_count {
-                                        return Err(VmError::WrongArgumentCount {
-                                            expected: arity,
-                                            found: arg_count,
-                                        });
+                                        return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
                                     }
                                     let frame = CallFrame {
                                         chunk_index: self.chunk_index,
@@ -673,13 +572,13 @@ impl Vm {
                                 Value::Builtin { name: bname, .. } => {
                                     let args: Vec<Value> = self.stack[obj_index + 1..].to_vec();
                                     self.stack.truncate(obj_index);
-                                    if let Some(builtin_fn) = self.builtins.get(&bname) {
+                                    if let Some(builtin_fn) = self.builtins.get(bname.as_ref()) {
                                         match builtin_fn(&args) {
                                             Ok(result) => self.push(result)?,
                                             Err(e) => return Err(VmError::RuntimeError(e)),
                                         }
                                     } else {
-                                        return Err(VmError::UndefinedFunction(bname));
+                                        return Err(VmError::UndefinedFunction(bname.to_string()));
                                     }
                                 }
                                 _ => {
@@ -699,21 +598,18 @@ impl Vm {
                         elements.push(self.pop()?);
                     }
                     elements.reverse();
-                    self.push(Value::Array(elements))?;
+                    self.push(Value::Array(Rc::new(elements)))?;
                 }
                 Opcode::BuildMap => {
                     let count = operand.unwrap_or(0) as usize;
                     let mut entries = Vec::with_capacity(count);
-                    // Stack has key, value pairs pushed in order: k1, v1, k2, v2, ...
-                    // We pop from top: v2, k2, v1, k1
                     for _ in 0..count {
                         let value = self.pop()?;
                         let key = self.pop()?;
                         entries.push((key, value));
                     }
-                    // Reverse to maintain original order
                     entries.reverse();
-                    self.push(Value::Map(entries))?;
+                    self.push(Value::Map(Rc::new(entries)))?;
                 }
                 Opcode::IndexGet => {
                     let index = self.pop()?;
@@ -721,16 +617,13 @@ impl Vm {
                     match (&object, &index) {
                         (Value::Array(arr), Value::Int(i)) => {
                             if *i < 0 || *i >= arr.len() as i64 {
-                                return Err(VmError::IndexOutOfBounds {
-                                    index: *i,
-                                    length: arr.len(),
-                                });
+                                return Err(VmError::IndexOutOfBounds { index: *i, length: arr.len() });
                             }
                             self.push(arr[*i as usize].clone())?;
                         }
                         (Value::Map(entries), key) => {
                             let mut found = false;
-                            for (k, v) in entries {
+                            for (k, v) in entries.iter() {
                                 if self.values_equal(k, key) {
                                     self.push(v.clone())?;
                                     found = true;
@@ -744,10 +637,7 @@ impl Vm {
                         (Value::Str(s), Value::Int(i)) => {
                             let char_count = s.chars().count();
                             if *i < 0 || *i >= char_count as i64 {
-                                return Err(VmError::IndexOutOfBounds {
-                                    index: *i,
-                                    length: char_count,
-                                });
+                                return Err(VmError::IndexOutOfBounds { index: *i, length: char_count });
                             }
                             self.push(Value::Char(s.chars().nth(*i as usize).unwrap()))?;
                         }
@@ -761,16 +651,17 @@ impl Vm {
                     match (&mut object, &index) {
                         (Value::Array(arr), Value::Int(i)) => {
                             if *i < 0 || *i >= arr.len() as i64 {
-                                return Err(VmError::IndexOutOfBounds {
-                                    index: *i,
-                                    length: arr.len(),
-                                });
+                                return Err(VmError::IndexOutOfBounds { index: *i, length: arr.len() });
                             }
-                            arr[*i as usize] = value;
+                            let mut new_arr = arr.as_ref().clone();
+                            new_arr[*i as usize] = value;
+                            object = Value::Array(Rc::new(new_arr));
                         }
                         (Value::Map(entries), key) => {
-                            entries.retain(|(k, _)| !self.values_equal(k, key));
-                            entries.push((index, value));
+                            let mut new_entries = entries.as_ref().clone();
+                            new_entries.retain(|(k, _)| !self.values_equal(k, key));
+                            new_entries.push((index, value));
+                            object = Value::Map(Rc::new(new_entries));
                         }
                         _ => return Err(VmError::TypeError("Cannot index-assign this type".to_string())),
                     }
@@ -785,33 +676,21 @@ impl Vm {
                             .map(|(n, ci)| (n.clone(), *ci, 0))
                             .collect();
                         self.class_table.push(RegisteredClass {
-                            name: name.clone(),
+                            name: name.to_string(),
                             superclass: superclass.clone(),
                             methods: methods_vec,
-                            properties: properties.clone(),
+                            properties: properties.as_ref().clone(),
                         });
-                        self.push(Value::Class {
-                            name: name.clone(),
-                            methods: methods.clone(),
-                            superclass: superclass.clone(),
-                            properties: properties.clone(),
-                        })?;
+                        self.push(class)?;
                     } else {
                         self.push(class)?;
                     }
                 }
-                Opcode::CreateInstance => {
-                    self.push(Value::Null)?;
-                }
-                Opcode::GetMethod => {
-                    self.push(Value::Null)?;
-                }
-                Opcode::MatchPattern => {
-                    self.push(Value::Bool(true))?;
-                }
+                Opcode::CreateInstance => { self.push(Value::Null)?; }
+                Opcode::GetMethod => { self.push(Value::Null)?; }
+                Opcode::MatchPattern => { self.push(Value::Bool(true))?; }
                 Opcode::MakeClosure => {
                     let count = operand.unwrap_or(0) as usize;
-                    // Pop upvalue values (in reverse order) and store them
                     let mut uv_indices = Vec::with_capacity(count);
                     for _ in 0..count {
                         let value = self.pop()?;
@@ -820,7 +699,6 @@ impl Vm {
                         uv_indices.push(idx);
                     }
                     uv_indices.reverse();
-                    // Pop the function value
                     let func = self.pop()?;
                     match func {
                         Value::Function { chunk_index, arity, .. } => {
@@ -896,8 +774,8 @@ impl Vm {
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
-            (Value::Char(a), Value::Str(b)) => a.to_string().as_str() == b,
-            (Value::Str(a), Value::Char(b)) => a.as_str() == b.to_string().as_str(),
+            (Value::Char(a), Value::Str(b)) => a.to_string().as_str() == b.as_ref(),
+            (Value::Str(a), Value::Char(b)) => a.as_ref() == b.to_string().as_str(),
             _ => false,
         }
     }
@@ -908,15 +786,15 @@ impl Vm {
             (Value::Float(a), Value::Float(b)) => Ok(a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal) as i32),
             (Value::Int(a), Value::Float(b)) => Ok((*a as f64).partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal) as i32),
             (Value::Float(a), Value::Int(b)) => Ok(a.partial_cmp(&(*b as f64)).unwrap_or(std::cmp::Ordering::Equal) as i32),
-            (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b) as i32),
+            (Value::Str(a), Value::Str(b)) => Ok(a.as_ref().cmp(b.as_ref()) as i32),
             (Value::Char(a), Value::Char(b)) => Ok(a.cmp(b) as i32),
             (Value::Char(a), Value::Str(b)) => {
                 let a_str = a.to_string();
-                Ok(a_str.as_str().cmp(b) as i32)
+                Ok(a_str.as_str().cmp(b.as_ref()) as i32)
             }
             (Value::Str(a), Value::Char(b)) => {
                 let b_str = b.to_string();
-                Ok(a.as_str().cmp(&b_str) as i32)
+                Ok(a.as_ref().cmp(b_str.as_str()) as i32)
             }
             _ => Err(VmError::TypeError("Cannot compare these types".to_string())),
         }
@@ -928,12 +806,13 @@ impl Vm {
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f64 + b)),
             (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + b as f64)),
-            (Value::Str(a), Value::Str(b)) => Ok(Value::Str(format!("{}{}", a, b))),
-            (Value::Str(a), b) => Ok(Value::Str(format!("{}{}", a, self.value_to_string(&b)))),
-            (a, Value::Str(b)) => Ok(Value::Str(format!("{}{}", self.value_to_string(&a), b))),
-            (Value::Array(mut a), Value::Array(b)) => {
-                a.extend(b);
-                Ok(Value::Array(a))
+            (Value::Str(a), Value::Str(b)) => Ok(Value::Str(format!("{}{}", a, b).into())),
+            (Value::Str(a), b) => Ok(Value::Str(format!("{}{}", a, mailang_stdlib::value_to_string(&b)).into())),
+            (a, Value::Str(b)) => Ok(Value::Str(format!("{}{}", mailang_stdlib::value_to_string(&a), b).into())),
+            (Value::Array(a), Value::Array(b)) => {
+                let mut new_vec = a.as_ref().clone();
+                new_vec.extend(b.as_ref().clone());
+                Ok(Value::Array(Rc::new(new_vec)))
             }
             _ => Err(VmError::TypeError("Cannot add these types".to_string())),
         }
@@ -955,7 +834,7 @@ impl Vm {
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f64 * b)),
             (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * b as f64)),
-            (Value::Str(s), Value::Int(n)) => Ok(Value::Str(s.repeat(n.max(0) as usize))),
+            (Value::Str(s), Value::Int(n)) => Ok(Value::Str(s.repeat(n.max(0) as usize).into())),
             _ => Err(VmError::TypeError("Cannot multiply these types".to_string())),
         }
     }
@@ -1023,10 +902,6 @@ impl Vm {
             (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a ^ b)),
             _ => Err(VmError::TypeError("Bitwise XOR requires integers".to_string())),
         }
-    }
-
-    fn value_to_string(&self, v: &Value) -> String {
-        mailang_stdlib::value_to_string(v)
     }
 
     pub fn set_global(&mut self, name: String, value: Value) {

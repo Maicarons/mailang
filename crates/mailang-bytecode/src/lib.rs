@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Opcode {
@@ -84,19 +86,19 @@ pub enum Opcode {
     Halt,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Value {
     Null,
     Bool(bool),
     Int(i64),
     Float(f64),
-    Str(String),
+    Str(Rc<str>),
     Char(char),
-    Array(Vec<Value>),
-    Map(Vec<(Value, Value)>),
-    Tuple(Vec<Value>),
+    Array(Rc<Vec<Value>>),
+    Map(Rc<Vec<(Value, Value)>>),
+    Tuple(Rc<Vec<Value>>),
     Function {
-        name: String,
+        name: Rc<str>,
         arity: usize,
         chunk_index: usize,
     },
@@ -106,19 +108,97 @@ pub enum Value {
         upvalues: Vec<usize>,
     },
     Class {
-        name: String,
-        methods: Vec<(String, usize)>,
+        name: Rc<str>,
+        methods: Rc<Vec<(String, usize)>>,
         superclass: Option<String>,
-        properties: Vec<(String, Value)>,
+        properties: Rc<Vec<(String, Value)>>,
     },
     Instance {
         class_index: usize,
-        fields: Vec<(String, Value)>,
+        fields: Rc<RefCell<Vec<(String, Value)>>>,
     },
     Ok(Box<Value>),
     Err(Box<Value>),
     Some(Box<Value>),
-    Builtin { name: String, arity: usize },
+    Builtin { name: Rc<str>, arity: usize },
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Null, Value::Null) => true,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Str(a), Value::Str(b)) => a == b,
+            (Value::Char(a), Value::Char(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::Map(a), Value::Map(b)) => a == b,
+            (Value::Tuple(a), Value::Tuple(b)) => a == b,
+            (
+                Value::Function {
+                    name: n1,
+                    arity: a1,
+                    chunk_index: c1,
+                },
+                Value::Function {
+                    name: n2,
+                    arity: a2,
+                    chunk_index: c2,
+                },
+            ) => n1 == n2 && a1 == a2 && c1 == c2,
+            (
+                Value::Closure {
+                    function_index: f1,
+                    arity: a1,
+                    upvalues: u1,
+                },
+                Value::Closure {
+                    function_index: f2,
+                    arity: a2,
+                    upvalues: u2,
+                },
+            ) => f1 == f2 && a1 == a2 && u1 == u2,
+            (
+                Value::Class {
+                    name: n1,
+                    methods: m1,
+                    superclass: s1,
+                    properties: p1,
+                },
+                Value::Class {
+                    name: n2,
+                    methods: m2,
+                    superclass: s2,
+                    properties: p2,
+                },
+            ) => n1 == n2 && m1 == m2 && s1 == s2 && p1 == p2,
+            (
+                Value::Instance {
+                    class_index: c1,
+                    fields: f1,
+                },
+                Value::Instance {
+                    class_index: c2,
+                    fields: f2,
+                },
+            ) => c1 == c2 && *f1.borrow() == *f2.borrow(),
+            (Value::Ok(a), Value::Ok(b)) => a == b,
+            (Value::Err(a), Value::Err(b)) => a == b,
+            (Value::Some(a), Value::Some(b)) => a == b,
+            (
+                Value::Builtin {
+                    name: n1,
+                    arity: a1,
+                },
+                Value::Builtin {
+                    name: n2,
+                    arity: a2,
+                },
+            ) => n1 == n2 && a1 == a2,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
