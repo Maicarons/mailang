@@ -25,32 +25,56 @@ jobs:
     name: Publish to crates.io
     runs-on: ubuntu-latest
     needs: release
+    # Requires repository secret CARGO_REGISTRY_TOKEN; GitHub Release still succeeds if unset.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Check crates.io token
+        id: token
+        run: |
+          if [ -z "${{ secrets.CARGO_REGISTRY_TOKEN }}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "CARGO_REGISTRY_TOKEN secret is not set; skipping crates.io publish."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Login to crates.io
+        if: steps.token.outputs.present == 'true'
         run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Publish mailang-ast
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-ast --allow-dirty
       - name: Publish mailang-bytecode
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-bytecode --allow-dirty
       - name: Publish mailang-lexer
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-lexer --allow-dirty
       - name: Publish mailang-stdlib
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-stdlib --allow-dirty
       - name: Publish mailang-gc
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-gc --allow-dirty
       - name: Publish mailang-parser
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-parser --allow-dirty
       - name: Publish mailang-analyzer
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-analyzer --allow-dirty
       - name: Publish mailang-compiler
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-compiler --allow-dirty
       - name: Publish mailang-vm
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-vm --allow-dirty
       - name: Publish mailang-core
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-core --allow-dirty
       - name: Publish mailang-macros
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-macros --allow-dirty
       - name: Publish mailang-cli
+        if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-cli --allow-dirty
