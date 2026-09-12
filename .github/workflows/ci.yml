@@ -51,16 +51,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        # Full workspace (std) only — bare-metal targets are covered by no_std below.
         target:
           - aarch64-unknown-linux-gnu
-          - thumbv7em-none-eabihf
-          - riscv32imc-unknown-none-elf
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - run: cargo check --target ${{ matrix.target }} --exclude mailang-wasm --exclude mailang-lsp --exclude mailang-ffi
+      - run: cargo check --workspace --target ${{ matrix.target }} --exclude mailang-wasm --exclude mailang-lsp --exclude mailang-ffi
 
   no_std:
     name: no_std bytecode (${{ matrix.target }})
