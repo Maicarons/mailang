@@ -22,7 +22,7 @@ jobs:
       - name: Build FFI
         run: cargo build --release -p mailang-ffi
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mailang-ffi-${{ matrix.os }}
           path: target/release/*mailang_ffi*
