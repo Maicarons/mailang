@@ -229,3 +229,175 @@ fn test_utf8_string_len() {
     // Should count characters, not bytes
     assert_eq!(eval("\"你好\".len"), "2");
 }
+
+// ===== Phase B: lexer =====
+
+#[test]
+fn test_hex_literal() {
+    assert_eq!(eval("0x10"), "16");
+}
+
+#[test]
+fn test_octal_literal() {
+    assert_eq!(eval("0o17"), "15");
+}
+
+#[test]
+fn test_binary_literal() {
+    assert_eq!(eval("0b1010"), "10");
+}
+
+#[test]
+fn test_block_comment() {
+    assert_eq!(eval("/* comment */ 1 + 1"), "2");
+}
+
+#[test]
+fn test_block_comment_multiline() {
+    assert_eq!(eval("/* line1\nline2 */ 42"), "42");
+}
+
+// ===== Phase B: generics / Result =====
+
+#[test]
+fn test_generic_result_annotation() {
+    let code = r#"
+fn divide(a: float, b: float) -> Result<float, str> {
+    if b == 0.0 {
+        return Err("div0")
+    }
+    return Ok(a / b)
+}
+divide(10.0, 2.0)
+"#;
+    assert_eq!(eval(code), "Ok(5)");
+}
+
+#[test]
+fn test_option_annotation() {
+    let code = r#"
+fn find(flag: bool) -> Option<int> {
+    if flag {
+        return Some(7)
+    }
+    return None
+}
+find(true)
+"#;
+    assert_eq!(eval(code), "Some(7)");
+}
+
+// ===== Phase B: Ok/Err/Some patterns =====
+
+#[test]
+fn test_match_ok() {
+    assert_eq!(eval("match Ok(42) {\nOk(v) => v\nErr(e) => 0\n}"), "42");
+}
+
+#[test]
+fn test_match_err() {
+    assert_eq!(eval("match Err(\"boom\") {\nOk(v) => 1\nErr(e) => e\n}"), "boom");
+}
+
+#[test]
+fn test_match_some() {
+    assert_eq!(eval("match Some(3) {\nSome(v) => v * 2\nNone => 0\n}"), "6");
+}
+
+#[test]
+fn test_match_comma_separated_arms() {
+    assert_eq!(eval("match Ok(5) { Ok(v) => v, Err(e) => 0 }"), "5");
+}
+
+// ===== Phase B: range patterns =====
+
+#[test]
+fn test_match_range_inclusive_start() {
+    assert_eq!(eval("match 5 {\n1..10 => \"small\"\n_ => \"big\"\n}"), "small");
+}
+
+#[test]
+fn test_match_range_outside() {
+    assert_eq!(eval("match 15 {\n1..10 => \"small\"\n_ => \"big\"\n}"), "big");
+}
+
+#[test]
+fn test_match_range_inclusive_end() {
+    assert_eq!(eval("match 10 {\n1..=10 => \"in\"\n_ => \"out\"\n}"), "in");
+}
+
+// ===== Phase B: traits =====
+
+#[test]
+fn test_trait_default_method() {
+    let code = r#"
+trait Printable {
+    fn to_string() -> str
+    fn print() {
+        println(this.to_string())
+    }
+}
+class Point implements Printable {
+    let x: float
+    let y: float
+    fn init(x: float, y: float) {
+        this.x = x
+        this.y = y
+    }
+    fn to_string() -> str {
+        return "({this.x}, {this.y})"
+    }
+}
+let p = Point(1.0, 2.0)
+p.to_string()
+"#;
+    assert_eq!(eval(code), "(1, 2)");
+}
+
+#[test]
+fn test_trait_required_method_override() {
+    let code = r#"
+trait Greeter {
+    fn greet() -> str
+    fn shout() -> str {
+        return this.greet()
+    }
+}
+class Hello implements Greeter {
+    fn greet() -> str {
+        return "hi"
+    }
+}
+let h = Hello()
+h.shout()
+"#;
+    assert_eq!(eval(code), "hi");
+}
+
+// ===== Phase B: performance / TCO =====
+
+#[test]
+fn test_tail_call_deep_recursion() {
+    // Would overflow a non-TCO call stack at this depth.
+    let code = r#"
+fn count(n) {
+    if n <= 0 {
+        return 0
+    }
+    return count(n - 1)
+}
+count(5000)
+"#;
+    assert_eq!(eval(code), "0");
+}
+
+#[test]
+fn test_array_mutation_shared() {
+    // Array write is in-place via Rc<RefCell>
+    assert_eq!(eval("let a = [1, 2, 3]\na[0] = 9\na"), "[9, 2, 3]");
+}
+
+#[test]
+fn test_map_property_set() {
+    assert_eq!(eval("let m = {\"a\": 1}\nm[\"b\"] = 2\nm[\"b\"]"), "2");
+}

@@ -52,6 +52,7 @@ pub enum Opcode {
     JumpIfFalse,
     JumpIfTrue,
     Call,
+    TailCall,
     Return,
 
     // Object operations
@@ -80,6 +81,12 @@ pub enum Opcode {
     Throw,
     TryBegin,
     TryEnd,
+    WrapOk,
+    WrapErr,
+    WrapSome,
+    UnwrapOk,
+    UnwrapErr,
+    UnwrapSome,
 
     // Special
     Nop,
@@ -94,9 +101,9 @@ pub enum Value {
     Float(f64),
     Str(Rc<str>),
     Char(char),
-    Array(Rc<Vec<Value>>),
-    Map(Rc<Vec<(Value, Value)>>),
-    Tuple(Rc<Vec<Value>>),
+    Array(Rc<RefCell<Vec<Value>>>),
+    Map(Rc<RefCell<Vec<(Value, Value)>>>),
+    Tuple(Rc<RefCell<Vec<Value>>>),
     Function {
         name: Rc<str>,
         arity: usize,
@@ -132,9 +139,9 @@ impl PartialEq for Value {
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
-            (Value::Array(a), Value::Array(b)) => a == b,
-            (Value::Map(a), Value::Map(b)) => a == b,
-            (Value::Tuple(a), Value::Tuple(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => *a.borrow() == *b.borrow(),
+            (Value::Map(a), Value::Map(b)) => *a.borrow() == *b.borrow(),
+            (Value::Tuple(a), Value::Tuple(b)) => *a.borrow() == *b.borrow(),
             (
                 Value::Function {
                     name: n1,

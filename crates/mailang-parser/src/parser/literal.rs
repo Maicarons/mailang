@@ -223,6 +223,11 @@ impl Parser {
                 body,
             });
             self.skip_newlines();
+            // Optional comma between arms: `Ok(v) => x, Err(e) => y`
+            if self.peek() == &Token::Comma {
+                self.advance();
+                self.skip_newlines();
+            }
         }
 
         self.expect(&Token::RightBrace)?;
@@ -248,8 +253,7 @@ impl Parser {
             // Convert to range using expressions
             let start_expr = pattern_to_expr(&first)?;
             let end_expr = pattern_to_expr(&end)?;
-            let _ = inclusive; // TODO: support ..= (inclusive range)
-            return Ok(Pattern::Range(Box::new(start_expr), Box::new(end_expr)));
+            return Ok(Pattern::Range(Box::new(start_expr), Box::new(end_expr), inclusive));
         }
 
         // Check for or-pattern: a | b | c
@@ -304,6 +308,31 @@ impl Parser {
                 } else {
                     Ok(Pattern::Identifier(name))
                 }
+            }
+            Token::Ok => {
+                self.advance();
+                self.expect(&Token::LeftParen)?;
+                let inner = self.parse_pattern()?;
+                self.expect(&Token::RightParen)?;
+                Ok(Pattern::Ok(Box::new(inner)))
+            }
+            Token::Err => {
+                self.advance();
+                self.expect(&Token::LeftParen)?;
+                let inner = self.parse_pattern()?;
+                self.expect(&Token::RightParen)?;
+                Ok(Pattern::Err(Box::new(inner)))
+            }
+            Token::Some => {
+                self.advance();
+                self.expect(&Token::LeftParen)?;
+                let inner = self.parse_pattern()?;
+                self.expect(&Token::RightParen)?;
+                Ok(Pattern::Some(Box::new(inner)))
+            }
+            Token::None => {
+                self.advance();
+                Ok(Pattern::Literal(Literal::Null))
             }
             Token::LeftParen => {
                 self.advance();

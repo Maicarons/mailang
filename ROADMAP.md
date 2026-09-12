@@ -2,18 +2,18 @@
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0](https://github.com/Maicarons/mailang/releases/tag/v0.1.0)
 >
-> 更新日期：2026-06-17（Phase A 完成后）
+> 更新日期：2026-09-12（Phase B 收尾完成后）
 > 研究方法：运行时行为验证 + 代码审计 + 竞品对比
 
 ---
 
-## 一、当前状态总结（Phase A 完成后）
+## 一、当前状态总结（Phase B 完成后）
 
 ### 1.1 已验证可用的功能
 
 | 功能 | 状态 | 验证方式 |
 |------|------|---------|
-| 算术/字符串/布尔/null | ✅ | 40 个集成测试 |
+| 算术/字符串/布尔/null | ✅ | 59 个集成测试 |
 | 变量 let/var/const | ✅ | 测试通过 |
 | 函数定义与递归 | ✅ | fibonacci.mai |
 | Lambda 表达式 | ✅ | `fn(x) { return x * 2 }` |
@@ -22,26 +22,27 @@
 | if/elif/else | ✅ | 测试通过 |
 | while/for 循环 | ✅ | 测试通过 |
 | 字符串插值 | ✅ | `"{name}"` |
-| 数组/字典 | ✅ | 索引读写 |
+| 数组/字典 | ✅ | 索引读写（Rc\<RefCell\> 原地写） |
 | OOP 类/继承/方法 | ✅ | oop_demo.mai |
 | super() 调用 | ✅ | Dog extends Animal |
-| match 字面量/通配符 | ✅ | 测试通过 |
+| Trait / implements | ✅ | trait_demo.mai（含默认方法注入） |
+| match 字面量/通配符/范围/Ok|Err|Some | ✅ | 测试通过 |
+| 泛型类型标注 Result/Option | ✅ | error_handling.mai |
+| 十六进制/八进制/二进制 | ✅ | 0x10 == 16 |
+| 块注释 /* */ | ✅ | 测试通过 |
+| 尾调用优化 | ✅ | count(50000) 不栈溢出 |
+| 全局槽表 | ✅ | LoadGlobal 无 String clone |
 | UTF-8 标识符 | ✅ | `let 中文 = 42` |
 | CLI/REPL | ✅ | run/eval |
 | C FFI | ✅ | eval/eval_file |
 | WASM + Playground | ✅ | VitePress 部署 |
 
-### 1.2 仍需修复的问题
+### 1.2 仍需处理
 
-| 问题 | 严重度 | 根因 |
+| 问题 | 严重度 | 说明 |
 |------|--------|------|
-| `Result<float, str>` 泛型语法 | P0 | Parser 不支持 `<T, E>` 泛型标注 |
-| Trait 系统 | P0 | `compile_trait` 为空函数 |
-| 范围匹配 `1..10` | P1 | Parser 不支持 `..` 在 match 模式中 |
-| 十六进制字面量 `0x10` | P1 | Lexer 不支持 `0x` 前缀 |
-| 块注释 `/* */` | P1 | Lexer 用 `**` 而非 `*/` |
-| `println` 未注册为内置函数 | P1 | VM builtins 缺少 println |
-| Analyzer 未接入管道 | P1 | 738 行代码从未被调用 |
+| Fibonacci(30) 未达 3x | P1 | 整数递归瓶颈不在 Value clone；需调用帧/指令分派优化 |
+| Analyzer 未接入管道 | P1 | 代码存在但从未被调用 |
 | GC 是空壳 | P2 | 84 行，VM 从未使用 |
 | LSP 是桩 | P2 | 仅 initialize/shutdown |
 
@@ -80,10 +81,10 @@
 
 **方案**：
 - Parser 的 `parse_pattern` 支持 `Pattern::Range`
-- Compiler 编译范围比较（>= 且 <=）
+- Compiler 编译范围比较（>= 且 < / <=）
 - 支持 `1..=10`（包含端点）
 
-**验收**：范围匹配测试通过
+**验收**：范围匹配测试通过 — **已完成（含 `..=`）**
 
 ### B4. Lexer 增强（P1）
 
@@ -255,13 +256,13 @@ Week 13:    发布 v0.2.0
 ## 八、成功指标
 
 ### Phase B 完成标准
-- [ ] `error_handling.mai` 运行成功
-- [ ] `trait_demo.mai` 运行成功
-- [ ] 范围匹配 `1..10` 工作
-- [ ] 十六进制 `0x10` = 16
-- [ ] 块注释 `/* */` 工作
-- [ ] Fibonacci(30) 性能提升 3x+
-- [ ] 全局查找无 String clone
+- [x] `error_handling.mai` 运行成功
+- [x] `trait_demo.mai` 运行成功
+- [x] 范围匹配 `1..10` 工作
+- [x] 十六进制 `0x10` = 16
+- [x] 块注释 `/* */` 工作
+- [ ] Fibonacci(30) 性能提升 3x+（未达标：当前约与基线持平，整数递归瓶颈不在 clone）
+- [x] 全局查找无 String clone（`Vec` 槽表直读）
 
 ### Phase C 完成标准
 - [ ] thumbv7em / riscv32 编译成功

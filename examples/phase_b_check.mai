@@ -1,0 +1,68 @@
+let h = 0x10
+println(h)
+
+/* block comment */
+let c = 1 + 1
+println(c)
+
+let r = match 5 {
+    1..10 => "small"
+    _ => "big"
+}
+println(r)
+
+let r2 = match 15 {
+    1..10 => "small"
+    _ => "big"
+}
+println(r2)
+
+let o = Ok(42)
+println(o)
+
+let e = Err("boom")
+println(e)
+
+let m1 = match Ok(7) {
+    Ok(v) => v * 2
+    Err(e) => 0
+}
+println(m1)
+
+let m2 = match Err("x") {
+    Ok(v) => 1
+    Err(msg) => msg
+}
+println(m2)
+
+trait Printable {
+    fn to_string() -> str
+    fn print() {
+        println(this.to_string())
+    }
+}
+
+class Point implements Printable {
+    let x: float
+    let y: float
+
+    fn init(x: float, y: float) {
+        this.x = x
+        this.y = y
+    }
+
+    fn to_string() -> str {
+        return "({this.x}, {this.y})"
+    }
+}
+
+let p = Point(3.0, 4.0)
+p.print()
+
+fn count(n) {
+    if n <= 0 {
+        return 0
+    }
+    return count(n - 1)
+}
+println(count(5000))

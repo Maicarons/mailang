@@ -91,4 +91,4 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-Early development (Phase 1). The lexer, parser, compiler, and VM are functional for basic arithmetic, variables, functions, and control flow. OOP (class/trait) compilation is skeletal. Analyzer and GC are stubs.
+Phase B largely complete. Lexer/parser/compiler/VM support basic procedural code, OOP (classes/inheritance/super), closures, pattern matching (literal, wildcard, identifier, or, guard, range including `..=`, `Ok`/`Err`/`Some`), generic type annotations (`Result<T,E>`, `Option<T>`), traits with default-method injection, hex/octal/binary literals, block comments, TCO for self tail-calls, and a slot-based global table. 59 integration tests pass. Analyzer and GC remain stubs. Fib(30) integer recursion is still the main perf gap.

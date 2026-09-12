@@ -1,4 +1,4 @@
-﻿//! MaìLang standard library
+//! MaìLang standard library
 //!
 //! This module provides built-in functions for MaìLang.
 
@@ -79,18 +79,19 @@ pub fn value_to_string(v: &Value) -> String {
         Value::Str(s) => s.to_string(),
         Value::Char(c) => c.to_string(),
         Value::Array(arr) => {
-            let items: Vec<String> = arr.iter().map(value_to_string).collect();
+            let items: Vec<String> = arr.borrow().iter().map(value_to_string).collect();
             format!("[{}]", items.join(", "))
         }
         Value::Map(m) => {
             let items: Vec<String> = m
+                .borrow()
                 .iter()
                 .map(|(k, v)| format!("{}: {}", value_to_string(k), value_to_string(v)))
                 .collect();
             format!("{{{}}}", items.join(", "))
         }
         Value::Tuple(t) => {
-            let items: Vec<String> = t.iter().map(value_to_string).collect();
+            let items: Vec<String> = t.borrow().iter().map(value_to_string).collect();
             format!("({})", items.join(", "))
         }
         Value::Function { name, .. } => format!("<fn {}>", name),

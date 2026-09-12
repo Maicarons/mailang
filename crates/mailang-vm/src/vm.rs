@@ -25,7 +25,8 @@ struct RegisteredClass {
 pub struct Vm {
     bytecode: Bytecode,
     stack: Vec<Value>,
-    globals: HashMap<String, Value>,
+    /// Global variables indexed by interned slot (no name lookup on hot path).
+    globals: Vec<Value>,
     builtins: HashMap<String, BuiltinFn>,
     call_stack: Vec<CallFrame>,
     ip: usize,
@@ -36,56 +37,56 @@ pub struct Vm {
 
 impl Vm {
     pub fn new(bytecode: Bytecode) -> Self {
-        let mut vm = Self {
+        let mut builtins: HashMap<String, BuiltinFn> = HashMap::new();
+        builtins.insert("println".to_string(), |args| mailang_stdlib::builtin_println(args));
+        builtins.insert("print".to_string(), |args| mailang_stdlib::builtin_print(args));
+        builtins.insert("input".to_string(), |args| mailang_stdlib::builtin_input(args));
+        builtins.insert("sqrt".to_string(), |args| mailang_stdlib::builtin_sqrt(args));
+        builtins.insert("abs".to_string(), |args| mailang_stdlib::builtin_abs(args));
+        builtins.insert("sin".to_string(), |args| mailang_stdlib::builtin_sin(args));
+        builtins.insert("cos".to_string(), |args| mailang_stdlib::builtin_cos(args));
+        builtins.insert("floor".to_string(), |args| mailang_stdlib::builtin_floor(args));
+        builtins.insert("ceil".to_string(), |args| mailang_stdlib::builtin_ceil(args));
+        builtins.insert("round".to_string(), |args| mailang_stdlib::builtin_round(args));
+        builtins.insert("min".to_string(), |args| mailang_stdlib::builtin_min(args));
+        builtins.insert("max".to_string(), |args| mailang_stdlib::builtin_max(args));
+        builtins.insert("len".to_string(), |args| mailang_stdlib::builtin_len(args));
+        builtins.insert("to_string".to_string(), |args| mailang_stdlib::builtin_to_string(args));
+        builtins.insert("parse_int".to_string(), |args| mailang_stdlib::builtin_parse_int(args));
+        builtins.insert("parse_float".to_string(), |args| mailang_stdlib::builtin_parse_float(args));
+        builtins.insert("time_now".to_string(), |args| mailang_stdlib::builtin_time_now(args));
+        builtins.insert("time_now_secs".to_string(), |args| mailang_stdlib::builtin_time_now_secs(args));
+        builtins.insert("time_year".to_string(), |args| mailang_stdlib::builtin_time_year(args));
+        builtins.insert("time_month".to_string(), |args| mailang_stdlib::builtin_time_month(args));
+        builtins.insert("time_day".to_string(), |args| mailang_stdlib::builtin_time_day(args));
+        builtins.insert("time_hour".to_string(), |args| mailang_stdlib::builtin_time_hour(args));
+        builtins.insert("time_minute".to_string(), |args| mailang_stdlib::builtin_time_minute(args));
+        builtins.insert("time_second".to_string(), |args| mailang_stdlib::builtin_time_second(args));
+        builtins.insert("time_date".to_string(), |args| mailang_stdlib::builtin_time_date(args));
+        builtins.insert("time_datetime".to_string(), |args| mailang_stdlib::builtin_time_datetime(args));
+        builtins.insert("time_elapsed".to_string(), |args| mailang_stdlib::builtin_time_elapsed(args));
+        builtins.insert("time_sleep".to_string(), |args| mailang_stdlib::builtin_time_sleep(args));
+
+        let mut globals = vec![Value::Null; bytecode.global_names.len()];
+        for (slot, name) in bytecode.global_names.iter().enumerate() {
+            if builtins.contains_key(name.as_str()) {
+                globals[slot] = Value::Builtin {
+                    name: name.as_str().into(),
+                    arity: 0,
+                };
+            }
+        }
+
+        Self {
             bytecode,
             stack: Vec::with_capacity(256),
-            globals: HashMap::new(),
-            builtins: HashMap::new(),
+            globals,
+            builtins,
             call_stack: Vec::new(),
             ip: 0,
             chunk_index: 0,
             class_table: Vec::new(),
             upvalue_store: Vec::new(),
-        };
-        vm.register_stdlib_builtins();
-        vm
-    }
-
-    fn register_stdlib_builtins(&mut self) {
-        self.builtins.insert("println".to_string(), |args| mailang_stdlib::builtin_println(args));
-        self.builtins.insert("print".to_string(), |args| mailang_stdlib::builtin_print(args));
-        self.builtins.insert("input".to_string(), |args| mailang_stdlib::builtin_input(args));
-        self.builtins.insert("sqrt".to_string(), |args| mailang_stdlib::builtin_sqrt(args));
-        self.builtins.insert("abs".to_string(), |args| mailang_stdlib::builtin_abs(args));
-        self.builtins.insert("sin".to_string(), |args| mailang_stdlib::builtin_sin(args));
-        self.builtins.insert("cos".to_string(), |args| mailang_stdlib::builtin_cos(args));
-        self.builtins.insert("floor".to_string(), |args| mailang_stdlib::builtin_floor(args));
-        self.builtins.insert("ceil".to_string(), |args| mailang_stdlib::builtin_ceil(args));
-        self.builtins.insert("round".to_string(), |args| mailang_stdlib::builtin_round(args));
-        self.builtins.insert("min".to_string(), |args| mailang_stdlib::builtin_min(args));
-        self.builtins.insert("max".to_string(), |args| mailang_stdlib::builtin_max(args));
-        self.builtins.insert("len".to_string(), |args| mailang_stdlib::builtin_len(args));
-        self.builtins.insert("to_string".to_string(), |args| mailang_stdlib::builtin_to_string(args));
-        self.builtins.insert("parse_int".to_string(), |args| mailang_stdlib::builtin_parse_int(args));
-        self.builtins.insert("parse_float".to_string(), |args| mailang_stdlib::builtin_parse_float(args));
-        self.builtins.insert("time_now".to_string(), |args| mailang_stdlib::builtin_time_now(args));
-        self.builtins.insert("time_now_secs".to_string(), |args| mailang_stdlib::builtin_time_now_secs(args));
-        self.builtins.insert("time_year".to_string(), |args| mailang_stdlib::builtin_time_year(args));
-        self.builtins.insert("time_month".to_string(), |args| mailang_stdlib::builtin_time_month(args));
-        self.builtins.insert("time_day".to_string(), |args| mailang_stdlib::builtin_time_day(args));
-        self.builtins.insert("time_hour".to_string(), |args| mailang_stdlib::builtin_time_hour(args));
-        self.builtins.insert("time_minute".to_string(), |args| mailang_stdlib::builtin_time_minute(args));
-        self.builtins.insert("time_second".to_string(), |args| mailang_stdlib::builtin_time_second(args));
-        self.builtins.insert("time_date".to_string(), |args| mailang_stdlib::builtin_time_date(args));
-        self.builtins.insert("time_datetime".to_string(), |args| mailang_stdlib::builtin_time_datetime(args));
-        self.builtins.insert("time_elapsed".to_string(), |args| mailang_stdlib::builtin_time_elapsed(args));
-        self.builtins.insert("time_sleep".to_string(), |args| mailang_stdlib::builtin_time_sleep(args));
-
-        for (name, _) in &self.builtins {
-            self.globals.insert(name.clone(), Value::Builtin {
-                name: name.as_str().into(),
-                arity: 0,
-            });
         }
     }
 
@@ -131,19 +132,18 @@ impl Vm {
                 }
                 Opcode::LoadGlobal => {
                     let slot = operand.ok_or_else(|| VmError::Internal("LoadGlobal missing operand".to_string()))? as usize;
-                    let name = self.bytecode.global_names.get(slot)
-                        .ok_or_else(|| VmError::Internal(format!("Invalid global slot {}", slot)))?
-                        .clone();
-                    let value = self.globals.get(&name).cloned().unwrap_or(Value::Null);
+                    let value = self.globals.get(slot)
+                        .cloned()
+                        .unwrap_or(Value::Null);
                     self.push(value)?;
                 }
                 Opcode::StoreGlobal => {
                     let slot = operand.ok_or_else(|| VmError::Internal("StoreGlobal missing operand".to_string()))? as usize;
-                    let name = self.bytecode.global_names.get(slot)
-                        .ok_or_else(|| VmError::Internal(format!("Invalid global slot {}", slot)))?
-                        .clone();
                     let value = self.pop()?;
-                    self.globals.insert(name, value);
+                    if slot >= self.globals.len() {
+                        self.globals.resize(slot + 1, Value::Null);
+                    }
+                    self.globals[slot] = value;
                 }
                 Opcode::LoadUpvalue => {
                     let index = operand.unwrap_or(0) as usize;
@@ -398,6 +398,174 @@ impl Vm {
                         }
                     }
                 }
+                Opcode::WrapOk => {
+                    let value = self.pop()?;
+                    self.push(Value::Ok(Box::new(value)))?;
+                }
+                Opcode::WrapErr => {
+                    let value = self.pop()?;
+                    self.push(Value::Err(Box::new(value)))?;
+                }
+                Opcode::WrapSome => {
+                    let value = self.pop()?;
+                    self.push(Value::Some(Box::new(value)))?;
+                }
+                Opcode::UnwrapOk => {
+                    let value = self.pop()?;
+                    match value {
+                        Value::Ok(inner) => {
+                            self.push(*inner)?;
+                            self.push(Value::Bool(true))?;
+                        }
+                        _ => {
+                            self.push(Value::Bool(false))?;
+                        }
+                    }
+                }
+                Opcode::UnwrapErr => {
+                    let value = self.pop()?;
+                    match value {
+                        Value::Err(inner) => {
+                            self.push(*inner)?;
+                            self.push(Value::Bool(true))?;
+                        }
+                        _ => {
+                            self.push(Value::Bool(false))?;
+                        }
+                    }
+                }
+                Opcode::UnwrapSome => {
+                    let value = self.pop()?;
+                    match value {
+                        Value::Some(inner) => {
+                            self.push(*inner)?;
+                            self.push(Value::Bool(true))?;
+                        }
+                        _ => {
+                            self.push(Value::Bool(false))?;
+                        }
+                    }
+                }
+                Opcode::TailCall => {
+                    let arg_count = operand.unwrap_or(0) as usize;
+                    let func_index = self.stack.len().checked_sub(arg_count + 1)
+                        .ok_or_else(|| VmError::Internal(format!(
+                            "Stack underflow in TailCall: stack_len={}, arg_count={}",
+                            self.stack.len(), arg_count
+                        )))?;
+                    let func = self.stack[func_index].clone();
+
+                    match func {
+                        Value::Function { arity, chunk_index, .. } => {
+                            if arity != arg_count {
+                                return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
+                            }
+                            // Move the new callee+args over the current frame's slot
+                            // so the abandoned locals are discarded and Return goes
+                            // straight to the original caller.
+                            if let Some(frame) = self.call_stack.last() {
+                                let old_base = frame.stack_base.saturating_sub(1);
+                                let new_len = arg_count + 1;
+                                if old_base != func_index {
+                                    for i in 0..new_len {
+                                        self.stack[old_base + i] = self.stack[func_index + i].clone();
+                                    }
+                                    self.stack.truncate(old_base + new_len);
+                                }
+                                if let Some(frame) = self.call_stack.last_mut() {
+                                    frame.stack_base = old_base + 1;
+                                    frame.upvalues.clear();
+                                }
+                            }
+                            self.chunk_index = chunk_index;
+                            self.ip = 0;
+                        }
+                        Value::Closure { function_index, arity, upvalues } => {
+                            if arity != arg_count {
+                                return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
+                            }
+                            if let Some(frame) = self.call_stack.last() {
+                                let old_base = frame.stack_base.saturating_sub(1);
+                                let new_len = arg_count + 1;
+                                if old_base != func_index {
+                                    for i in 0..new_len {
+                                        self.stack[old_base + i] = self.stack[func_index + i].clone();
+                                    }
+                                    self.stack.truncate(old_base + new_len);
+                                }
+                                if let Some(frame) = self.call_stack.last_mut() {
+                                    frame.stack_base = old_base + 1;
+                                    frame.upvalues = upvalues;
+                                }
+                            }
+                            self.chunk_index = function_index;
+                            self.ip = 0;
+                        }
+                        Value::Builtin { name, .. } => {
+                            let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
+                            self.stack.truncate(func_index);
+                            let result = if let Some(builtin_fn) = self.builtins.get(name.as_ref()) {
+                                match builtin_fn(&args) {
+                                    Ok(result) => result,
+                                    Err(e) => return Err(VmError::RuntimeError(e)),
+                                }
+                            } else {
+                                return Err(VmError::UndefinedFunction(name.to_string()));
+                            };
+                            if let Some(frame) = self.call_stack.pop() {
+                                let base = frame.stack_base.saturating_sub(1);
+                                self.stack.truncate(base);
+                                self.chunk_index = frame.chunk_index;
+                                self.ip = frame.ip;
+                                self.push(result)?;
+                            } else {
+                                return Ok(result);
+                            }
+                        }
+                        // Constructors / unknown callables: perform a normal Call.
+                        Value::Class { name, methods, superclass, properties } => {
+                            let class_idx = self.class_table.len();
+                            self.class_table.push(RegisteredClass {
+                                name: name.to_string(),
+                                superclass: superclass.clone(),
+                                methods: methods.iter().map(|(n, ci)| (n.clone(), *ci, 0usize)).collect(),
+                                properties: properties.as_ref().clone(),
+                            });
+
+                            let mut fields: Vec<(String, Value)> = Vec::new();
+                            for (pname, pdefault) in properties.iter() {
+                                fields.push((pname.clone(), pdefault.clone()));
+                            }
+                            let instance = Value::Instance {
+                                class_index: class_idx,
+                                fields: Rc::new(RefCell::new(fields)),
+                            };
+                            self.stack[func_index] = instance.clone();
+
+                            let init_chunk = methods.iter()
+                                .find(|(n, _)| n == "init")
+                                .map(|(_, ci)| *ci);
+
+                            if let Some(chunk_index) = init_chunk {
+                                self.stack.insert(func_index, instance.clone());
+                                let frame = CallFrame {
+                                    chunk_index: self.chunk_index,
+                                    ip: self.ip,
+                                    stack_base: func_index + 1,
+                                    upvalues: Vec::new(),
+                                };
+                                self.call_stack.push(frame);
+                                self.chunk_index = chunk_index;
+                                self.ip = 0;
+                            } else {
+                                self.stack.truncate(func_index + 1);
+                            }
+                        }
+                        _ => {
+                            return Err(VmError::TypeError("TailCall not supported for this callable".to_string()));
+                        }
+                    }
+                }
                 Opcode::Return => {
                     let value = self.pop()?;
                     if let Some(frame) = self.call_stack.pop() {
@@ -420,7 +588,7 @@ impl Vm {
                     match &object {
                         Value::Map(entries) => {
                             let mut found = false;
-                            for (k, v) in entries.iter() {
+                            for (k, v) in entries.borrow().iter() {
                                 if let Value::Str(s) = k {
                                     if s.as_ref() == prop_name.as_str() {
                                         self.push(v.clone())?;
@@ -448,7 +616,7 @@ impl Vm {
                         }
                         Value::Array(arr) => {
                             match prop_name.as_str() {
-                                "len" => self.push(Value::Int(arr.len() as i64))?,
+                                "len" => self.push(Value::Int(arr.borrow().len() as i64))?,
                                 _ => return Err(VmError::UndefinedProperty(prop_name)),
                             }
                         }
@@ -485,16 +653,18 @@ impl Vm {
                             self.push(Value::Instance { class_index: *class_index, fields: fields.clone() })?;
                         }
                         Value::Map(entries) => {
-                            let mut new_entries = entries.as_ref().clone();
-                            new_entries.retain(|(k, _)| {
-                                if let Value::Str(s) = k {
-                                    s.as_ref() != prop_name.as_str()
-                                } else {
-                                    true
-                                }
-                            });
-                            new_entries.push((Value::Str(prop_name.as_str().into()), value));
-                            self.push(Value::Map(Rc::new(new_entries)))?;
+                            {
+                                let mut map = entries.borrow_mut();
+                                map.retain(|(k, _)| {
+                                    if let Value::Str(s) = k {
+                                        s.as_ref() != prop_name.as_str()
+                                    } else {
+                                        true
+                                    }
+                                });
+                                map.push((Value::Str(prop_name.as_str().into()), value));
+                            }
+                            self.push(object)?;
                         }
                         _ => return Err(VmError::TypeError("Cannot set property of non-object".to_string())),
                     }
@@ -539,7 +709,7 @@ impl Vm {
                         }
                         Value::Map(entries) => {
                             let mut found = false;
-                            for (k, v) in entries.iter() {
+                            for (k, v) in entries.borrow().iter() {
                                 if let Value::Str(s) = k {
                                     if s.as_ref() == method_name.as_str() {
                                         self.stack[obj_index] = v.clone();
@@ -596,7 +766,7 @@ impl Vm {
                         elements.push(self.pop()?);
                     }
                     elements.reverse();
-                    self.push(Value::Array(Rc::new(elements)))?;
+                    self.push(Value::Array(Rc::new(RefCell::new(elements))))?;
                 }
                 Opcode::BuildMap => {
                     let count = operand.unwrap_or(0) as usize;
@@ -607,21 +777,22 @@ impl Vm {
                         entries.push((key, value));
                     }
                     entries.reverse();
-                    self.push(Value::Map(Rc::new(entries)))?;
+                    self.push(Value::Map(Rc::new(RefCell::new(entries))))?;
                 }
                 Opcode::IndexGet => {
                     let index = self.pop()?;
                     let object = self.pop()?;
                     match (&object, &index) {
                         (Value::Array(arr), Value::Int(i)) => {
-                            if *i < 0 || *i >= arr.len() as i64 {
-                                return Err(VmError::IndexOutOfBounds { index: *i, length: arr.len() });
+                            let arr_ref = arr.borrow();
+                            if *i < 0 || *i >= arr_ref.len() as i64 {
+                                return Err(VmError::IndexOutOfBounds { index: *i, length: arr_ref.len() });
                             }
-                            self.push(arr[*i as usize].clone())?;
+                            self.push(arr_ref[*i as usize].clone())?;
                         }
                         (Value::Map(entries), key) => {
                             let mut found = false;
-                            for (k, v) in entries.iter() {
+                            for (k, v) in entries.borrow().iter() {
                                 if self.values_equal(k, key) {
                                     self.push(v.clone())?;
                                     found = true;
@@ -648,18 +819,20 @@ impl Vm {
                     let mut object = self.pop()?;
                     match (&mut object, &index) {
                         (Value::Array(arr), Value::Int(i)) => {
-                            if *i < 0 || *i >= arr.len() as i64 {
-                                return Err(VmError::IndexOutOfBounds { index: *i, length: arr.len() });
+                            {
+                                let mut arr_mut = arr.borrow_mut();
+                                if *i < 0 || *i >= arr_mut.len() as i64 {
+                                    return Err(VmError::IndexOutOfBounds { index: *i, length: arr_mut.len() });
+                                }
+                                arr_mut[*i as usize] = value;
                             }
-                            let mut new_arr = arr.as_ref().clone();
-                            new_arr[*i as usize] = value;
-                            object = Value::Array(Rc::new(new_arr));
                         }
                         (Value::Map(entries), key) => {
-                            let mut new_entries = entries.as_ref().clone();
-                            new_entries.retain(|(k, _)| !self.values_equal(k, key));
-                            new_entries.push((index, value));
-                            object = Value::Map(Rc::new(new_entries));
+                            {
+                                let mut map = entries.borrow_mut();
+                                map.retain(|(k, _)| !self.values_equal(k, key));
+                                map.push((index, value));
+                            }
                         }
                         _ => return Err(VmError::TypeError("Cannot index-assign this type".to_string())),
                     }
@@ -808,9 +981,9 @@ impl Vm {
             (Value::Str(a), b) => Ok(Value::Str(format!("{}{}", a, mailang_stdlib::value_to_string(&b)).into())),
             (a, Value::Str(b)) => Ok(Value::Str(format!("{}{}", mailang_stdlib::value_to_string(&a), b).into())),
             (Value::Array(a), Value::Array(b)) => {
-                let mut new_vec = a.as_ref().clone();
-                new_vec.extend(b.as_ref().clone());
-                Ok(Value::Array(Rc::new(new_vec)))
+                let mut new_vec = a.borrow().clone();
+                new_vec.extend(b.borrow().iter().cloned());
+                Ok(Value::Array(Rc::new(RefCell::new(new_vec))))
             }
             _ => Err(VmError::TypeError("Cannot add these types".to_string())),
         }
@@ -903,6 +1076,14 @@ impl Vm {
     }
 
     pub fn set_global(&mut self, name: String, value: Value) {
-        self.globals.insert(name, value);
+        let slot = if let Some(pos) = self.bytecode.global_names.iter().position(|n| n == &name) {
+            pos
+        } else {
+            self.bytecode.intern_global(&name) as usize
+        };
+        if slot >= self.globals.len() {
+            self.globals.resize(slot + 1, Value::Null);
+        }
+        self.globals[slot] = value;
     }
 }

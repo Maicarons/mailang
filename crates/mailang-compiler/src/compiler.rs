@@ -41,6 +41,14 @@ struct CompiledClass {
     properties: Vec<(String, Value)>,
 }
 
+/// Stored trait definition used when a class `implements` it.
+struct CompiledTrait {
+    /// Required method names (must be provided by the implementing class).
+    required: Vec<String>,
+    /// Default method bodies keyed by method name.
+    defaults: HashMap<String, (Vec<Param>, Vec<Stmt>)>,
+}
+
 pub struct Compiler {
     bytecode: Bytecode,
     current: FunctionCompiler,
@@ -50,6 +58,7 @@ pub struct Compiler {
     loop_continues: Vec<Vec<usize>>,
     loop_local_counts: Vec<usize>, // track locals count at loop start for break cleanup
     class_info: HashMap<String, CompiledClass>,
+    trait_info: HashMap<String, CompiledTrait>,
     current_class: Option<String>,
 }
 
@@ -71,6 +80,7 @@ impl Compiler {
             loop_continues: Vec::new(),
             loop_local_counts: Vec::new(),
             class_info: HashMap::new(),
+            trait_info: HashMap::new(),
             current_class: None,
         }
     }
@@ -250,6 +260,18 @@ impl Compiler {
                 }
             }
             Stmt::Return(value) => {
+                // Tail-call optimization: `return f(args)` reuses the current frame.
+                if let Some(Expr::Call { callee, args }) = value.as_ref() {
+                    let is_super = matches!(&**callee, Expr::Identifier(name) if name == "super");
+                    if !is_super {
+                        self.compile_expression(callee)?;
+                        for arg in args {
+                            self.compile_expression(arg)?;
+                        }
+                        self.emit(Opcode::TailCall, Some(args.len() as u32), 0);
+                        return Ok(());
+                    }
+                }
                 if let Some(val) = value {
                     self.compile_expression(val)?;
                 } else {
@@ -713,8 +735,8 @@ impl Compiler {
                             if let Some(local) = self.resolve_local(name) {
                                 self.emit(Opcode::StoreLocal, Some(local), 0);
                             } else {
-                                let idx = self.add_constant(Value::Str(name.clone().into()))?;
-                                self.emit(Opcode::StoreGlobal, Some(idx), 0);
+                                let slot = self.bytecode.intern_global(name);
+                                self.emit(Opcode::StoreGlobal, Some(slot), 0);
                             }
                         } else {
                             self.emit(Opcode::Pop, None, 0);
@@ -753,18 +775,15 @@ impl Compiler {
             }
             Expr::Ok(value) => {
                 self.compile_expression(value)?;
-                self.emit_push_constant(Value::Str("Ok".into()), 0)?;
-                self.emit(Opcode::BuildArray, Some(2), 0);
+                self.emit(Opcode::WrapOk, None, 0);
             }
             Expr::Err(value) => {
                 self.compile_expression(value)?;
-                self.emit_push_constant(Value::Str("Err".into()), 0)?;
-                self.emit(Opcode::BuildArray, Some(2), 0);
+                self.emit(Opcode::WrapErr, None, 0);
             }
             Expr::Some(value) => {
                 self.compile_expression(value)?;
-                self.emit_push_constant(Value::Str("Some".into()), 0)?;
-                self.emit(Opcode::BuildArray, Some(2), 0);
+                self.emit(Opcode::WrapSome, None, 0);
             }
             Expr::None => {
                 self.emit_push_constant(Value::Null, 0)?;
@@ -874,11 +893,10 @@ impl Compiler {
             }
             Pattern::Identifier(name) => {
                 // Always matches AND binds the scrutinee to the variable.
-                // Store a copy of the scrutinee as a global, then push true.
                 // [s] -> [s, s] -> [s] (one copy stored) -> [s, true]
                 self.emit(Opcode::Dup, None, 0);
-                let index = self.add_constant(Value::Str(name.clone().into()))?;
-                self.emit(Opcode::StoreGlobal, Some(index), 0);
+                let slot = self.bytecode.intern_global(name);
+                self.emit(Opcode::StoreGlobal, Some(slot), 0);
                 self.emit_push_constant(Value::Bool(true), 0)?;
             }
             Pattern::Or(patterns) => {
@@ -925,9 +943,9 @@ impl Compiler {
                 self.emit_push_constant(Value::Bool(false), 0)?;
                 self.patch_jump(jump_end)?;
             }
-            Pattern::Range(start_expr, end_expr) => {
+            Pattern::Range(start_expr, end_expr, inclusive) => {
                 // Stack on entry: [scrutinee]
-                // Test: start <= scrutinee && scrutinee < end
+                // Test: start <= scrutinee && (scrutinee < end  or  scrutinee <= end)
                 // Result: [scrutinee, bool]
 
                 // Test 1: scrutinee >= start
@@ -940,15 +958,15 @@ impl Compiler {
                 self.emit(Opcode::Pop, None, 0);           // [scrutinee]
                 self.emit(Opcode::Dup, None, 0);           // [scrutinee, scrutinee]
                 self.compile_expression(end_expr)?;         // [scrutinee, scrutinee, end]
-                self.emit(Opcode::Lt, None, 0);            // [scrutinee, bool2]
-                // bool2 is the final result
+                if *inclusive {
+                    self.emit(Opcode::Le, None, 0);        // [scrutinee, bool2]
+                } else {
+                    self.emit(Opcode::Lt, None, 0);        // [scrutinee, bool2]
+                }
                 let jump_done = self.emit_jump(Opcode::Jump, 0);
 
-                // Fail path: pop bool1 (from JumpIfFalse peek), pop scrutinee, push false
+                // Fail path: [scrutinee, false] already (JumpIfFalse peeks)
                 self.patch_jump(jump_fail)?;
-                self.emit(Opcode::Pop, None, 0);           // pop bool1
-                self.emit(Opcode::Pop, None, 0);           // pop scrutinee
-                self.emit_push_constant(Value::Bool(false), 0)?;
 
                 self.patch_jump(jump_done)?;
             }
@@ -956,7 +974,85 @@ impl Compiler {
                 // Not yet fully implemented — always match for now
                 self.emit_push_constant(Value::Bool(true), 0)?;
             }
+            Pattern::Ok(inner) => self.compile_variant_pattern(Opcode::UnwrapOk, inner)?,
+            Pattern::Err(inner) => self.compile_variant_pattern(Opcode::UnwrapErr, inner)?,
+            Pattern::Some(inner) => self.compile_variant_pattern(Opcode::UnwrapSome, inner)?,
         }
+        Ok(())
+    }
+
+    /// Compile `Ok(pat)` / `Err(pat)` / `Some(pat)`.
+    /// Unwrap* leaves [inner, true] on match, or [s, false] on failure.
+    fn compile_variant_pattern(
+        &mut self,
+        unwrap: Opcode,
+        inner: &Pattern,
+    ) -> Result<(), CompilerError> {
+        // [s]
+        self.emit(Opcode::Dup, None, 0); // [s, s]
+        self.emit(unwrap, None, 0); // [s, inner, true] or [s, false]
+
+        let jump_fail = self.emit_jump(Opcode::JumpIfFalse, 0);
+        // Matched: [s, inner, true]
+        self.emit(Opcode::Pop, None, 0); // [s, inner]
+
+        match inner {
+            Pattern::Wildcard => {
+                self.emit(Opcode::Pop, None, 0); // [s]
+            }
+            Pattern::Identifier(name) => {
+                let slot = self.bytecode.intern_global(name);
+                self.emit(Opcode::StoreGlobal, Some(slot), 0); // [s]
+            }
+            Pattern::Literal(lit) => {
+                let value = match lit {
+                    Literal::Int(n) => Value::Int(*n),
+                    Literal::Float(n) => Value::Float(*n),
+                    Literal::Bool(b) => Value::Bool(*b),
+                    Literal::Str(s) => Value::Str(s.clone().into()),
+                    Literal::Char(c) => Value::Char(*c),
+                    Literal::Null => Value::Null,
+                };
+                let index = self.add_constant(value)?;
+                self.emit(Opcode::Push, Some(index), 0); // [s, inner, lit]
+                self.emit(Opcode::Eq, None, 0); // [s, bool]
+                // If inner equality fails, overall match fails (bool already on stack).
+                let jump_end = self.emit_jump(Opcode::Jump, 0);
+                self.patch_jump(jump_fail)?;
+                self.emit(Opcode::Pop, None, 0); // pop false from unwrap
+                self.emit_push_constant(Value::Bool(false), 0)?;
+                self.patch_jump(jump_end)?;
+                return Ok(());
+            }
+            other => {
+                // Nested patterns: recurse on the unwrapped value.
+                // Stack is [s, inner]; compile nested test -> [s, inner, bool]
+                self.compile_pattern_test(other)?;
+                let jump_nested_fail = self.emit_jump(Opcode::JumpIfFalse, 0);
+                self.emit(Opcode::Pop, None, 0); // pop bool
+                self.emit(Opcode::Pop, None, 0); // pop inner
+                self.emit_push_constant(Value::Bool(true), 0)?;
+                let jump_end = self.emit_jump(Opcode::Jump, 0);
+                self.patch_jump(jump_nested_fail)?;
+                self.emit(Opcode::Pop, None, 0); // pop bool
+                self.emit(Opcode::Pop, None, 0); // pop inner
+                self.emit_push_constant(Value::Bool(false), 0)?;
+                self.patch_jump(jump_end)?;
+
+                let jump_outer_end = self.emit_jump(Opcode::Jump, 0);
+                self.patch_jump(jump_fail)?;
+                self.emit(Opcode::Pop, None, 0);
+                self.emit_push_constant(Value::Bool(false), 0)?;
+                self.patch_jump(jump_outer_end)?;
+                return Ok(());
+            }
+        }
+
+        self.emit_push_constant(Value::Bool(true), 0)?;
+        let jump_end = self.emit_jump(Opcode::Jump, 0);
+        self.patch_jump(jump_fail)?;
+        // Failed: [s, false] already
+        self.patch_jump(jump_end)?;
         Ok(())
     }
 
@@ -1125,7 +1221,7 @@ impl Compiler {
         &mut self,
         name: &str,
         superclass: &Option<String>,
-        _traits: &[String],
+        traits: &[String],
         members: &[ClassMember],
     ) -> Result<(), CompilerError> {
         let mut methods: Vec<(String, usize)> = Vec::new();
@@ -1166,6 +1262,46 @@ impl Compiler {
             },
         );
 
+        // Class-provided method names (used for trait checks / default injection).
+        let mut declared_methods: HashMap<String, (Vec<Param>, Vec<Stmt>)> = HashMap::new();
+        for member in members {
+            match member {
+                ClassMember::Method {
+                    name: m_name,
+                    params,
+                    body,
+                    ..
+                } => {
+                    declared_methods.insert(m_name.clone(), (params.clone(), body.clone()));
+                }
+                ClassMember::Constructor { params, body, .. } => {
+                    declared_methods.insert("init".to_string(), (params.clone(), body.clone()));
+                }
+                ClassMember::Property { .. } => {}
+            }
+        }
+
+        // Validate implemented traits and collect default methods to inject.
+        let mut injected_defaults: Vec<(String, Vec<Param>, Vec<Stmt>)> = Vec::new();
+        for trait_name in traits {
+            let info = self.trait_info.get(trait_name).ok_or_else(|| {
+                CompilerError::Internal(format!("Unknown trait '{}'", trait_name))
+            })?;
+            for req in &info.required {
+                if !declared_methods.contains_key(req) {
+                    return Err(CompilerError::Internal(format!(
+                        "Class '{}' does not implement required method '{}' from trait '{}'",
+                        name, req, trait_name
+                    )));
+                }
+            }
+            for (m_name, (params, body)) in &info.defaults {
+                if !declared_methods.contains_key(m_name) {
+                    injected_defaults.push((m_name.clone(), params.clone(), body.clone()));
+                }
+            }
+        }
+
         // Compile each method body into its own chunk. `this` is implicit local 0.
         let prev_class = self.current_class.replace(name.to_string());
         for member in members {
@@ -1200,6 +1336,15 @@ impl Compiler {
             methods.push((method_name.clone(), chunk_index));
             method_info.insert(method_name, (chunk_index, arity));
         }
+
+        // Inject trait default methods not overridden by the class.
+        for (method_name, params, body) in injected_defaults {
+            let (chunk_index, arity) =
+                self.compile_method(name, &method_name, &params, &body)?;
+            methods.push((method_name.clone(), chunk_index));
+            method_info.insert(method_name, (chunk_index, arity));
+        }
+
         self.current_class = prev_class;
 
         // Update class metadata with compiled method info.
@@ -1319,6 +1464,33 @@ impl Compiler {
         name: &str,
         methods: &[TraitMethod],
     ) -> Result<(), CompilerError> {
+        if self.trait_info.contains_key(name) {
+            return Err(CompilerError::DuplicateTrait(name.to_string()));
+        }
+        let mut required = Vec::new();
+        let mut defaults = HashMap::new();
+        for method in methods {
+            match method {
+                TraitMethod::Required { name: m_name, .. } => {
+                    required.push(m_name.clone());
+                }
+                TraitMethod::Default {
+                    name: m_name,
+                    params,
+                    body,
+                    ..
+                } => {
+                    defaults.insert(m_name.clone(), (params.clone(), body.clone()));
+                }
+            }
+        }
+        self.trait_info.insert(
+            name.to_string(),
+            CompiledTrait {
+                required,
+                defaults,
+            },
+        );
         Ok(())
     }
 }

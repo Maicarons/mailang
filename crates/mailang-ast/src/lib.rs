@@ -23,9 +23,13 @@ pub enum Pattern {
     Wildcard,
     Tuple(Vec<Pattern>),
     Array(Vec<Pattern>),
-    Range(Box<Expr>, Box<Expr>),
+    Range(Box<Expr>, Box<Expr>, bool),
     Or(Vec<Pattern>),
     Guard(Box<Pattern>, Box<Expr>),
+    /// `Ok(pat)`, `Err(pat)`, `Some(pat)`
+    Ok(Box<Pattern>),
+    Err(Box<Pattern>),
+    Some(Box<Pattern>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
