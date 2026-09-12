@@ -470,6 +470,8 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "mailang-core",
+ "mailang-lsp",
+ "tokio",
 ]
 
 [[package]]
@@ -485,6 +487,7 @@ dependencies = [
 name = "mailang-core"
 version = "0.1.0"
 dependencies = [
+ "mailang-analyzer",
  "mailang-ast",
  "mailang-bytecode",
  "mailang-compiler",
@@ -525,7 +528,11 @@ dependencies = [
 name = "mailang-lsp"
 version = "0.1.0"
 dependencies = [
+ "dashmap",
+ "mailang-analyzer",
+ "mailang-ast",
  "mailang-core",
+ "mailang-parser",
  "serde",
  "serde_json",
  "tokio",

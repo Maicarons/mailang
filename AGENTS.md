@@ -91,4 +91,4 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-Phases B–D largely complete. Language runtime supports OOP, closures, pattern matching (including `Ok`/`Err`/`Some` and ranges), traits with defaults, TCO, slot-based globals, and a versioned `.mailangbc` format (64 integration tests). C FFI exports host-fn registration, global get/set, and panic-safe entry points; verified from C, Python, Go, and Node (WASM). Simulated GPIO/Delay/ADC HAL builtins are available. Analyzer and GC remain stubs. Fib(30) integer recursion is still the main perf gap.
+Phases B–E core items complete. Runtime supports OOP, traits, pattern matching (including `Ok`/`Err`/`Some` and ranges), TCO, slot-based globals, `.mailangbc` format, simulated HAL, and C FFI host-fn registration (C/Python/Go/Node verified). Analyzer is wired into eval (undefined variables fail early). LSP provides diagnostics/completions/definition (`mailang lsp`). `mailang fmt` reformats sources. 67 integration tests. Module system v2 and Fib(30) perf remain open.

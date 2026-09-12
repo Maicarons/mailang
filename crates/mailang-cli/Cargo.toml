@@ -11,4 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 mailang-core = { path = "../mailang-core" }
+mailang-lsp = { path = "../mailang-lsp" }
 clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }

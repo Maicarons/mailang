@@ -117,7 +117,7 @@ impl Analyzer {
             variables: HashMap::new(),
             parent: None,
         };
-        Self {
+        let mut s = Self {
             scopes: vec![global_scope],
             current_scope: 0,
             functions: HashMap::new(),
@@ -125,6 +125,36 @@ impl Analyzer {
             traits: HashMap::new(),
             current_class: None,
             errors: Vec::new(),
+        };
+        s.register_stdlib_builtins();
+        s
+    }
+
+    /// Mark a name as a known global (builtin or host-registered function).
+    pub fn register_builtin(&mut self, name: &str) {
+        self.define_variable(name.to_string(), Type::Any, true);
+        self.functions.insert(
+            name.to_string(),
+            FunctionInfo {
+                name: name.to_string(),
+                params: Vec::new(),
+                return_type: Type::Any,
+            },
+        );
+    }
+
+    fn register_stdlib_builtins(&mut self) {
+        const BUILTINS: &[&str] = &[
+            "println", "print", "input", "sqrt", "abs", "sin", "cos", "floor", "ceil", "round",
+            "min", "max", "len", "to_string", "parse_int", "parse_float",
+            "time_now", "time_now_secs", "time_year", "time_month", "time_day",
+            "time_hour", "time_minute", "time_second", "time_date", "time_datetime",
+            "time_elapsed", "time_sleep",
+            // simulated HAL
+            "gpio_write", "gpio_read", "delay_ms", "adc_read",
+        ];
+        for name in BUILTINS {
+            self.register_builtin(name);
         }
     }
 
@@ -197,11 +227,24 @@ impl Analyzer {
             self.analyze_statement(stmt);
         }
 
-        if self.errors.is_empty() {
+        // Drop unused-variable noise from the hard-error list; they are hints.
+        let hard: Vec<AnalyzerError> = self
+            .errors
+            .iter()
+            .filter(|e| !matches!(e, AnalyzerError::UnusedVariable(_)))
+            .cloned()
+            .collect();
+
+        if hard.is_empty() {
             Ok(())
         } else {
-            Err(self.errors.clone())
+            Err(hard)
         }
+    }
+
+    /// All diagnostics including unused-variable hints.
+    pub fn diagnostics(&self) -> Vec<AnalyzerError> {
+        self.errors.clone()
     }
 
     fn analyze_statement(&mut self, stmt: &Stmt) {
@@ -540,6 +583,8 @@ impl Analyzer {
                     );
 
                     self.push_scope();
+                    // Default methods have an implicit receiver.
+                    self.define_variable("this".to_string(), Type::Any, true);
                     for (param, ty) in params.iter().zip(param_types.iter()) {
                         self.define_variable(param.name.clone(), ty.clone(), true);
                     }
@@ -558,7 +603,22 @@ impl Analyzer {
         match expr {
             Expr::Literal(_) => {}
             Expr::Identifier(name) => {
-                self.mark_variable_used(name);
+                if name == "super" || name == "this" {
+                    // Context-sensitive keywords checked by the compiler/VM.
+                    return;
+                }
+                if self.lookup_variable(name).is_some() {
+                    self.mark_variable_used(name);
+                } else if self.functions.contains_key(name)
+                    || self.classes.contains_key(name)
+                    || self.traits.contains_key(name)
+                {
+                    // known function/class/trait name used as a value
+                    self.mark_variable_used(name);
+                } else {
+                    self.errors
+                        .push(AnalyzerError::UndefinedVariable(name.clone()));
+                }
             }
             Expr::BinaryOp { left, right, .. } => {
                 self.analyze_expression(left);
@@ -637,10 +697,13 @@ impl Analyzer {
             Expr::Match { scrutinee, arms } => {
                 self.analyze_expression(scrutinee);
                 for arm in arms {
+                    self.push_scope();
+                    self.analyze_pattern(&arm.pattern);
                     if let Some(guard) = &arm.guard {
                         self.analyze_expression(guard);
                     }
                     self.analyze_expression(&arm.body);
+                    self.pop_scope();
                 }
             }
             Expr::Block(stmts) => {
@@ -668,6 +731,31 @@ impl Analyzer {
                         self.analyze_expression(expr);
                     }
                 }
+            }
+        }
+    }
+
+    fn analyze_pattern(&mut self, pattern: &Pattern) {
+        match pattern {
+            Pattern::Literal(_) | Pattern::Wildcard => {}
+            Pattern::Identifier(name) => {
+                self.define_variable(name.clone(), Type::Any, true);
+            }
+            Pattern::Or(patterns) | Pattern::Tuple(patterns) | Pattern::Array(patterns) => {
+                for p in patterns {
+                    self.analyze_pattern(p);
+                }
+            }
+            Pattern::Range(start, end, _) => {
+                self.analyze_expression(start);
+                self.analyze_expression(end);
+            }
+            Pattern::Guard(inner, guard) => {
+                self.analyze_pattern(inner);
+                self.analyze_expression(guard);
+            }
+            Pattern::Ok(inner) | Pattern::Err(inner) | Pattern::Some(inner) => {
+                self.analyze_pattern(inner);
             }
         }
     }

@@ -441,3 +441,34 @@ fn test_delay_ms_sim() {
 fn test_adc_read_default() {
     assert_eq!(eval("adc_read(0)"), "0");
 }
+
+// ===== Phase E: analyzer =====
+
+#[test]
+fn test_analyzer_undefined_variable() {
+    let mut interp = MailangInterpreter::new();
+    let err = interp.eval("not_defined_xyz").unwrap_err();
+    assert!(err.contains("Undefined variable"), "got: {}", err);
+}
+
+#[test]
+fn test_analyzer_allows_builtins() {
+    assert_eq!(eval("sqrt(9)"), "3");
+}
+
+#[test]
+fn test_analyzer_allows_this_super() {
+    // oop_demo uses this/super; covered by example but assert via check
+    let mut interp = MailangInterpreter::new();
+    let src = r#"
+class A {
+    fn init() { this.x = 1 }
+}
+class B extends A {
+    fn init() { super() }
+}
+let b = B()
+b.x
+"#;
+    assert_eq!(interp.eval(src).unwrap(), "1");
+}

@@ -28,6 +28,15 @@ enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Format a .mai source file in place (or print with --check)
+    Fmt {
+        file: String,
+        /// Check formatting without writing; exit 1 if reformatting needed
+        #[arg(long)]
+        check: bool,
+    },
+    /// Run the language server on stdin/stdout
+    Lsp,
 }
 
 fn print_result(output: &str) {
@@ -40,6 +49,37 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
+        Some(Commands::Lsp) => {
+            tokio::runtime::Runtime::new()
+                .expect("tokio runtime")
+                .block_on(mailang_lsp::run_lsp());
+        }
+        Some(Commands::Fmt { file, check }) => {
+            let src = match std::fs::read_to_string(&file) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Error: failed to read '{}': {}", file, e);
+                    std::process::exit(1);
+                }
+            };
+            match mailang_core::format_source(&src) {
+                Ok(formatted) => {
+                    if check {
+                        if formatted != src {
+                            eprintln!("{}: needs formatting", file);
+                            std::process::exit(1);
+                        }
+                    } else if let Err(e) = std::fs::write(&file, &formatted) {
+                        eprintln!("Error: failed to write '{}': {}", file, e);
+                        std::process::exit(1);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error: cannot format '{}': {}", file, e);
+                    std::process::exit(1);
+                }
+            }
+        }
         Some(Commands::Run {
             file,
             bytecode: use_bytecode,

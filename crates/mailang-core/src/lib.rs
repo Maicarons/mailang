@@ -6,7 +6,12 @@ pub use mailang_bytecode as bytecode;
 pub use mailang_vm as vm;
 pub use mailang_stdlib as stdlib;
 pub use mailang_module as module;
+pub use mailang_analyzer as analyzer;
 
+mod format;
+pub use format::format_source;
+
+use mailang_analyzer::Analyzer;
 use mailang_compiler::Compiler;
 use mailang_parser::Parser;
 use mailang_vm::{HostFn, Vm};
@@ -80,6 +85,38 @@ impl MailangInterpreter {
         self.vm.set_global(name, value);
     }
 
+    /// Run semantic analysis. Returns hard errors (unused-variable hints are ignored).
+    pub fn check(&self, code: &str) -> Result<(), Vec<String>> {
+        let mut parser = Parser::new(code).map_err(|e| vec![e.to_string()])?;
+        let program = parser.parse_program().map_err(|e| vec![e.to_string()])?;
+        let mut analyzer = Analyzer::new();
+        for name in self.host_fns.keys() {
+            analyzer.register_builtin(name);
+        }
+        for name in self.host_globals.keys() {
+            analyzer.register_builtin(name);
+        }
+        analyzer
+            .analyze(&program)
+            .map_err(|errs| errs.iter().map(|e| e.to_string()).collect())
+    }
+
+    fn analyze_program(&self, program: &mailang_ast::Program) -> Result<(), String> {
+        let mut analyzer = Analyzer::new();
+        for name in self.host_fns.keys() {
+            analyzer.register_builtin(name);
+        }
+        for name in self.host_globals.keys() {
+            analyzer.register_builtin(name);
+        }
+        analyzer.analyze(program).map_err(|errs| {
+            errs.iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join("; ")
+        })
+    }
+
     pub fn eval(&mut self, code: &str) -> Result<String, String> {
         let mut parser = Parser::new(code).map_err(|e| e.to_string())?;
         let program = parser.parse_program().map_err(|e| e.to_string())?;
@@ -90,6 +127,8 @@ impl MailangInterpreter {
         } else {
             program
         };
+
+        self.analyze_program(&processed_program)?;
 
         let compiler = Compiler::new();
         let bytecode = compiler.compile(&processed_program).map_err(|e| e.to_string())?;
@@ -125,6 +164,8 @@ impl MailangInterpreter {
         } else {
             program
         };
+
+        self.analyze_program(&processed_program)?;
 
         let compiler = Compiler::new();
         compiler.compile(&processed_program).map_err(|e| e.to_string())

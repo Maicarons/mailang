@@ -206,18 +206,20 @@ enum Value {
 
 ## 五、Phase E 详细计划（持续）
 
-### E1. LSP 核心功能（P2）
+### E1. LSP 核心功能（P2） — **基本完成**
 
-- 诊断（来自 Analyzer）
-- 补全（函数、变量、类型）
-- 跳转定义
-- 悬停提示
+- 诊断（来自 Analyzer）：`didOpen`/`didChange` 发布
+- 补全：关键字 + 内置 + 文档内标识符
+- 跳转定义：`fn`/`class`/`let`/`var`/`const`/`trait`
+- 悬停：当前行预览
+- 入口：`mailang lsp`
 
-### E2. 格式化器 `mailang fmt`（P2）
+### E2. 格式化器 `mailang fmt`（P2） — **基本完成**
 
-- Go/Zig 经验：强制风格减少争议
+- AST 重印：4 空格缩进、规范化空格
+- CLI：`mailang fmt file.mai` / `mailang fmt --check file.mai`
 
-### E3. 模块系统 v2（P2）
+### E3. 模块系统 v2（P2） — 未做
 
 - 独立 chunk 编译
 - 导出表

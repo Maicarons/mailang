@@ -1,3 +1,7 @@
+use dashmap::DashMap;
+use mailang_analyzer::Analyzer;
+use mailang_parser::Parser;
+use std::sync::Arc;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -5,6 +9,191 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 #[derive(Debug)]
 struct Backend {
     client: Client,
+    documents: Arc<DashMap<Url, String>>,
+}
+
+fn offset_to_position(text: &str, offset: usize) -> Position {
+    let mut line = 0u32;
+    let mut col = 0u32;
+    for (i, ch) in text.char_indices() {
+        if i >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 0;
+        } else {
+            col += ch.len_utf16() as u32;
+        }
+    }
+    Position::new(line, col)
+}
+
+fn collect_diagnostics(source: &str) -> Vec<Diagnostic> {
+    let mut parser = match Parser::new(source) {
+        Ok(p) => p,
+        Err(e) => {
+            return vec![Diagnostic {
+                range: Range::new(Position::new(0, 0), Position::new(0, 1)),
+                severity: Some(DiagnosticSeverity::ERROR),
+                message: e.to_string(),
+                ..Default::default()
+            }];
+        }
+    };
+    let program = match parser.parse_program() {
+        Ok(p) => p,
+        Err(e) => {
+            return vec![Diagnostic {
+                range: Range::new(Position::new(0, 0), Position::new(0, 1)),
+                severity: Some(DiagnosticSeverity::ERROR),
+                message: e.to_string(),
+                ..Default::default()
+            }];
+        }
+    };
+
+    let mut analyzer = Analyzer::new();
+    match analyzer.analyze(&program) {
+        Ok(()) => {
+            // Surface unused-variable hints as Information
+            analyzer
+                .diagnostics()
+                .into_iter()
+                .filter_map(|e| match e {
+                    mailang_analyzer::AnalyzerError::UnusedVariable(name) => Some(Diagnostic {
+                        range: Range::new(Position::new(0, 0), Position::new(0, 1)),
+                        severity: Some(DiagnosticSeverity::INFORMATION),
+                        message: format!("unused variable '{}'", name),
+                        ..Default::default()
+                    }),
+                    other => Some(Diagnostic {
+                        range: Range::new(Position::new(0, 0), Position::new(0, 1)),
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        message: other.to_string(),
+                        ..Default::default()
+                    }),
+                })
+                .collect()
+        }
+        Err(errs) => errs
+            .into_iter()
+            .map(|e| Diagnostic {
+                range: Range::new(Position::new(0, 0), Position::new(0, 1)),
+                severity: Some(DiagnosticSeverity::ERROR),
+                message: e.to_string(),
+                source: Some("mailang".into()),
+                ..Default::default()
+            })
+            .collect(),
+    }
+}
+
+fn builtin_completions() -> Vec<CompletionItem> {
+    let names = [
+        "println", "print", "input", "sqrt", "abs", "sin", "cos", "floor", "ceil", "round",
+        "min", "max", "len", "to_string", "parse_int", "parse_float",
+        "let", "var", "const", "fn", "if", "elif", "else", "while", "for", "in",
+        "match", "return", "class", "trait", "extends", "implements", "super", "this",
+        "Ok", "Err", "Some", "None",
+        "gpio_write", "gpio_read", "delay_ms", "adc_read",
+    ];
+    names
+        .iter()
+        .map(|n| {
+            let kind = match *n {
+                "let" | "var" | "const" | "fn" | "if" | "elif" | "else" | "while" | "for"
+                | "in" | "match" | "return" | "class" | "trait" | "extends" | "implements" => {
+                    Some(CompletionItemKind::KEYWORD)
+                }
+                _ => Some(CompletionItemKind::FUNCTION),
+            };
+            CompletionItem {
+                label: n.to_string(),
+                kind,
+                detail: Some("MaìLang".into()),
+                ..Default::default()
+            }
+        })
+        .collect()
+}
+
+fn word_completions(source: &str, _position: Position) -> Vec<CompletionItem> {
+    let mut items = builtin_completions();
+    // Collect simple identifiers defined in the document
+    let mut seen = std::collections::HashSet::new();
+    for word in source
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|w| !w.is_empty() && w.chars().next().unwrap().is_ascii_alphabetic())
+    {
+        if seen.insert(word.to_string()) && word.len() > 1 {
+            items.push(CompletionItem {
+                label: word.to_string(),
+                kind: Some(CompletionItemKind::VARIABLE),
+                detail: Some("local".into()),
+                ..Default::default()
+            });
+        }
+    }
+    items
+}
+
+fn find_definition(source: &str, position: Position) -> Option<Location> {
+    let lines: Vec<&str> = source.lines().collect();
+    let line = lines.get(position.line as usize)?;
+    let chars: Vec<char> = line.chars().collect();
+    let col = position.character as usize;
+    if col > chars.len() {
+        return None;
+    }
+    // Expand word under cursor
+    let mut start = col.min(chars.len().saturating_sub(1));
+    let mut end = start;
+    while start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '_') {
+        start -= 1;
+    }
+    while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+        end += 1;
+    }
+    if start >= end {
+        return None;
+    }
+    let word: String = chars[start..end].iter().collect();
+
+    // Search for `fn word`, `class word`, `let word`, `var word`, `trait word`
+    for (i, l) in lines.iter().enumerate() {
+        let patterns = [
+            format!("fn {}", word),
+            format!("class {}", word),
+            format!("trait {}", word),
+            format!("let {}", word),
+            format!("var {}", word),
+            format!("const {}", word),
+        ];
+        if let Some(pos) = patterns.iter().find_map(|p| l.find(p.as_str())) {
+            let name_col = l[..pos].chars().count() as u32
+                + if l[pos..].starts_with("fn ") {
+                    3
+                } else if l[pos..].starts_with("class ") {
+                    6
+                } else if l[pos..].starts_with("trait ") {
+                    6
+                } else if l[pos..].starts_with("const ") {
+                    6
+                } else {
+                    4
+                };
+            let uri = Url::parse("file:///memory.mai").unwrap();
+            return Some(Location {
+                uri,
+                range: Range::new(
+                    Position::new(i as u32, name_col),
+                    Position::new(i as u32, name_col + word.chars().count() as u32),
+                ),
+            });
+        }
+    }
+    None
 }
 
 #[tower_lsp::async_trait]
@@ -24,6 +213,8 @@ impl LanguageServer for Backend {
                     trigger_characters: Some(vec![".".to_string()]),
                     ..Default::default()
                 }),
+                definition_provider: Some(OneOf::Left(true)),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 ..Default::default()
             },
         })
@@ -31,8 +222,75 @@ impl LanguageServer for Backend {
 
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::INFO, "MaìLang LSP initialized!")
+            .log_message(MessageType::INFO, "MaìLang LSP initialized")
             .await;
+    }
+
+    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        let uri = params.text_document.uri;
+        let text = params.text_document.text;
+        self.documents.insert(uri.clone(), text.clone());
+        let diags = collect_diagnostics(&text);
+        self.client.publish_diagnostics(uri, diags, None).await;
+    }
+
+    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        if let Some(change) = params.content_changes.into_iter().last() {
+            let uri = params.text_document.uri;
+            self.documents.insert(uri.clone(), change.text.clone());
+            let diags = collect_diagnostics(&change.text);
+            self.client.publish_diagnostics(uri, diags, None).await;
+        }
+    }
+
+    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        self.documents.remove(&params.text_document.uri);
+        self.client
+            .publish_diagnostics(params.text_document.uri, Vec::new(), None)
+            .await;
+    }
+
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let uri = &params.text_document_position.text_document.uri;
+        let items = if let Some(text) = self.documents.get(uri) {
+            word_completions(&text, params.text_document_position.position)
+        } else {
+            builtin_completions()
+        };
+        Ok(Some(CompletionResponse::Array(items)))
+    }
+
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        if let Some(text) = self.documents.get(uri) {
+            if let Some(loc) = find_definition(&text, pos) {
+                return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        if let Some(text) = self.documents.get(uri) {
+            let lines: Vec<&str> = text.lines().collect();
+            if let Some(line) = lines.get(pos.line as usize) {
+                // Show the current line as a mini hover
+                return Ok(Some(Hover {
+                    contents: HoverContents::Markup(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: format!("```mailang\n{}\n```", line.trim()),
+                    }),
+                    range: None,
+                }));
+            }
+        }
+        Ok(None)
     }
 
     async fn shutdown(&self) -> Result<()> {
@@ -44,6 +302,9 @@ pub async fn run_lsp() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| Backend { client });
+    let (service, socket) = LspService::new(|client| Backend {
+        client,
+        documents: Arc::new(DashMap::new()),
+    });
     Server::new(stdin, stdout, socket).serve(service).await;
 }
