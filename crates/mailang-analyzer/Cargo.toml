@@ -6,7 +6,7 @@ license.workspace = true
 description = "Semantic analyzer for MaìLang"
 
 [dependencies]
-mailang-ast = { path = "../mailang-ast" }
+mailang-ast = { path = "../mailang-ast", version = "0.2.5" }
 thiserror = { workspace = true }
 
 [features]

@@ -6,8 +6,8 @@ license.workspace = true
 description = "Parser for MaìLang"
 
 [dependencies]
-mailang-ast = { path = "../mailang-ast" }
-mailang-lexer = { path = "../mailang-lexer" }
+mailang-ast = { path = "../mailang-ast", version = "0.2.5" }
+mailang-lexer = { path = "../mailang-lexer", version = "0.2.5" }
 thiserror = { workspace = true }
 
 [features]

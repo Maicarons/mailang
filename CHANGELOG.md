@@ -4,6 +4,12 @@ All notable changes to MaìLang will be documented in this file.
 
 Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 
+## [0.2.5] - 2026-09-12
+
+### Fixed
+- Path dependencies now carry `version` so `cargo publish` can verify manifests
+- CI publishes `mailang-lsp` (required by `mailang-cli`)
+
 ## [0.2.4] - 2026-09-12
 
 Phase G: language completeness and DX.

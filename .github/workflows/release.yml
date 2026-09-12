@@ -148,6 +148,9 @@ jobs:
       - name: Publish mailang-core
         if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-core --allow-dirty
+      - name: Publish mailang-lsp
+        if: steps.token.outputs.present == 'true'
+        run: cargo publish -p mailang-lsp --allow-dirty
       - name: Publish mailang-macros
         if: steps.token.outputs.present == 'true'
         run: cargo publish -p mailang-macros --allow-dirty

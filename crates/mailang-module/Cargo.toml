@@ -6,7 +6,7 @@ license.workspace = true
 description = "Module loader for MaìLang"
 
 [dependencies]
-mailang-ast = { path = "../mailang-ast" }
-mailang-parser = { path = "../mailang-parser" }
-mailang-compiler = { path = "../mailang-compiler" }
-mailang-bytecode = { path = "../mailang-bytecode" }
+mailang-ast = { path = "../mailang-ast", version = "0.2.5" }
+mailang-parser = { path = "../mailang-parser", version = "0.2.5" }
+mailang-compiler = { path = "../mailang-compiler", version = "0.2.5" }
+mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.5" }

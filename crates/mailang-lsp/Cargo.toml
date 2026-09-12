@@ -6,10 +6,10 @@ license.workspace = true
 description = "Language Server Protocol for MaìLang"
 
 [dependencies]
-mailang-core = { path = "../mailang-core" }
-mailang-analyzer = { path = "../mailang-analyzer" }
-mailang-parser = { path = "../mailang-parser" }
-mailang-ast = { path = "../mailang-ast" }
+mailang-core = { path = "../mailang-core", version = "0.2.5" }
+mailang-analyzer = { path = "../mailang-analyzer", version = "0.2.5" }
+mailang-parser = { path = "../mailang-parser", version = "0.2.5" }
+mailang-ast = { path = "../mailang-ast", version = "0.2.5" }
 tokio = { version = "1", features = ["full"] }
 tower-lsp = "0.20"
 serde_json = "1.0"

@@ -6,8 +6,8 @@ license.workspace = true
 description = "Compiler for MaìLang"
 
 [dependencies]
-mailang-ast = { path = "../mailang-ast" }
-mailang-bytecode = { path = "../mailang-bytecode" }
+mailang-ast = { path = "../mailang-ast", version = "0.2.5" }
+mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.5" }
 thiserror = { workspace = true }
 
 [features]

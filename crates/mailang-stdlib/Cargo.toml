@@ -6,7 +6,7 @@ license.workspace = true
 description = "Standard library for MaìLang"
 
 [dependencies]
-mailang-bytecode = { path = "../mailang-bytecode" }
+mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.5" }
 lazy_static = { version = "1.4", optional = true }
 
 [features]
