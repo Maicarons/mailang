@@ -1,11 +1,29 @@
-use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::rc::Rc;
+#![cfg_attr(not(feature = "std"), no_std)]
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+extern crate alloc;
+
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::cell::RefCell;
+
+#[cfg(all(feature = "serde", feature = "std"))]
+use serde::{Deserialize, Serialize};
+
+pub mod format;
+pub use format::{decode, encode, BytecodeFormatError, FORMAT_MAGIC, FORMAT_VERSION};
+
+/// Opcode is `Copy` and serialized as a single byte in the binary format.
+/// Keep variants in a stable order; append-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+#[repr(u8)]
 pub enum Opcode {
     // Stack operations
-    Push,
+    Push = 0,
     Pop,
     Dup,
 
@@ -93,7 +111,81 @@ pub enum Opcode {
     Halt,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Opcode {
+    /// Stable discriminant used by the binary bytecode format.
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    pub fn from_u8(v: u8) -> Option<Self> {
+        Some(match v {
+            0 => Opcode::Push,
+            1 => Opcode::Pop,
+            2 => Opcode::Dup,
+            3 => Opcode::LoadLocal,
+            4 => Opcode::StoreLocal,
+            5 => Opcode::LoadGlobal,
+            6 => Opcode::StoreGlobal,
+            7 => Opcode::LoadUpvalue,
+            8 => Opcode::StoreUpvalue,
+            9 => Opcode::Add,
+            10 => Opcode::Sub,
+            11 => Opcode::Mul,
+            12 => Opcode::Div,
+            13 => Opcode::Mod,
+            14 => Opcode::Pow,
+            15 => Opcode::Neg,
+            16 => Opcode::BitAnd,
+            17 => Opcode::BitOr,
+            18 => Opcode::BitXor,
+            19 => Opcode::BitNot,
+            20 => Opcode::Shl,
+            21 => Opcode::Shr,
+            22 => Opcode::Eq,
+            23 => Opcode::Ne,
+            24 => Opcode::Lt,
+            25 => Opcode::Le,
+            26 => Opcode::Gt,
+            27 => Opcode::Ge,
+            28 => Opcode::And,
+            29 => Opcode::Or,
+            30 => Opcode::Not,
+            31 => Opcode::Jump,
+            32 => Opcode::JumpIfFalse,
+            33 => Opcode::JumpIfTrue,
+            34 => Opcode::Call,
+            35 => Opcode::TailCall,
+            36 => Opcode::Return,
+            37 => Opcode::GetProperty,
+            38 => Opcode::SetProperty,
+            39 => Opcode::Invoke,
+            40 => Opcode::BuildArray,
+            41 => Opcode::BuildMap,
+            42 => Opcode::IndexGet,
+            43 => Opcode::IndexSet,
+            44 => Opcode::CreateClass,
+            45 => Opcode::CreateInstance,
+            46 => Opcode::GetMethod,
+            47 => Opcode::MatchPattern,
+            48 => Opcode::MakeClosure,
+            49 => Opcode::Throw,
+            50 => Opcode::TryBegin,
+            51 => Opcode::TryEnd,
+            52 => Opcode::WrapOk,
+            53 => Opcode::WrapErr,
+            54 => Opcode::WrapSome,
+            55 => Opcode::UnwrapOk,
+            56 => Opcode::UnwrapErr,
+            57 => Opcode::UnwrapSome,
+            58 => Opcode::Nop,
+            59 => Opcode::Halt,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
 pub enum Value {
     Null,
     Bool(bool),
@@ -127,7 +219,10 @@ pub enum Value {
     Ok(Box<Value>),
     Err(Box<Value>),
     Some(Box<Value>),
-    Builtin { name: Rc<str>, arity: usize },
+    Builtin {
+        name: Rc<str>,
+        arity: usize,
+    },
 }
 
 impl PartialEq for Value {
@@ -208,14 +303,16 @@ impl PartialEq for Value {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
 pub struct Instruction {
     pub opcode: Opcode,
     pub operand: Option<u32>,
     pub line: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
 pub struct Chunk {
     pub instructions: Vec<Instruction>,
     pub constants: Vec<Value>,
@@ -246,7 +343,8 @@ impl Chunk {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
 pub struct Bytecode {
     pub chunks: Vec<Chunk>,
     pub main_chunk: usize,

@@ -3,10 +3,13 @@ name = "mailang-bytecode"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Bytecode definitions for MaìLang"
+description = "Bytecode definitions for MaìLang (no_std capable)"
 
 [dependencies]
-serde = { workspace = true }
+serde = { workspace = true, optional = true }
 
 [features]
-default = []
+default = ["std", "serde"]
+# Host builds: std + serde (Rc support). Embedded: --no-default-features.
+std = []
+serde = ["dep:serde"]

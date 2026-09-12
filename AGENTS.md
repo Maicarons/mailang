@@ -91,4 +91,4 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-Phase B largely complete. Lexer/parser/compiler/VM support basic procedural code, OOP (classes/inheritance/super), closures, pattern matching (literal, wildcard, identifier, or, guard, range including `..=`, `Ok`/`Err`/`Some`), generic type annotations (`Result<T,E>`, `Option<T>`), traits with default-method injection, hex/octal/binary literals, block comments, TCO for self tail-calls, and a slot-based global table. 59 integration tests pass. Analyzer and GC remain stubs. Fib(30) integer recursion is still the main perf gap.
+Phases B and C largely complete. Language runtime supports OOP, closures, pattern matching (including `Ok`/`Err`/`Some` and ranges), traits with defaults, TCO, and slot-based globals (64 integration tests). `mailang-bytecode` is `no_std`+`alloc` and ships a versioned `.mailangbc` binary format with CLI `build`/`run`. Simulated GPIO/Delay/ADC HAL builtins are available. Analyzer and GC remain stubs. Fib(30) integer recursion is still the main perf gap.

@@ -66,6 +66,11 @@ impl Vm {
         builtins.insert("time_datetime".to_string(), |args| mailang_stdlib::builtin_time_datetime(args));
         builtins.insert("time_elapsed".to_string(), |args| mailang_stdlib::builtin_time_elapsed(args));
         builtins.insert("time_sleep".to_string(), |args| mailang_stdlib::builtin_time_sleep(args));
+        // Simulated IoT HAL
+        builtins.insert("gpio_write".to_string(), |args| mailang_stdlib::hal::builtin_gpio_write(args));
+        builtins.insert("gpio_read".to_string(), |args| mailang_stdlib::hal::builtin_gpio_read(args));
+        builtins.insert("delay_ms".to_string(), |args| mailang_stdlib::hal::builtin_delay_ms(args));
+        builtins.insert("adc_read".to_string(), |args| mailang_stdlib::hal::builtin_adc_read(args));
 
         let mut globals = vec![Value::Null; bytecode.global_names.len()];
         for (slot, name) in bytecode.global_names.iter().enumerate() {

@@ -73,6 +73,41 @@ impl MailangInterpreter {
         self.eval(&code)
     }
 
+    /// Compile source to bytecode without executing it.
+    pub fn compile(&mut self, code: &str) -> Result<mailang_bytecode::Bytecode, String> {
+        let mut parser = Parser::new(code).map_err(|e| e.to_string())?;
+        let program = parser.parse_program().map_err(|e| e.to_string())?;
+
+        let processed_program = if self.module_loader.is_some() {
+            self.process_imports(program)?
+        } else {
+            program
+        };
+
+        let compiler = Compiler::new();
+        compiler.compile(&processed_program).map_err(|e| e.to_string())
+    }
+
+    /// Compile a `.mai` file to bytecode.
+    pub fn compile_file(&mut self, path: &str) -> Result<mailang_bytecode::Bytecode, String> {
+        let code = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
+        if self.module_loader.is_none() {
+            let base_dir = Path::new(path)
+                .parent()
+                .unwrap_or(Path::new("."));
+            self.module_loader = Some(create_loader(base_dir));
+        }
+        self.compile(&code)
+    }
+
+    /// Run previously compiled bytecode.
+    pub fn run_bytecode(&mut self, bytecode: mailang_bytecode::Bytecode) -> Result<String, String> {
+        self.vm = Vm::new(bytecode);
+        let result = self.vm.run().map_err(|e| e.to_string())?;
+        Ok(mailang_stdlib::value_to_string(&result))
+    }
+
     /// Process imports in a program, loading and injecting imported modules
     fn process_imports(
         &mut self,

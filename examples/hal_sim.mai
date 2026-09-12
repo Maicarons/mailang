@@ -1,0 +1,37 @@
+// Simulated IoT device demo using the built-in HAL builtins.
+// Host firmware would implement Gpio/Delay/Adc via FFI instead.
+
+let led = 2
+let button = 3
+
+// LED on
+gpio_write(led, true)
+println("LED pin {led} = {gpio_read(led)}")
+
+// blink
+var i = 0
+while i < 3 {
+    gpio_write(led, true)
+    delay_ms(50)
+    gpio_write(led, false)
+    delay_ms(50)
+    i = i + 1
+}
+println("blinked {i} times, LED = {gpio_read(led)}")
+
+// button starts low; treat write of false as released
+gpio_write(button, false)
+if gpio_read(button) == false {
+    println("button {button} released")
+}
+
+// ADC channel 0 defaults to 0 in the simulator
+let raw = adc_read(0)
+println("adc0 raw = {raw}")
+if raw < 512 {
+    println("sensor: low")
+} elif raw < 1536 {
+    println("sensor: mid")
+} else {
+    println("sensor: high")
+}

@@ -149,30 +149,30 @@ enum Value {
 
 ## 三、Phase C 详细计划（3-4 周）
 
-### 目标：IoT 可信度
+### 目标：IoT 可信度 — **已完成**
 
-### C1. 真实 no_std（P1）
+### C1. 真实 no_std（P1） — 完成
 
-- `mailang-bytecode`: `#![no_std]`
-- `mailang-vm`: alloc feature
-- CI: thumbv7em / riscv32imc 构建验证
+- `mailang-bytecode`: `#![no_std]` + `alloc`；serde 仅在 `std` 下启用
+- CI: thumbv7em / riscv32imc `cargo check --no-default-features`
+- 说明：完整 VM 仍依赖 std（HashMap builtins / ThreadLocal HAL）
 
-### C2. 字节码文件格式（P1）
+### C2. 字节码文件格式（P1） — 完成
 
-- Magic + 版本 + Chunks + 调试映射
-- CLI: `mailang build` / `mailang run --bytecode`
-- 端序/对齐规则
+- Magic `MAILBC01` + 版本 + 小端编码；见 `mailang-bytecode/src/format.rs`
+- CLI: `mailang build file.mai [-o out.mailangbc]` / `mailang run file.mailangbc`
+- 端序：全部小端；对齐：按字节流顺序写，无 padding
 
-### C3. 体积测量 CI（P1）
+### C3. 体积测量 CI（P1） — 完成
 
-- 每次构建报告 thumbv7em/riscv32 大小
-- 与 MicroPython/JerryScript 对比
+- `benchmark/measure_size.py`：host CLI + 嵌入式 rlib
+- CI `no_std` job 报告 rlib 大小
 
-### C4. 最小 HAL trait（P2）
+### C4. 最小 HAL trait（P2） — 完成
 
-- Gpio / Delay / Adc trait
-- 通过 FFI 注册宿主函数
-- 模拟设备 demo
+- `Gpio` / `Delay` / `Adc` + `SimulatedHal`（32 pin / 8 ADC）
+- 内置：`gpio_write` / `gpio_read` / `delay_ms` / `adc_read`
+- Demo: `examples/hal_sim.mai`
 
 ---
 
@@ -265,9 +265,9 @@ Week 13:    发布 v0.2.0
 - [x] 全局查找无 String clone（`Vec` 槽表直读）
 
 ### Phase C 完成标准
-- [ ] thumbv7em / riscv32 编译成功
-- [ ] 字节码可序列化/反序列化
-- [ ] 实测二进制大小报告
+- [x] thumbv7em / riscv32 编译成功（`mailang-bytecode --no-default-features`）
+- [x] 字节码可序列化/反序列化（`.mailangbc`）
+- [x] 实测二进制大小报告（`benchmark/measure_size.py` + CI no_std job）
 
 ### Phase D 完成标准
 - [ ] C API 支持宿主函数注册

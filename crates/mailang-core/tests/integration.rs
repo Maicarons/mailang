@@ -401,3 +401,43 @@ fn test_array_mutation_shared() {
 fn test_map_property_set() {
     assert_eq!(eval("let m = {\"a\": 1}\nm[\"b\"] = 2\nm[\"b\"]"), "2");
 }
+
+// ===== Phase C: bytecode format =====
+
+#[test]
+fn test_bytecode_roundtrip() {
+    use mailang_core::bytecode::{decode, encode};
+    let mut interp = MailangInterpreter::new();
+    let bc = interp.compile("let x = 1 + 2\nx").expect("compile");
+    let bytes = encode(&bc);
+    let back = decode(&bytes).expect("decode");
+    assert_eq!(bc, back);
+    let out = interp.run_bytecode(back).expect("run");
+    assert_eq!(out, "3");
+}
+
+// ===== Phase C: simulated HAL =====
+
+#[test]
+fn test_gpio_write_read() {
+    assert_eq!(eval("gpio_write(5, true)\ngpio_read(5)"), "true");
+}
+
+#[test]
+fn test_gpio_clear() {
+    assert_eq!(
+        eval("gpio_write(6, true)\ngpio_write(6, false)\ngpio_read(6)"),
+        "false"
+    );
+}
+
+#[test]
+fn test_delay_ms_sim() {
+    // delay_ms is a no-op in wall time but must succeed
+    assert_eq!(eval("delay_ms(10)\n1"), "1");
+}
+
+#[test]
+fn test_adc_read_default() {
+    assert_eq!(eval("adc_read(0)"), "0");
+}
