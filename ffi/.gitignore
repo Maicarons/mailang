@@ -1,0 +1,4 @@
+# FFI test artifacts
+ffi/tests/*.exe
+ffi/tests/*.o
+ffi/tests/*.out

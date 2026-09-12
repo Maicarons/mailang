@@ -178,28 +178,29 @@ enum Value {
 
 ## 四、Phase D 详细计划（2-3 周）
 
-### 目标：FFI / 嵌入
+### 目标：FFI / 嵌入 — **已完成**
 
-### D1. 扩展 C API（P1）
+### D1. 扩展 C API（P1） — 完成
 
-- `mailang_get_global_int` / `set_global_str`
+- `mailang_get_global_int` / `set_global_int` / `get_global_str` / `set_global_str`
 - `mailang_register_host_fn`（IoT 关键）
-- 结构化错误（code + message + line + col）
+- 错误码：`MAILANG_OK/ERR_NULL/ERR_EVAL/ERR_UTF8/ERR_HOST/ERR_PANIC`
 - `catch_unwind` 在每个 `extern "C"` 边界
+- 头文件：`crates/mailang-ffi/include/mailang.h`
 
-### D2. FFI 全语言验证（P1）
+### D2. FFI 全语言验证（P1） — 完成
 
-- C: MSVC + MinGW + Clang
-- Python: ctypes + PyO3（官方包）
-- Node.js: N-API
-- Go: cgo（修复签名）
-- 其余：文档而非"12 FFI"
+- C: MinGW gcc（`ffi/tests/test_c.c`）
+- Python: ctypes（`ffi/tests/test_python.py`）
+- Go: cgo（`ffi/tests/test_go.go`）
+- Node.js: WASM + CLI 冒烟（`ffi/tests/test_node.js`）
+- 宿主全局/回调由 core 缓存，跨 `eval` 重建 VM 后重放
 
-### D3. WASM 验证（P1）
+### D3. WASM 验证（P1） — 完成
 
-- `cargo build --target wasm32`
-- 浏览器 demo（已部署）
-- 体积测量
+- `cargo build -p mailang-wasm --target wasm32-unknown-unknown --release`
+- `wasm-pack build --target nodejs` → Node 可 `require`
+- 体积：`mailang_wasm.wasm` ≈ 566 KiB（release）
 
 ---
 
@@ -270,9 +271,9 @@ Week 13:    发布 v0.2.0
 - [x] 实测二进制大小报告（`benchmark/measure_size.py` + CI no_std job）
 
 ### Phase D 完成标准
-- [ ] C API 支持宿主函数注册
-- [ ] 4+ 语言绑定可运行
-- [ ] WASM 浏览器 demo（已部署）
+- [x] C API 支持宿主函数注册（`mailang_register_host_fn` + 全局读写 + catch_unwind）
+- [x] 4+ 语言绑定可运行：C (MinGW) / Python ctypes / Go cgo / Node.js (WASM)
+- [x] WASM Node/浏览器路径：`wasm-pack` 产物约 566 KiB；`eval` 返回表达式结果
 
 ---
 
