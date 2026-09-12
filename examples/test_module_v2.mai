@@ -1,0 +1,5 @@
+// Module system v2: relative import of a sibling file
+import "./utils"
+
+println(utils.greet("MaìLang"))
+println(utils.add(20, 22))

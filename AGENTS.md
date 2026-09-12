@@ -91,4 +91,4 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-Phases B–E core items complete. Runtime supports OOP, traits, pattern matching (including `Ok`/`Err`/`Some` and ranges), TCO, slot-based globals, `.mailangbc` format, simulated HAL, and C FFI host-fn registration (C/Python/Go/Node verified). Analyzer is wired into eval (undefined variables fail early). LSP provides diagnostics/completions/definition (`mailang lsp`). `mailang fmt` reformats sources. 67 integration tests. Module system v2 and Fib(30) perf remain open.
+Phases B–E core items complete. Runtime supports OOP, traits, pattern matching, TCO, slot-based globals, `.mailangbc`, simulated HAL, and C FFI host-fn registration. Analyzer runs before compile; LSP provides diagnostics/completions; `mailang fmt` reformats. Module system v2 links independently analyzed modules via export tables without rewriting the importer AST. 69 integration tests. Fib(30) perf remains the main open gap.

@@ -219,11 +219,13 @@ enum Value {
 - AST 重印：4 空格缩进、规范化空格
 - CLI：`mailang fmt file.mai` / `mailang fmt --check file.mai`
 
-### E3. 模块系统 v2（P2） — 未做
+### E3. 模块系统 v2（P2） — **基本完成**
 
-- 独立 chunk 编译
-- 导出表
-- 不再 AST 注入
+- 独立 parse + analyze 每个模块
+- 导出表：顶层 `fn`/`let`/`const`（`_` 前缀不导出）
+- 链接：`Compiler::compile_linked` 把模块体 + 导出命名空间表 + 主程序编进同一 Bytecode
+- **不再 AST 注入**：主程序 AST 不改写
+- CLI 验证：`examples/test_module_v2.mai`、`libs/time/example/basic.mai`
 
 ---
 

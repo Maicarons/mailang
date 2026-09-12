@@ -35,6 +35,25 @@ impl std::fmt::Display for ModuleError {
     }
 }
 
+/// Collect top-level exportable names from a parsed program.
+/// Exports are `fn` / `let` / `const` bindings at module scope.
+pub fn extract_exports(program: &Program) -> Vec<String> {
+    let mut names = Vec::new();
+    for stmt in &program.statements {
+        match stmt {
+            mailang_ast::Stmt::FunctionDef { name, .. }
+            | mailang_ast::Stmt::Let { name, .. }
+            | mailang_ast::Stmt::Const { name, .. } => {
+                if !name.starts_with('_') {
+                    names.push(name.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    names
+}
+
 /// A compiled module with its bytecode and exports
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
@@ -294,13 +313,19 @@ impl ModuleLoader for FileModuleLoader {
         };
 
         let program = self.load_from_path(&file_path)?;
+        let export_names = extract_exports(&program);
         let bytecode = self.compile_program(&program)?;
+
+        let mut exports = HashMap::new();
+        for (i, name) in export_names.iter().enumerate() {
+            exports.insert(name.clone(), i as u32);
+        }
 
         let module = CompiledModule {
             name: path.to_string(),
             info,
             bytecode,
-            exports: HashMap::new(),
+            exports,
         };
 
         self.modules.insert(path.to_string(), module);

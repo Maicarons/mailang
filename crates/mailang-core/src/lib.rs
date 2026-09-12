@@ -121,17 +121,13 @@ impl MailangInterpreter {
         let mut parser = Parser::new(code).map_err(|e| e.to_string())?;
         let program = parser.parse_program().map_err(|e| e.to_string())?;
 
-        // Process imports if module loader is available
-        let processed_program = if self.module_loader.is_some() {
-            self.process_imports(program)?
+        let bytecode = if self.module_loader.is_some() {
+            self.compile_with_modules(program)?
         } else {
-            program
+            self.analyze_program(&program)?;
+            let compiler = Compiler::new();
+            compiler.compile(&program).map_err(|e| e.to_string())?
         };
-
-        self.analyze_program(&processed_program)?;
-
-        let compiler = Compiler::new();
-        let bytecode = compiler.compile(&processed_program).map_err(|e| e.to_string())?;
 
         let vm = Vm::new(bytecode);
         self.vm = self.reapply_host_fns(vm);
@@ -159,16 +155,13 @@ impl MailangInterpreter {
         let mut parser = Parser::new(code).map_err(|e| e.to_string())?;
         let program = parser.parse_program().map_err(|e| e.to_string())?;
 
-        let processed_program = if self.module_loader.is_some() {
-            self.process_imports(program)?
+        if self.module_loader.is_some() {
+            self.compile_with_modules(program)
         } else {
-            program
-        };
-
-        self.analyze_program(&processed_program)?;
-
-        let compiler = Compiler::new();
-        compiler.compile(&processed_program).map_err(|e| e.to_string())
+            self.analyze_program(&program)?;
+            let compiler = Compiler::new();
+            compiler.compile(&program).map_err(|e| e.to_string())
+        }
     }
 
     /// Compile a `.mai` file to bytecode.
@@ -192,87 +185,136 @@ impl MailangInterpreter {
         Ok(mailang_stdlib::value_to_string(&result))
     }
 
-    /// Process imports in a program, loading and injecting imported modules
-    fn process_imports(
+    /// Module-system v2: parse/analyze each import independently, then link
+    /// module bodies + export-table namespaces + main into one Bytecode.
+    /// The importer AST is not rewritten with module source.
+    fn compile_with_modules(
         &mut self,
         program: mailang_ast::Program,
-    ) -> Result<mailang_ast::Program, String> {
-        use mailang_module::ModuleLoader;
+    ) -> Result<mailang_bytecode::Bytecode, String> {
+        use mailang_module::{extract_exports, ModuleLoader};
 
-        let mut imported_stmts = Vec::new();
+        // Phase 1: resolve + parse modules (needs &mut loader).
+        struct PendingImport {
+            module_name: String,
+            module_program: mailang_ast::Program,
+            exports: Vec<String>,
+            selective: bool,
+        }
+        let mut pending: Vec<PendingImport> = Vec::new();
         let mut main_stmts = Vec::new();
 
-        for stmt in program.statements {
-            match &stmt {
-                mailang_ast::Stmt::Import { path, alias, items } => {
-                    let module_path = path.join(".");
-                    let module_name = alias.clone().unwrap_or_else(|| path.last().unwrap().clone());
+        {
+            let loader = self
+                .module_loader
+                .as_mut()
+                .ok_or_else(|| "module loader not set".to_string())?;
 
-                    // Load the module
-                    if let Some(ref mut loader) = self.module_loader {
-                        let _module = loader.load(&module_path)
+            for stmt in program.statements {
+                match stmt {
+                    mailang_ast::Stmt::Import { path, alias, items } => {
+                        let module_path = path.join(".");
+                        // `./utils` / `../lib/helper` → last path segment without prefix
+                        let default_name = path
+                            .last()
+                            .map(|s| {
+                                let s = s.rsplit('/').next().unwrap_or(s);
+                                let s = s.rsplit('\\').next().unwrap_or(s);
+                                s.trim_start_matches('.').to_string()
+                            })
+                            .unwrap_or_default();
+                        let module_name = alias.clone().unwrap_or(default_name);
+
+                        loader
+                            .load(&module_path)
                             .map_err(|e| format!("Failed to import '{}': {}", module_path, e))?;
 
-                        // Get the module's file path and read its source
-                        let module_file = loader.resolve_path(&module_path);
-                        if let Some(file_path) = module_file {
-                            // Read and parse the module source
-                            let module_code = std::fs::read_to_string(&file_path)
-                                .map_err(|e| format!("Failed to read module '{}': {}", module_path, e))?;
+                        let file_path = loader
+                            .resolve_path(&module_path)
+                            .ok_or_else(|| format!("Module not found: {}", module_path))?;
 
-                            let mut parser = mailang_parser::Parser::new(&module_code)
-                                .map_err(|e| format!("Failed to parse module '{}': {}", module_path, e))?;
-                            let module_program = parser.parse_program()
-                                .map_err(|e| format!("Failed to parse module '{}': {}", module_path, e))?;
+                        let module_code = std::fs::read_to_string(&file_path).map_err(|e| {
+                            format!("Failed to read module '{}': {}", module_path, e)
+                        })?;
+                        let mut parser = Parser::new(&module_code).map_err(|e| {
+                            format!("Failed to parse module '{}': {}", module_path, e)
+                        })?;
+                        let module_program = parser.parse_program().map_err(|e| {
+                            format!("Failed to parse module '{}': {}", module_path, e)
+                        })?;
 
-                            // Collect function and constant names from the module
-                            let mut exported_names = Vec::new();
-                            for stmt in &module_program.statements {
-                                match stmt {
-                                    mailang_ast::Stmt::FunctionDef { name, .. } => {
-                                        exported_names.push(name.clone());
-                                    }
-                                    mailang_ast::Stmt::Let { name, .. } => {
-                                        exported_names.push(name.clone());
-                                    }
-                                    mailang_ast::Stmt::Const { name, .. } => {
-                                        exported_names.push(name.clone());
-                                    }
-                                    _ => {}
-                                }
-                            }
-
-                            // Inject the module's statements (functions/constants become globals)
-                            imported_stmts.extend(module_program.statements);
-
-                            // Create a namespace map: let time = { "now": now, "PI": PI, ... }
-                            let map_entries: Vec<(mailang_ast::Expr, mailang_ast::Expr)> = exported_names
-                                .iter()
-                                .map(|name| {
-                                    (
-                                        mailang_ast::Expr::Literal(mailang_ast::Literal::Str(name.clone())),
-                                        mailang_ast::Expr::Identifier(name.clone()),
-                                    )
-                                })
-                                .collect();
-
-                            let namespace_stmt = mailang_ast::Stmt::Let {
-                                name: module_name,
-                                mutable: false,
-                                type_annotation: None,
-                                value: Some(mailang_ast::Expr::Map(map_entries)),
-                            };
-                            imported_stmts.push(namespace_stmt);
+                        let mut exports = extract_exports(&module_program);
+                        let selective = items.is_some();
+                        if let Some(requested) = items {
+                            exports.retain(|n| requested.contains(n));
                         }
+                        let ns_name = if selective {
+                            // Still expose a namespace if aliased; otherwise bind items only.
+                            if alias.is_some() {
+                                module_name
+                            } else {
+                                format!("_import_{}", module_name)
+                            }
+                        } else {
+                            module_name
+                        };
+                        pending.push(PendingImport {
+                            module_name: ns_name,
+                            module_program,
+                            exports: if selective && alias.is_none() {
+                                Vec::new()
+                            } else {
+                                exports
+                            },
+                            selective,
+                        });
                     }
+                    other => main_stmts.push(other),
                 }
-                _ => main_stmts.push(stmt),
             }
         }
 
-        // Combine imported statements with main statements
-        imported_stmts.extend(main_stmts);
-        Ok(mailang_ast::Program { statements: imported_stmts })
+        // Phase 2: analyze modules and main (no loader borrow).
+        let mut linked: Vec<(String, mailang_ast::Program, Vec<String>)> = Vec::new();
+        for p in pending {
+            self.analyze_program(&p.module_program).map_err(|e| {
+                format!("Module '{}' failed analysis: {}", p.module_name, e)
+            })?;
+            linked.push((p.module_name, p.module_program, p.exports));
+        }
+
+        {
+            let mut analyzer = mailang_analyzer::Analyzer::new();
+            for name in self.host_fns.keys() {
+                analyzer.register_builtin(name);
+            }
+            for name in self.host_globals.keys() {
+                analyzer.register_builtin(name);
+            }
+            for (mod_name, module_program, exports) in &linked {
+                // Namespace map binding (e.g. `utils`, `time`)
+                if !exports.is_empty() {
+                    analyzer.register_builtin(mod_name);
+                }
+                for name in mailang_module::extract_exports(module_program) {
+                    analyzer.register_builtin(&name);
+                }
+            }
+            let main_program = mailang_ast::Program {
+                statements: main_stmts.clone(),
+            };
+            analyzer.analyze(&main_program).map_err(|errs| {
+                errs.iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            })?;
+        }
+
+        let main_program = mailang_ast::Program {
+            statements: main_stmts,
+        };
+        Compiler::compile_linked(&linked, &main_program).map_err(|e| e.to_string())
     }
 }
 

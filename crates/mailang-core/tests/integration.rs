@@ -472,3 +472,29 @@ b.x
 "#;
     assert_eq!(interp.eval(src).unwrap(), "1");
 }
+
+// ===== Phase E: module system v2 =====
+
+#[test]
+fn test_module_export_table() {
+    use mailang_module::extract_exports;
+    let src = "fn a() { return 1 }\nlet b = 2\nconst c = 3\nfn _hidden() { return 0 }\n";
+    let mut parser = mailang_core::parser::Parser::new(src).unwrap();
+    let program = parser.parse_program().unwrap();
+    let exports = extract_exports(&program);
+    assert_eq!(exports, vec!["a", "b", "c"]);
+}
+
+#[test]
+fn test_module_linked_eval() {
+    // Relative import of examples/utils.mai from a temp file in examples/
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("examples");
+    let mut interp = MailangInterpreter::with_modules(&dir);
+    let src = "import \"./utils\"\nutils.add(20, 22)";
+    assert_eq!(interp.eval(src).unwrap(), "42");
+}

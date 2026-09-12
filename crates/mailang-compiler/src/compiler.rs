@@ -103,6 +103,61 @@ impl Compiler {
         Ok(self.bytecode)
     }
 
+    /// Link independently-parsed modules, then the main program, into one Bytecode.
+    ///
+    /// Each module is compiled as top-level statements (its `fn`/`let`/`const`
+    /// become globals). A namespace map `let <mod> = { "export": export, ... }`
+    /// is emitted from the module's export table — the importer's AST is not
+    /// rewritten with the module body.
+    pub fn compile_linked(
+        modules: &[(String, Program, Vec<String>)],
+        main: &Program,
+    ) -> Result<Bytecode, CompilerError> {
+        let mut c = Self::new();
+        for (name, program, exports) in modules {
+            for stmt in &program.statements {
+                c.compile_statement(stmt)?;
+            }
+            c.emit_namespace(name, exports)?;
+        }
+
+        let len = main.statements.len();
+        for (i, stmt) in main.statements.iter().enumerate() {
+            if i == len - 1 {
+                if let Stmt::Expression(expr) = stmt {
+                    c.compile_expression(expr)?;
+                } else {
+                    c.compile_statement(stmt)?;
+                    c.emit_push_constant(Value::Null, 0)?;
+                }
+            } else {
+                c.compile_statement(stmt)?;
+            }
+        }
+        c.emit(Opcode::Halt, None, 0);
+        Ok(c.bytecode)
+    }
+
+    /// Emit `let name = { "e1": e1, "e2": e2, ... }` as bytecode (no AST).
+    fn emit_namespace(&mut self, name: &str, exports: &[String]) -> Result<(), CompilerError> {
+        if exports.is_empty() {
+            self.emit_push_constant(Value::Null, 0)?;
+            let slot = self.bytecode.intern_global(name);
+            self.emit(Opcode::StoreGlobal, Some(slot), 0);
+            return Ok(());
+        }
+        for export in exports {
+            let key = self.add_constant(Value::Str(export.as_str().into()))?;
+            self.emit(Opcode::Push, Some(key), 0);
+            let slot = self.bytecode.intern_global(export);
+            self.emit(Opcode::LoadGlobal, Some(slot), 0);
+        }
+        self.emit(Opcode::BuildMap, Some(exports.len() as u32), 0);
+        let ns_slot = self.bytecode.intern_global(name);
+        self.emit(Opcode::StoreGlobal, Some(ns_slot), 0);
+        Ok(())
+    }
+
     fn emit(&mut self, opcode: Opcode, operand: Option<u32>, line: usize) {
         self.bytecode.chunks[self.current.chunk_index].emit(opcode, operand, line);
     }
