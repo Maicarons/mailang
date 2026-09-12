@@ -23,7 +23,7 @@
 //! 6 Array, 7 Map, 8 Tuple, 9 Function, 10 Closure,
 //! 11 Class, 12 Instance, 13 Ok, 14 Err, 15 Some, 16 Builtin
 
-use crate::{Bytecode, Chunk, Instruction, Opcode, Value};
+use crate::{Bytecode, Chunk, ClassObj, ClosureObj, FunctionObj, Instruction, Opcode, Value};
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
@@ -130,51 +130,38 @@ impl Writer {
                     self.value(item);
                 }
             }
-            Value::Function {
-                name,
-                arity,
-                chunk_index,
-            } => {
+            Value::Function(f) => {
                 self.u8(9);
-                self.str(name);
-                self.u32(*arity as u32);
-                self.u32(*chunk_index as u32);
+                self.str(&f.name);
+                self.u32(f.arity as u32);
+                self.u32(f.chunk_index as u32);
             }
-            Value::Closure {
-                function_index,
-                arity,
-                upvalues,
-            } => {
+            Value::Closure(c) => {
                 self.u8(10);
-                self.u32(*function_index as u32);
-                self.u32(*arity as u32);
-                self.u32(upvalues.len() as u32);
-                for u in upvalues {
+                self.u32(c.function_index as u32);
+                self.u32(c.arity as u32);
+                self.u32(c.upvalues.len() as u32);
+                for u in &c.upvalues {
                     self.u32(*u as u32);
                 }
             }
-            Value::Class {
-                name,
-                methods,
-                superclass,
-                properties,
-            } => {
+            Value::Class(cls) => {
                 self.u8(11);
-                self.str(name);
-                self.u32(methods.len() as u32);
-                for (mname, ci) in methods.iter() {
+                self.str(&cls.name);
+                self.u32(cls.methods.len() as u32);
+                for (mname, ci) in cls.methods.iter() {
                     self.str(mname);
                     self.u32(*ci as u32);
                 }
-                match superclass {
+                match &cls.superclass {
                     Some(s) => {
                         self.u8(1);
                         self.str(s);
                     }
                     None => self.u8(0),
                 }
-                self.u32(properties.len() as u32);
-                for (pname, pval) in properties.iter() {
+                self.u32(cls.properties.len() as u32);
+                for (pname, pval) in cls.properties.iter() {
                     self.str(pname);
                     self.value(pval);
                 }
@@ -319,11 +306,11 @@ impl<'a> Reader<'a> {
                 let name = self.str()?;
                 let arity = self.u32()? as usize;
                 let chunk_index = self.u32()? as usize;
-                Ok(Value::Function {
+                Ok(Value::Function(Rc::new(FunctionObj {
                     name: Rc::from(name.as_str()),
                     arity,
                     chunk_index,
-                })
+                })))
             }
             10 => {
                 let function_index = self.u32()? as usize;
@@ -333,11 +320,11 @@ impl<'a> Reader<'a> {
                 for _ in 0..n {
                     upvalues.push(self.u32()? as usize);
                 }
-                Ok(Value::Closure {
+                Ok(Value::Closure(Rc::new(ClosureObj {
                     function_index,
                     arity,
                     upvalues,
-                })
+                })))
             }
             11 => {
                 let name = self.str()?;
@@ -350,7 +337,7 @@ impl<'a> Reader<'a> {
                 }
                 let has_super = self.u8()?;
                 let superclass = if has_super == 1 {
-                    Some(self.str()?)
+                    Some(Rc::from(self.str()?.as_str()))
                 } else {
                     None
                 };
@@ -361,12 +348,12 @@ impl<'a> Reader<'a> {
                     let pval = self.value()?;
                     properties.push((pname, pval));
                 }
-                Ok(Value::Class {
+                Ok(Value::Class(Rc::new(ClassObj {
                     name: Rc::from(name.as_str()),
                     methods: Rc::new(methods),
                     superclass,
                     properties: Rc::new(properties),
-                })
+                })))
             }
             12 => {
                 let class_index = self.u32()? as usize;

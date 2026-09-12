@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use mailang_bytecode::{Bytecode, Opcode, Value};
+use mailang_bytecode::{Bytecode, ClosureObj, Opcode, Value};
 use crate::error::VmError;
 
 type BuiltinFn = fn(&[Value]) -> Result<Value, String>;
@@ -436,9 +436,9 @@ impl Vm {
                         )))?;
 
                     // Fast path: plain function without cloning the Value.
-                    if let Value::Function { arity, chunk_index, .. } = &self.stack[func_index] {
-                        let arity = *arity;
-                        let chunk_index = *chunk_index;
+                    if let Value::Function(f) = &self.stack[func_index] {
+                        let arity = f.arity;
+                        let chunk_index = f.chunk_index;
                         if arity != arg_count {
                             return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
                         }
@@ -456,9 +456,9 @@ impl Vm {
                     let func = self.stack[func_index].clone();
 
                     match func {
-                        Value::Function { arity, chunk_index, .. } => {
-                            if arity != arg_count {
-                                return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
+                        Value::Function(f) => {
+                            if f.arity != arg_count {
+                                return Err(VmError::WrongArgumentCount { expected: f.arity, found: arg_count });
                             }
                             let frame = CallFrame {
                                 chunk_index: self.chunk_index,
@@ -467,34 +467,34 @@ impl Vm {
                                 upvalues: Vec::new(),
                             };
                             self.call_stack.push(frame);
-                            self.chunk_index = chunk_index;
+                            self.chunk_index = f.chunk_index;
                             self.ip = 0;
                         }
-                        Value::Closure { function_index, arity, upvalues } => {
-                            if arity != arg_count {
-                                return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
+                        Value::Closure(c) => {
+                            if c.arity != arg_count {
+                                return Err(VmError::WrongArgumentCount { expected: c.arity, found: arg_count });
                             }
                             let frame = CallFrame {
                                 chunk_index: self.chunk_index,
                                 ip: self.ip,
                                 stack_base: func_index + 1,
-                                upvalues,
+                                upvalues: c.upvalues.clone(),
                             };
                             self.call_stack.push(frame);
-                            self.chunk_index = function_index;
+                            self.chunk_index = c.function_index;
                             self.ip = 0;
                         }
-                        Value::Class { name, methods, superclass, properties } => {
+                        Value::Class(cls) => {
                             let class_idx = self.class_table.len();
                             self.class_table.push(RegisteredClass {
-                                name: name.to_string(),
-                                superclass: superclass.clone(),
-                                methods: methods.iter().map(|(n, ci)| (n.clone(), *ci, 0usize)).collect(),
-                                properties: properties.as_ref().clone(),
+                                name: cls.name.to_string(),
+                                superclass: cls.superclass.as_ref().map(|s| s.to_string()),
+                                methods: cls.methods.iter().map(|(n, ci)| (n.clone(), *ci, 0usize)).collect(),
+                                properties: cls.properties.as_ref().clone(),
                             });
 
                             let mut fields: Vec<(String, Value)> = Vec::new();
-                            for (pname, pdefault) in properties.iter() {
+                            for (pname, pdefault) in cls.properties.iter() {
                                 fields.push((pname.clone(), pdefault.clone()));
                             }
                             let instance = Value::Instance {
@@ -503,7 +503,7 @@ impl Vm {
                             };
                             self.stack[func_index] = instance.clone();
 
-                            let init_chunk = methods.iter()
+                            let init_chunk = cls.methods.iter()
                                 .find(|(n, _)| n == "init")
                                 .map(|(_, ci)| *ci);
 
@@ -600,9 +600,9 @@ impl Vm {
                     let func = self.stack[func_index].clone();
 
                     match func {
-                        Value::Function { arity, chunk_index, .. } => {
-                            if arity != arg_count {
-                                return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
+                        Value::Function(f) => {
+                            if f.arity != arg_count {
+                                return Err(VmError::WrongArgumentCount { expected: f.arity, found: arg_count });
                             }
                             // Move the new callee+args over the current frame's slot
                             // so the abandoned locals are discarded and Return goes
@@ -621,12 +621,12 @@ impl Vm {
                                     frame.upvalues.clear();
                                 }
                             }
-                            self.chunk_index = chunk_index;
+                            self.chunk_index = f.chunk_index;
                             self.ip = 0;
                         }
-                        Value::Closure { function_index, arity, upvalues } => {
-                            if arity != arg_count {
-                                return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
+                        Value::Closure(c) => {
+                            if c.arity != arg_count {
+                                return Err(VmError::WrongArgumentCount { expected: c.arity, found: arg_count });
                             }
                             if let Some(frame) = self.call_stack.last() {
                                 let old_base = frame.stack_base.saturating_sub(1);
@@ -639,10 +639,10 @@ impl Vm {
                                 }
                                 if let Some(frame) = self.call_stack.last_mut() {
                                     frame.stack_base = old_base + 1;
-                                    frame.upvalues = upvalues;
+                                    frame.upvalues = c.upvalues.clone();
                                 }
                             }
-                            self.chunk_index = function_index;
+                            self.chunk_index = c.function_index;
                             self.ip = 0;
                         }
                         Value::Builtin { name, .. } => {
@@ -667,17 +667,17 @@ impl Vm {
                             }
                         }
                         // Constructors / unknown callables: perform a normal Call.
-                        Value::Class { name, methods, superclass, properties } => {
+                        Value::Class(cls) => {
                             let class_idx = self.class_table.len();
                             self.class_table.push(RegisteredClass {
-                                name: name.to_string(),
-                                superclass: superclass.clone(),
-                                methods: methods.iter().map(|(n, ci)| (n.clone(), *ci, 0usize)).collect(),
-                                properties: properties.as_ref().clone(),
+                                name: cls.name.to_string(),
+                                superclass: cls.superclass.as_ref().map(|s| s.to_string()),
+                                methods: cls.methods.iter().map(|(n, ci)| (n.clone(), *ci, 0usize)).collect(),
+                                properties: cls.properties.as_ref().clone(),
                             });
 
                             let mut fields: Vec<(String, Value)> = Vec::new();
-                            for (pname, pdefault) in properties.iter() {
+                            for (pname, pdefault) in cls.properties.iter() {
                                 fields.push((pname.clone(), pdefault.clone()));
                             }
                             let instance = Value::Instance {
@@ -686,7 +686,7 @@ impl Vm {
                             };
                             self.stack[func_index] = instance.clone();
 
-                            let init_chunk = methods.iter()
+                            let init_chunk = cls.methods.iter()
                                 .find(|(n, _)| n == "init")
                                 .map(|(_, ci)| *ci);
 
@@ -867,9 +867,9 @@ impl Vm {
                             }
                             let func = self.stack[obj_index].clone();
                             match func {
-                                Value::Function { arity, chunk_index, .. } => {
-                                    if arity != arg_count {
-                                        return Err(VmError::WrongArgumentCount { expected: arity, found: arg_count });
+                                Value::Function(f) => {
+                                    if f.arity != arg_count {
+                                        return Err(VmError::WrongArgumentCount { expected: f.arity, found: arg_count });
                                     }
                                     let frame = CallFrame {
                                         chunk_index: self.chunk_index,
@@ -878,7 +878,7 @@ impl Vm {
                                         upvalues: Vec::new(),
                                     };
                                     self.call_stack.push(frame);
-                                    self.chunk_index = chunk_index;
+                                    self.chunk_index = f.chunk_index;
                                     self.ip = 0;
                                 }
                                 Value::Builtin { name: bname, .. } => {
@@ -985,16 +985,16 @@ impl Vm {
                 Opcode::CreateClass => {
                     let class_const_idx = operand.ok_or_else(|| VmError::Internal("CreateClass missing operand".to_string()))? as usize;
                     let class = self.bytecode.chunks[self.chunk_index].constants[class_const_idx].clone();
-                    if let Value::Class { name, methods, superclass, properties } = &class {
+                    if let Value::Class(cls) = &class {
                         let class_idx = self.class_table.len();
-                        let methods_vec: Vec<(String, usize, usize)> = methods.iter()
+                        let methods_vec: Vec<(String, usize, usize)> = cls.methods.iter()
                             .map(|(n, ci)| (n.clone(), *ci, 0))
                             .collect();
                         self.class_table.push(RegisteredClass {
-                            name: name.to_string(),
-                            superclass: superclass.clone(),
+                            name: cls.name.to_string(),
+                            superclass: cls.superclass.as_ref().map(|s| s.to_string()),
                             methods: methods_vec,
-                            properties: properties.as_ref().clone(),
+                            properties: cls.properties.as_ref().clone(),
                         });
                         self.push(class)?;
                     } else {
@@ -1016,12 +1016,12 @@ impl Vm {
                     uv_indices.reverse();
                     let func = self.pop()?;
                     match func {
-                        Value::Function { chunk_index, arity, .. } => {
-                            self.push(Value::Closure {
-                                function_index: chunk_index,
-                                arity,
+                        Value::Function(f) => {
+                            self.push(Value::Closure(Rc::new(ClosureObj {
+                                function_index: f.chunk_index,
+                                arity: f.arity,
                                 upvalues: uv_indices,
-                            })?;
+                            })))?;
                         }
                         _ => {
                             return Err(VmError::TypeError("MakeClosure expects a function".to_string()));

@@ -17,23 +17,18 @@
 
 ---
 
-## 2. Phase E 后热路径优化实测（release，7 次取平均）
+## 2. Phase F1 后实测（release，7 次取平均）
 
 | 基准测试 | 结果 | 说明 |
 |----------|------|------|
-| Fibonacci(30) 递归 | **~423 ms**（含进程启动 ~11 ms） | 结果 832040 |
-| 对比 Phase A 基线 581.59 ms | **~1.37x** | 未达 3x |
-| 对比 Phase B 初测 ~883 ms | **~2.1x** | `current_frame` 整帧 clone 已消除 |
-| TCO 深递归 count(50000) | 通过 | 无栈溢出 |
-| 单次进程开销（eval 1+1） | ~11 ms | 启动+解析+编译+分析 |
+| Fibonacci(30) 递归 | **~280 ms**（含进程启动 ~11 ms） | 结果 832040 |
+| 对比 Phase A 基线 581.59 ms | **~2.08x** | 未达 3x，已大幅接近 |
+| 对比 Phase B 初测 ~883 ms | **~3.2x** | |
+| 对比热路径阶段 ~423 ms | **~1.5x** | 胖 Value 改 Rc 包装 |
 
-**已做热路径优化**：
-- `LoadLocal`/`StoreLocal` 不再 clone 整个 `CallFrame`（含 `upvalues` Vec）
-- Int 标量 Load/Store 与 Add/Sub/Mul/Eq/Ne/Lt/Le/Gt/Ge 走专用路径
-- `Call` 对 `Value::Function` 不 clone，直接改写 `chunk_index`/`ip`
-- `JumpIfFalse` 对 Bool/Null/Int(0) 短路
+**F1 优化**：`Function`/`Closure`/`Class` 改为 `Rc<FunctionObj>` 等，缩小栈上 `Value`，clone 为 refcount bump 而非深分配。
 
-**结论**：栈式解释器在整数递归上的剩余成本是指令分派与 `Value` 栈布局；3x 需 Phase F（寄存器 VM / 专用 Int 寄存器 / 超级指令）。
+**剩余差距**：3x 目标 ~195 ms，还差约 1.4x，需 F2 超级指令 / F3 紧凑指令 / F4 跳转表。
 
 ---
 

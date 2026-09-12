@@ -41,7 +41,7 @@
 
 | 问题 | 严重度 | 说明 |
 |------|--------|------|
-| Fibonacci(30) 未达 3x | P1 | 热路径已优化至约 1.3–1.4x 基线；3x 需 Phase F 寄存器 VM / 专用 Int 栈 |
+| Fibonacci(30) 未达 3x | P1 | Phase F1 后约 **2.08x** 基线（~280 ms）；3x 需 F2–F4 |
 | GC 是空壳 | P2 | Value 已用 Rc；循环检测 / 标记清除仍未接入 VM |
 | LSP 诊断位置 | P2 | 能从解析错误消息提取 line/col；Analyzer 错误尚无 span |
 
@@ -288,14 +288,14 @@ Week 13:    发布 v0.2.0
 
 | 项 | 内容 | 预期收益 |
 |----|------|----------|
-| F1 | 专用 Int 操作数栈（`Vec<i64>` + 标记），避免胖 `Value` 拷贝 | 2–3x |
+| F1 | 胖 Value 改 `Rc` 包装（Function/Closure/Class） + 热路径 Int/Call | **已完成 ~2.08x** |
 | F2 | 超级指令：合并 fib 等高频序列 | 1.2–1.5x |
 | F3 | 指令精简：`u8 opcode + u32 operand`，热路径不带 line | 1.1–1.2x |
 | F4 | 跳转表分派（计算 goto） | 1.1–1.3x |
 | F5 | GC：循环检测 | 正确性 |
 | F6 | Analyzer span → LSP 精确诊断 | DX |
 
-**验收**：`bench_fib30.mai` release 平均 ≤ 195 ms；69+ 测试全绿。
+**验收**：`bench_fib30.mai` release 平均 ≤ 195 ms；69+ 测试全绿。当前 ~280 ms。
 
 ---
 

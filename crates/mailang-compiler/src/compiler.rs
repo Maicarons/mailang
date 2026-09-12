@@ -1187,11 +1187,11 @@ impl Compiler {
         let old_compiler = self.function_compilers.pop().unwrap();
         self.current = old_compiler;
 
-        let func_index = self.add_constant(Value::Function {
+        let func_index = self.add_constant(Value::Function(Rc::new(FunctionObj {
             name: name.into(),
             arity: params.len(),
             chunk_index,
-        })?;
+        })))?;
         self.emit(Opcode::Push, Some(func_index), 0);
 
         // Capture upvalues if the function closes over outer variables
@@ -1250,11 +1250,11 @@ impl Compiler {
         let old_compiler = self.function_compilers.pop().unwrap();
         self.current = old_compiler;
 
-        let func_index = self.add_constant(Value::Function {
+        let func_index = self.add_constant(Value::Function(Rc::new(FunctionObj {
             name: "lambda".into(),
             arity: params.len(),
             chunk_index,
-        })?;
+        })))?;
         self.emit(Opcode::Push, Some(func_index), 0);
 
         // Capture upvalues if the lambda closes over outer variables
@@ -1407,12 +1407,12 @@ impl Compiler {
             ci.methods = method_info;
         }
 
-        let class_const = self.add_constant(Value::Class {
+        let class_const = self.add_constant(Value::Class(Rc::new(ClassObj {
             name: name.into(),
             methods: Rc::new(methods.clone()),
-            superclass: superclass.clone(),
+            superclass: superclass.as_ref().map(|s| Rc::from(s.as_str())),
             properties: Rc::new(properties),
-        })?;
+        })))?;
         self.emit(Opcode::CreateClass, Some(class_const), 0);
         self.define_variable(name)?;
 
@@ -1495,11 +1495,11 @@ impl Compiler {
 
         // Push parent init as a Function value, then `this` + user args.
         self.emit_push_constant(
-            Value::Function {
+            Value::Function(Rc::new(FunctionObj {
                 name: format!("{}.init", parent_name).into(),
                 arity: init_arity,
                 chunk_index: init_chunk,
-            },
+            })),
             0,
         )?;
         self.emit(Opcode::LoadLocal, Some(0), 0);

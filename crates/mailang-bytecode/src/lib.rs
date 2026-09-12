@@ -184,6 +184,32 @@ impl Opcode {
     }
 }
 
+/// Fat payloads are boxed so `Value` stays small on the operand stack.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+pub struct FunctionObj {
+    pub name: Rc<str>,
+    pub arity: usize,
+    pub chunk_index: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+pub struct ClosureObj {
+    pub function_index: usize,
+    pub arity: usize,
+    pub upvalues: Vec<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
+pub struct ClassObj {
+    pub name: Rc<str>,
+    pub methods: Rc<Vec<(String, usize)>>,
+    pub superclass: Option<Rc<str>>,
+    pub properties: Rc<Vec<(String, Value)>>,
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(all(feature = "serde", feature = "std"), derive(Serialize, Deserialize))]
 pub enum Value {
@@ -196,22 +222,9 @@ pub enum Value {
     Array(Rc<RefCell<Vec<Value>>>),
     Map(Rc<RefCell<Vec<(Value, Value)>>>),
     Tuple(Rc<RefCell<Vec<Value>>>),
-    Function {
-        name: Rc<str>,
-        arity: usize,
-        chunk_index: usize,
-    },
-    Closure {
-        function_index: usize,
-        arity: usize,
-        upvalues: Vec<usize>,
-    },
-    Class {
-        name: Rc<str>,
-        methods: Rc<Vec<(String, usize)>>,
-        superclass: Option<String>,
-        properties: Rc<Vec<(String, Value)>>,
-    },
+    Function(Rc<FunctionObj>),
+    Closure(Rc<ClosureObj>),
+    Class(Rc<ClassObj>),
     Instance {
         class_index: usize,
         fields: Rc<RefCell<Vec<(String, Value)>>>,
@@ -237,44 +250,9 @@ impl PartialEq for Value {
             (Value::Array(a), Value::Array(b)) => *a.borrow() == *b.borrow(),
             (Value::Map(a), Value::Map(b)) => *a.borrow() == *b.borrow(),
             (Value::Tuple(a), Value::Tuple(b)) => *a.borrow() == *b.borrow(),
-            (
-                Value::Function {
-                    name: n1,
-                    arity: a1,
-                    chunk_index: c1,
-                },
-                Value::Function {
-                    name: n2,
-                    arity: a2,
-                    chunk_index: c2,
-                },
-            ) => n1 == n2 && a1 == a2 && c1 == c2,
-            (
-                Value::Closure {
-                    function_index: f1,
-                    arity: a1,
-                    upvalues: u1,
-                },
-                Value::Closure {
-                    function_index: f2,
-                    arity: a2,
-                    upvalues: u2,
-                },
-            ) => f1 == f2 && a1 == a2 && u1 == u2,
-            (
-                Value::Class {
-                    name: n1,
-                    methods: m1,
-                    superclass: s1,
-                    properties: p1,
-                },
-                Value::Class {
-                    name: n2,
-                    methods: m2,
-                    superclass: s2,
-                    properties: p2,
-                },
-            ) => n1 == n2 && m1 == m2 && s1 == s2 && p1 == p2,
+            (Value::Function(a), Value::Function(b)) => a == b,
+            (Value::Closure(a), Value::Closure(b)) => a == b,
+            (Value::Class(a), Value::Class(b)) => a == b,
             (
                 Value::Instance {
                     class_index: c1,

@@ -94,9 +94,9 @@ pub fn value_to_string(v: &Value) -> String {
             let items: Vec<String> = t.borrow().iter().map(value_to_string).collect();
             format!("({})", items.join(", "))
         }
-        Value::Function { name, .. } => format!("<fn {}>", name),
-        Value::Closure { function_index, .. } => format!("<closure {}>", function_index),
-        Value::Class { name, .. } => format!("<class {}>", name),
+        Value::Function(f) => format!("<fn {}>", f.name),
+        Value::Closure(c) => format!("<closure {}>", c.function_index),
+        Value::Class(cls) => format!("<class {}>", cls.name),
         Value::Instance { class_index, .. } => format!("<instance {}>", class_index),
         Value::Ok(v) => format!("Ok({})", value_to_string(v)),
         Value::Err(v) => format!("Err({})", value_to_string(v)),
