@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::rc::Rc;
 use mailang_ast::*;
 use mailang_bytecode::*;
@@ -523,8 +523,8 @@ impl Compiler {
                 } else if let Some(upvalue) = self.resolve_upvalue(name) {
                     self.emit(Opcode::LoadUpvalue, Some(upvalue), 0);
                 } else {
-                    let index = self.add_constant(Value::Str(name.clone().into()))?;
-                    self.emit(Opcode::LoadGlobal, Some(index), 0);
+                    let slot = self.bytecode.intern_global(name);
+                    self.emit(Opcode::LoadGlobal, Some(slot), 0);
                 }
             }
             Expr::BinaryOp { op, left, right } => {
@@ -812,8 +812,8 @@ impl Compiler {
                 } else if let Some(upvalue) = self.resolve_upvalue(name) {
                     self.emit(Opcode::StoreUpvalue, Some(upvalue), 0);
                 } else {
-                    let index = self.add_constant(Value::Str(name.clone().into()))?;
-                    self.emit(Opcode::StoreGlobal, Some(index), 0);
+                    let slot = self.bytecode.intern_global(name);
+                    self.emit(Opcode::StoreGlobal, Some(slot), 0);
                 }
             }
             Expr::PropertyAccess { object, property } => {
@@ -827,8 +827,8 @@ impl Compiler {
                         if let Some(local) = self.resolve_local(name) {
                             self.emit(Opcode::StoreLocal, Some(local), 0);
                         } else {
-                            let index = self.add_constant(Value::Str(name.clone().into()))?;
-                            self.emit(Opcode::StoreGlobal, Some(index), 0);
+                            let slot = self.bytecode.intern_global(name);
+                            self.emit(Opcode::StoreGlobal, Some(slot), 0);
                         }
                     }
                     _ => {
@@ -979,8 +979,8 @@ impl Compiler {
                 captured: false,
             });
         } else {
-            let index = self.add_constant(Value::Str(name.to_string().into()))?;
-            self.emit(Opcode::StoreGlobal, Some(index), 0);
+            let slot = self.bytecode.intern_global(name);
+            self.emit(Opcode::StoreGlobal, Some(slot), 0);
         }
         Ok(())
     }

@@ -243,6 +243,8 @@ impl Chunk {
 pub struct Bytecode {
     pub chunks: Vec<Chunk>,
     pub main_chunk: usize,
+    /// Global variable names indexed by slot ID. Used for LoadGlobal/StoreGlobal.
+    pub global_names: Vec<String>,
 }
 
 impl Bytecode {
@@ -251,7 +253,18 @@ impl Bytecode {
         Self {
             chunks: vec![main_chunk],
             main_chunk: 0,
+            global_names: Vec::new(),
         }
+    }
+
+    /// Register a global name and return its slot index.
+    pub fn intern_global(&mut self, name: &str) -> u32 {
+        if let Some(pos) = self.global_names.iter().position(|n| n == name) {
+            return pos as u32;
+        }
+        let idx = self.global_names.len() as u32;
+        self.global_names.push(name.to_string());
+        idx
     }
 }
 

@@ -130,20 +130,18 @@ impl Vm {
                     self.stack[base + index] = value;
                 }
                 Opcode::LoadGlobal => {
-                    let index = operand.ok_or_else(|| VmError::Internal("LoadGlobal missing operand".to_string()))? as usize;
-                    let name = match &self.bytecode.chunks[self.chunk_index].constants[index] {
-                        Value::Str(s) => s.to_string(),
-                        _ => return Err(VmError::Internal("Expected string constant".to_string())),
-                    };
+                    let slot = operand.ok_or_else(|| VmError::Internal("LoadGlobal missing operand".to_string()))? as usize;
+                    let name = self.bytecode.global_names.get(slot)
+                        .ok_or_else(|| VmError::Internal(format!("Invalid global slot {}", slot)))?
+                        .clone();
                     let value = self.globals.get(&name).cloned().unwrap_or(Value::Null);
                     self.push(value)?;
                 }
                 Opcode::StoreGlobal => {
-                    let index = operand.ok_or_else(|| VmError::Internal("StoreGlobal missing operand".to_string()))? as usize;
-                    let name = match &self.bytecode.chunks[self.chunk_index].constants[index] {
-                        Value::Str(s) => s.to_string(),
-                        _ => return Err(VmError::Internal("Expected string constant".to_string())),
-                    };
+                    let slot = operand.ok_or_else(|| VmError::Internal("StoreGlobal missing operand".to_string()))? as usize;
+                    let name = self.bytecode.global_names.get(slot)
+                        .ok_or_else(|| VmError::Internal(format!("Invalid global slot {}", slot)))?
+                        .clone();
                     let value = self.pop()?;
                     self.globals.insert(name, value);
                 }
