@@ -13,7 +13,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -28,7 +28,7 @@ jobs:
     # Requires repository secret CARGO_REGISTRY_TOKEN; GitHub Release still succeeds if unset.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Check crates.io token
         id: token
