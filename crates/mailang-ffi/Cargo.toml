@@ -9,7 +9,7 @@ description = "C FFI for MaìLang"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-mailang-core = { path = "../mailang-core", version = "0.2.5" }
-mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.5" }
-mailang-stdlib = { path = "../mailang-stdlib", version = "0.2.5" }
+mailang-core = { path = "../mailang-core", version = "0.2.6" }
+mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.6" }
+mailang-stdlib = { path = "../mailang-stdlib", version = "0.2.6" }
 libc = "0.2"

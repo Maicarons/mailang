@@ -4,6 +4,11 @@ All notable changes to MaìLang will be documented in this file.
 
 Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 
+## [0.2.6] - 2026-09-12
+
+### Fixed
+- Publish script: include mailang-module, skip already-published, retry on 429 rate limit
+
 ## [0.2.5] - 2026-09-12
 
 ### Fixed

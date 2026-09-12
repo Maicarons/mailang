@@ -118,42 +118,51 @@ jobs:
       - name: Login to crates.io
         if: steps.token.outputs.present == 'true'
         run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - name: Publish mailang-ast
+      - name: Publish to crates.io
         if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-ast --allow-dirty
-      - name: Publish mailang-bytecode
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-bytecode --allow-dirty
-      - name: Publish mailang-lexer
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-lexer --allow-dirty
-      - name: Publish mailang-stdlib
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-stdlib --allow-dirty
-      - name: Publish mailang-gc
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-gc --allow-dirty
-      - name: Publish mailang-parser
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-parser --allow-dirty
-      - name: Publish mailang-analyzer
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-analyzer --allow-dirty
-      - name: Publish mailang-compiler
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-compiler --allow-dirty
-      - name: Publish mailang-vm
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-vm --allow-dirty
-      - name: Publish mailang-core
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-core --allow-dirty
-      - name: Publish mailang-lsp
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-lsp --allow-dirty
-      - name: Publish mailang-macros
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-macros --allow-dirty
-      - name: Publish mailang-cli
-        if: steps.token.outputs.present == 'true'
-        run: cargo publish -p mailang-cli --allow-dirty
+        run: |
+          set -e
+          crates=(
+            mailang-ast
+            mailang-bytecode
+            mailang-lexer
+            mailang-stdlib
+            mailang-gc
+            mailang-parser
+            mailang-analyzer
+            mailang-compiler
+            mailang-vm
+            mailang-module
+            mailang-core
+            mailang-lsp
+            mailang-macros
+            mailang-cli
+          )
+          for c in "${crates[@]}"; do
+            echo "::group::Publish $c"
+            for attempt in 1 2 3 4; do
+              set +e
+              out=$(cargo publish -p "$c" --allow-dirty 2>&1)
+              code=$?
+              set -e
+              echo "$out"
+              if [ $code -eq 0 ]; then
+                echo "Published $c"
+                break
+              fi
+              if echo "$out" | grep -qiE 'already exists|is already uploaded'; then
+                echo "Skip $c (already on crates.io)"
+                break
+              fi
+              if echo "$out" | grep -q '429'; then
+                echo "Rate limited on $c, sleeping 300s (attempt $attempt)"
+                sleep 300
+                continue
+              fi
+              echo "Failed to publish $c"
+              exit 1
+            done
+            echo "::endgroup::"
+            sleep 20
+          done
+

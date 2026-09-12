@@ -6,15 +6,15 @@ license.workspace = true
 description = "Core library integrating all MaìLang components"
 
 [dependencies]
-mailang-lexer = { path = "../mailang-lexer", version = "0.2.5" }
-mailang-parser = { path = "../mailang-parser", version = "0.2.5" }
-mailang-ast = { path = "../mailang-ast", version = "0.2.5" }
-mailang-compiler = { path = "../mailang-compiler", version = "0.2.5" }
-mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.5" }
-mailang-vm = { path = "../mailang-vm", version = "0.2.5" }
-mailang-stdlib = { path = "../mailang-stdlib", version = "0.2.5" }
-mailang-module = { path = "../mailang-module", version = "0.2.5" }
-mailang-analyzer = { path = "../mailang-analyzer", version = "0.2.5" }
+mailang-lexer = { path = "../mailang-lexer", version = "0.2.6" }
+mailang-parser = { path = "../mailang-parser", version = "0.2.6" }
+mailang-ast = { path = "../mailang-ast", version = "0.2.6" }
+mailang-compiler = { path = "../mailang-compiler", version = "0.2.6" }
+mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.6" }
+mailang-vm = { path = "../mailang-vm", version = "0.2.6" }
+mailang-stdlib = { path = "../mailang-stdlib", version = "0.2.6" }
+mailang-module = { path = "../mailang-module", version = "0.2.6" }
+mailang-analyzer = { path = "../mailang-analyzer", version = "0.2.6" }
 
 [features]
 default = ["std", "gc"]

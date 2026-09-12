@@ -6,7 +6,7 @@ license.workspace = true
 description = "Lexer for MaìLang"
 
 [dependencies]
-mailang-ast = { path = "../mailang-ast", version = "0.2.5" }
+mailang-ast = { path = "../mailang-ast", version = "0.2.6" }
 unicode-xid = { workspace = true }
 thiserror = { workspace = true }
 
