@@ -513,6 +513,7 @@ dependencies = [
 name = "mailang-gc"
 version = "0.1.0"
 dependencies = [
+ "mailang-bytecode",
  "serde",
 ]
 

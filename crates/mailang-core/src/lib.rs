@@ -85,6 +85,11 @@ impl MailangInterpreter {
         self.vm.set_global(name, value);
     }
 
+    /// Break Rc cycles reachable from the VM stack and globals.
+    pub fn collect_cycles(&mut self) -> usize {
+        self.vm.collect_cycles()
+    }
+
     /// Run semantic analysis. Returns hard errors (unused-variable hints are ignored).
     pub fn check(&self, code: &str) -> Result<(), Vec<String>> {
         let mut parser = Parser::new(code).map_err(|e| vec![e.to_string()])?;

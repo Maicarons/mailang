@@ -42,8 +42,8 @@
 | 问题 | 严重度 | 说明 |
 |------|--------|------|
 | Fibonacci(30) 性能 | P1 | **已完成 ~4.25x 基线（~137 ms）** |
-| GC 是空壳 | P2 | Value 已用 Rc；循环检测 / 标记清除仍未接入 VM |
-| LSP 诊断位置 | P2 | 能从解析错误消息提取 line/col；Analyzer 错误尚无 span |
+| GC 环收集 | P2 | **已完成**（`collect_cycles` 断 Rc 回边） |
+| LSP 诊断位置 | P2 | **已完成**（解析错误 line/col + Analyzer span） |
 
 已关闭：Analyzer 已接入 eval；LSP 已有诊断/补全/跳转（不再是仅 initialize 的桩）。
 
@@ -293,10 +293,11 @@ Week 13:    发布 v0.2.0
 | F3 | `Instruction` 改为 `Copy` + `line: u32` | **完成** |
 | F4 | `CallDirect`（含无占位槽） | **完成** |
 | F5 | release `panic = "abort"` | **完成** |
-| F6 | GC：循环检测 | 未做 |
-| F7 | Analyzer span → LSP 精确诊断 | 未做 |
+| F6 | GC：Rc 图循环检测与断环 | **完成** |
+| F7 | Analyzer span + LSP 精确诊断 | **完成** |
 
 **验收**：`bench_fib30.mai` release 平均 ≤ 195 ms。**当前 ~137 ms（~4.25x 基线）— 已达标。**
+**Phase F 全部关闭。**
 
 ---
 

@@ -85,23 +85,45 @@ fn collect_diagnostics(source: &str) -> Vec<Diagnostic> {
 
     let mut analyzer = Analyzer::new();
     match analyzer.analyze(&program) {
-        Ok(()) => analyzer
-            .diagnostics()
+        Ok(()) => {
+            let unused: Vec<_> = analyzer
+                .diagnostics()
+                .into_iter()
+                .filter(|e| matches!(e, mailang_analyzer::AnalyzerError::UnusedVariable(_)))
+                .collect();
+            mailang_analyzer::diagnose(source, &unused)
+                .into_iter()
+                .map(|d| {
+                    let sev = match d.severity {
+                        mailang_analyzer::Severity::Error => DiagnosticSeverity::ERROR,
+                        mailang_analyzer::Severity::Warning => DiagnosticSeverity::WARNING,
+                        mailang_analyzer::Severity::Information => DiagnosticSeverity::INFORMATION,
+                    };
+                    Diagnostic {
+                        range: Range::new(
+                            Position::new(d.line, d.col),
+                            Position::new(d.line, d.col + 1),
+                        ),
+                        severity: Some(sev),
+                        message: d.message,
+                        source: Some("mailang".into()),
+                        ..Default::default()
+                    }
+                })
+                .collect()
+        }
+        Err(errs) => mailang_analyzer::diagnose(source, &errs)
             .into_iter()
-            .filter_map(|e| match e {
-                mailang_analyzer::AnalyzerError::UnusedVariable(name) => Some(diag_at(
-                    &format!("unused variable '{}'", name),
-                    DiagnosticSeverity::INFORMATION,
-                )),
-                other => Some(diag_at(
-                    &other.to_string(),
-                    DiagnosticSeverity::WARNING,
-                )),
+            .map(|d| Diagnostic {
+                range: Range::new(
+                    Position::new(d.line, d.col),
+                    Position::new(d.line, d.col + 1),
+                ),
+                severity: Some(DiagnosticSeverity::ERROR),
+                message: d.message,
+                source: Some("mailang".into()),
+                ..Default::default()
             })
-            .collect(),
-        Err(errs) => errs
-            .into_iter()
-            .map(|e| diag_at(&e.to_string(), DiagnosticSeverity::ERROR))
             .collect(),
     }
 }

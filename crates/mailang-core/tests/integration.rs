@@ -498,3 +498,57 @@ fn test_module_linked_eval() {
     let src = "import \"./utils\"\nutils.add(20, 22)";
     assert_eq!(interp.eval(src).unwrap(), "42");
 }
+
+// ===== Phase F: cycle GC =====
+
+#[test]
+fn test_gc_breaks_instance_cycle() {
+    // Instance field pointing at itself — classic Rc leak.
+    let src = r#"
+class Node {
+    let next
+    fn init() { this.next = null }
+}
+let a = Node()
+a.next = a
+a.next
+"#;
+    let mut interp = MailangInterpreter::new();
+    assert_eq!(interp.eval(src).unwrap(), "<instance 1>");
+    let broken = interp.collect_cycles();
+    assert!(broken >= 1, "expected to break self-cycle, got {}", broken);
+}
+
+#[test]
+fn test_gc_breaks_array_cycle() {
+    let mut interp = MailangInterpreter::new();
+    let out = interp
+        .eval(r#"
+class Box {
+    let items
+    fn init() { this.items = [] }
+}
+let b = Box()
+b.items = [b]
+1
+"#)
+        .unwrap();
+    assert_eq!(out, "1");
+    let broken = interp.collect_cycles();
+    assert!(broken >= 1, "expected cycle break, got {}", broken);
+}
+
+// ===== Phase F: analyzer span =====
+
+#[test]
+fn test_analyzer_diagnostic_position() {
+    let src = "let x = 1\nnot_defined_xyz\n";
+    let mut parser = mailang_core::parser::Parser::new(src).unwrap();
+    let program = parser.parse_program().unwrap();
+    let mut analyzer = mailang_core::analyzer::Analyzer::new();
+    let errs = analyzer.analyze(&program).unwrap_err();
+    let diags = mailang_core::analyzer::diagnose(src, &errs);
+    assert!(!diags.is_empty());
+    assert_eq!(diags[0].line, 1);
+    assert_eq!(diags[0].col, 0);
+}

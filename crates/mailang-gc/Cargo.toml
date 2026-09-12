@@ -6,6 +6,7 @@ license.workspace = true
 description = "Garbage collector for MaìLang"
 
 [dependencies]
+mailang-bytecode = { path = "../mailang-bytecode" }
 serde = { workspace = true, optional = true }
 
 [features]

@@ -5,6 +5,9 @@ pub enum GcState {
     Black,
 }
 
+pub mod cycle;
+pub use cycle::{collect_cycles, collect_cycles_value};
+
 #[derive(Debug)]
 pub struct GcObject<T> {
     pub value: T,

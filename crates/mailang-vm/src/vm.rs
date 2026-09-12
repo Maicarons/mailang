@@ -141,6 +141,27 @@ impl Vm {
         self.globals[slot] = value;
     }
 
+    /// Break Rc cycles reachable from the operand stack and globals.
+    /// Returns the number of back-edges cut.
+    pub fn collect_cycles(&mut self) -> usize {
+        let mut roots: Vec<Value> = self.stack.clone();
+        roots.extend(self.globals.iter().cloned());
+        let broken = mailang_gc::collect_cycles(&mut roots);
+        if broken > 0 {
+            // Write mutated values back.
+            let n_stack = self.stack.len();
+            for (i, v) in roots.iter().take(n_stack).enumerate() {
+                self.stack[i] = v.clone();
+            }
+            for (i, v) in roots.iter().skip(n_stack).enumerate() {
+                if i < self.globals.len() {
+                    self.globals[i] = v.clone();
+                }
+            }
+        }
+        broken
+    }
+
     pub fn run(&mut self) -> Result<Value, VmError> {
         loop {
             let instructions = &self.bytecode.chunks[self.chunk_index].instructions;
