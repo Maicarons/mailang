@@ -14,7 +14,7 @@ tokio = { version = "1", features = ["full"] }
 tower-lsp = "0.20"
 serde_json = "1.0"
 serde = { workspace = true }
-dashmap = "5"
+dashmap = "6"
 
 [features]
 default = []
