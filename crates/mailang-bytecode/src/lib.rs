@@ -14,7 +14,9 @@ use core::cell::RefCell;
 use serde::{Deserialize, Serialize};
 
 pub mod format;
+pub mod register;
 pub use format::{decode, encode, BytecodeFormatError, FORMAT_MAGIC, FORMAT_VERSION};
+pub use register::{RegChunk, RegOp, StackToRegister};
 
 /// Opcode is `Copy` and serialized as a single byte in the binary format.
 /// Keep variants in a stable order; append-only.
@@ -127,6 +129,8 @@ pub enum Opcode {
     /// Direct call to a known chunk. operand = (chunk_index << 16) | arity.
     /// Stack: [func_slot_placeholder, args...]
     CallDirect,
+    /// Push the number of arguments actually passed to the current frame.
+    Argc,
 }
 
 impl Opcode {
@@ -208,6 +212,7 @@ impl Opcode {
             68 => Opcode::Nop,
             69 => Opcode::Halt,
             70 => Opcode::CallDirect,
+            71 => Opcode::Argc,
             _ => return None,
         })
     }
@@ -221,7 +226,10 @@ impl Opcode {
 )]
 pub struct FunctionObj {
     pub name: Rc<str>,
+    /// Maximum number of parameters (all params, including those with defaults).
     pub arity: usize,
+    /// Parameters that must be supplied (those without defaults).
+    pub required: usize,
     pub chunk_index: usize,
 }
 
@@ -233,6 +241,7 @@ pub struct FunctionObj {
 pub struct ClosureObj {
     pub function_index: usize,
     pub arity: usize,
+    pub required: usize,
     pub upvalues: Vec<usize>,
 }
 

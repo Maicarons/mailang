@@ -1,4 +1,4 @@
-﻿# 类型系统
+# 类型系统
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [AST 源码](https://github.com/Maicarons/mailang/blob/master/crates/mailang-ast/src/lib.rs)
 
@@ -116,7 +116,10 @@ arr.len         // 长度
 arr.push(x)     // 添加
 arr.pop()       // 删除末尾
 arr.insert(i, x)// 插入
-arr.remove(i)   // 删除指定位置
+arr.contains(x) // 是否包含
+arr.join(sep)   // 连接为字符串
+arr.reverse()   // 反转
+arr.clear()     // 清空
 ```
 
 ### 字典 `&lbrace;K: V&rbrace;`
@@ -135,10 +138,11 @@ let empty: {str: int} = {}
 ```
 map["key"]      // 访问
 map["key"] = v  // 设置
-map.has_key(k)  // 检查键
+map.has(k)      // 检查键
 map.remove(k)   // 删除
 map.keys()      // 所有键
 map.values()    // 所有值
+map.clear()     // 清空
 ```
 
 ### 元组 `(T1, T2, ...)`
@@ -159,7 +163,7 @@ let first = point[0] // 索引
 
 ### Result&lt;T, E&gt;
 
-用于错误处理的类型。
+用于错误处理的类型。泛型参数仅为标注（annotation-only），不做单态化或真正的泛型检查。
 
 ```
 fn divide(a: float, b: float) -> Result<float, str> {
@@ -169,7 +173,8 @@ fn divide(a: float, b: float) -> Result<float, str> {
     return Ok(a / b)
 }
 
-let result = divide(10.0, 3.0) match {
+// 后缀写法 `expr match { ... }` 尚未实现（开发中）
+let result = match divide(10.0, 3.0) {
     Ok(v) => v,
     Err(e) => 0.0
 }
@@ -177,7 +182,7 @@ let result = divide(10.0, 3.0) match {
 
 ### Option&lt;T&gt;
 
-用于表示可选值的类型。
+用于表示可选值的类型。泛型参数仅为标注（annotation-only），不做单态化。
 
 ```
 fn find(arr: [int], target: int) -> Option<int> {
@@ -189,9 +194,9 @@ fn find(arr: [int], target: int) -> Option<int> {
     return None
 }
 
-let value = find([1, 2, 3], 2) match {
+let value = match find([1, 2, 3], 2) {
     Some(v) => v,
-    None => -1
+    None => 0
 }
 ```
 
@@ -232,14 +237,14 @@ value = [1, 2, 3]
 
 ## 类型检查
 
+当前没有 `is_int` / `is_float` / `is_str` 等类型判定内置函数。可用做法：
+
 ```
-is_int(42)        // true
-is_float(3.14)    // true
-is_str("hello")   // true
-is_bool(true)     // true
-is_null(null)     // true
-is_array([1, 2])  // true
-is_map({"a": 1})  // true
+// Result / Option 模式匹配
+match value {
+    Ok(v) => ...,
+    Err(e) => ...
+}
 ```
 
 ## 下一步

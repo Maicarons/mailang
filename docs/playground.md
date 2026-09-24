@@ -44,7 +44,7 @@ println("name = {name}")`,
   '函数': `fn add(a, b) {
     return a + b
 }
-fn greet(name = "World") {
+fn greet(name: str) {
     return "Hello, {name}!"
 }
 println(add(1, 2))

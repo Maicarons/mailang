@@ -1,0 +1,16 @@
+// mqtt — MQTT publish STUB
+// Version: 0.1.0
+//
+// Honest note: no sockets, no MQTT handshake, no broker ACK.
+// The host must supply transport (e.g. mqtt_publish via
+// mailang_register_host_fn) for real delivery.
+
+// Stub publish: pretends success. Does not perform network I/O.
+fn publish(topic, payload) {
+    // Real host binding would call a registered transport here.
+    // For now we only validate arguments lightly and return Ok("sim").
+    if topic == null || payload == null {
+        return Err("mqtt.publish: topic and payload required")
+    }
+    return Ok("sim")
+}

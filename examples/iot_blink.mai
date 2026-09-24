@@ -1,0 +1,21 @@
+// IoT blink demo — host must supply real gpio_write / delay_ms
+// (SimulatedHal only advances a fake clock on desktop).
+// ESP32 end-to-end host: docs/guide/esp32-blink.md
+
+let led = 2
+var count = 0
+
+println("iot_blink: LED pin {led}")
+
+while count < 5 {
+    gpio_write(led, true)
+    println("ON  #{count}")
+    delay_ms(500)
+    gpio_write(led, false)
+    println("OFF #{count}")
+    delay_ms(500)
+    count = count + 1
+}
+
+gpio_write(led, false)
+println("iot_blink: done after {count} cycles")

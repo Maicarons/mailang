@@ -30,6 +30,13 @@ pub enum AnalyzerError {
         found: usize,
     },
 
+    #[error("Wrong number of type arguments for '{name}': expected {expected}, found {found}")]
+    WrongTypeArgumentCount {
+        name: String,
+        expected: usize,
+        found: usize,
+    },
+
     #[error("Method '{method}' not found on type '{type_name}'")]
     MethodNotFound { method: String, type_name: String },
 
@@ -65,4 +72,14 @@ pub enum AnalyzerError {
 
     #[error("Duplicate definition of '{0}'")]
     DuplicateDefinition(String),
+
+    #[error(
+        "Non-exhaustive match: no wildcard `_` / catch-all arm and patterns do not cover all cases"
+    )]
+    NonExhaustiveMatch,
+
+    #[error(
+        "Function '{0}' declares a non-null return type but falls off the end without a return"
+    )]
+    MissingReturn(String),
 }

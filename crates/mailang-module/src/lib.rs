@@ -5,6 +5,26 @@ use mailang_parser::Parser;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+pub mod deps;
+pub mod registry;
+pub use deps::{
+    content_hash, content_hash_file, dependency_map, ensure_lock, find_offline_package,
+    find_project_root, format_lockfile, global_pkg_dir, home_dir, load_manifest,
+    lock_entries_from_resolved, lock_path_string, parse_add_spec, parse_lockfile, parse_manifest,
+    parse_semver_lite, plan_add, read_lockfile, resolve_dependencies, resolve_dependencies_locked,
+    resolve_dependencies_raw, semver_lite_cmp, semver_lite_eq, upsert_dependency, vendor_dir,
+    verify_lock, write_lockfile, AddPlan, AddSpec, DepSource, Dependency, EntryLockStatus,
+    LockEntry, LockEntryStatus, LockOutcome, LockReport, ProjectManifest, ResolvedDependency,
+    SemverLite,
+};
+pub use registry::{
+    format_index, format_index_line, index_file_path, index_rel, install, load_publish_meta,
+    mpkg_path, name_prefix, pack_mpkg, parse_index, parse_pkg_spec, pkg_dir_path, publish,
+    read_index, registry_init, resolve_version, search, set_yanked, unpack_mpkg,
+    upsert_index_entry, write_index, IndexEntry, InstallResult, PublishMeta, PublishResult,
+    RegistryError, RegistrySource,
+};
+
 /// Module information from mailib.ini
 #[derive(Debug, Clone, Default)]
 pub struct ModuleInfo {
@@ -81,6 +101,10 @@ pub struct FileModuleLoader {
     base_dir: PathBuf,
     /// Library directory (e.g., next to CLI executable)
     lib_dir: Option<PathBuf>,
+    /// Project root containing `mailang.toml` (if discovered)
+    project_root: Option<PathBuf>,
+    /// Explicit named deps from `mailang.toml` `[dependencies]`
+    deps: HashMap<String, PathBuf>,
     /// Loaded modules cache
     modules: HashMap<String, CompiledModule>,
     /// Built-in modules
@@ -90,12 +114,34 @@ pub struct FileModuleLoader {
 impl FileModuleLoader {
     /// Create a new file module loader
     pub fn new(base_dir: impl AsRef<Path>) -> Self {
-        Self {
+        let mut loader = Self {
             base_dir: base_dir.as_ref().to_path_buf(),
             lib_dir: None,
+            project_root: None,
+            deps: HashMap::new(),
             modules: HashMap::new(),
             builtins: HashMap::new(),
+        };
+        loader.load_project_deps();
+        loader
+    }
+
+    /// Discover `mailang.toml` (from `base_dir` upward) and load `[dependencies]`.
+    pub fn load_project_deps(&mut self) {
+        if let Some(root) = deps::find_project_root(&self.base_dir) {
+            self.deps = deps::dependency_map(&root);
+            self.project_root = Some(root);
         }
+    }
+
+    /// Project root that provided `mailang.toml`, if any.
+    pub fn project_root(&self) -> Option<&Path> {
+        self.project_root.as_deref()
+    }
+
+    /// Explicit dependencies from `mailang.toml`.
+    pub fn dependencies(&self) -> &HashMap<String, PathBuf> {
+        &self.deps
     }
 
     /// Set the library directory (for named imports like `import "sys"`)
@@ -162,6 +208,7 @@ impl FileModuleLoader {
         }
 
         // Mode 3: Named module (e.g., "sys", "time")
+        // Resolution order: (1) mailang.toml deps, (2) local libs/, (3) CWD/libs.
         self.resolve_named(path)
     }
 
@@ -213,8 +260,36 @@ impl FileModuleLoader {
     }
 
     /// Resolve a named module (e.g., "sys" -> libs/sys/lib.mai)
+    ///
+    /// Search order:
+    /// 1. Explicit `[dependencies]` entries from `mailang.toml`
+    /// 2. `lib_dir` / `base_dir/libs` / `CWD/libs`
     fn resolve_named(&self, name: &str) -> Option<PathBuf> {
-        // Try lib_dir first (e.g., next to CLI executable)
+        // 1. Explicit dependency from mailang.toml
+        if let Some(dep) = self.deps.get(name) {
+            if dep.is_file() {
+                return Some(dep.clone());
+            }
+            if let Some(parent) = dep.parent() {
+                if parent.is_dir() {
+                    let info = Self::parse_module_info(parent);
+                    let lib_path = parent.join(&info.entry);
+                    if lib_path.exists() {
+                        return Some(lib_path);
+                    }
+                }
+            }
+            // dep may be a directory path stored as resolved entry file already
+            if dep.is_dir() {
+                let info = Self::parse_module_info(dep);
+                let lib_path = dep.join(&info.entry);
+                if lib_path.exists() {
+                    return Some(lib_path);
+                }
+            }
+        }
+
+        // 2. Try lib_dir first (e.g., next to CLI executable)
         if let Some(ref lib_dir) = self.lib_dir {
             let module_dir = lib_dir.join(name);
 
@@ -234,7 +309,7 @@ impl FileModuleLoader {
             }
         }
 
-        // Try base_dir/libs
+        // 3. Try base_dir/libs
         let module_dir = self.base_dir.join("libs").join(name);
         if module_dir.is_dir() {
             let info = Self::parse_module_info(&module_dir);
@@ -244,7 +319,7 @@ impl FileModuleLoader {
             }
         }
 
-        // Try CWD/libs
+        // 4. Try CWD/libs
         if let Ok(cwd) = std::env::current_dir() {
             let module_dir = cwd.join("libs").join(name);
             if module_dir.is_dir() {
@@ -347,7 +422,7 @@ impl ModuleLoader for FileModuleLoader {
 /// Create a pre-configured module loader with default settings
 pub fn create_loader(base_dir: impl AsRef<Path>) -> FileModuleLoader {
     let base = base_dir.as_ref().to_path_buf();
-    let mut loader = FileModuleLoader::new(&base);
+    let mut loader = FileModuleLoader::new(&base); // loads mailang.toml deps
 
     // Try to find lib directory next to the executable
     if let Ok(exe_path) = std::env::current_exe() {

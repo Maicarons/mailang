@@ -92,9 +92,9 @@ Primary = Literal | Identifier | "(" Expression ")" | Array | Map | Lambda
 | 13 | `**` | Right |
 | 14 | `-` `!` `~` | Right |
 
-## Error Recovery
+## Error Recovery (not implemented)
 
-Parser attempts recovery by skipping to sync points (newlines, semicolons, braces).
+The parser currently fails on the first parse error and returns `ParseError`. There is **no** token-sync recovery (`recover_from_error` is not implemented).
 
 ## Next Steps
 

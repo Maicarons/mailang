@@ -1,4 +1,4 @@
-﻿# 编译原理
+# 编译原理
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [编译器源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-compiler) · [VM 源码](https://github.com/Maicarons/mailang/tree/master/crates/mailang-vm)
 
@@ -326,9 +326,9 @@ Chunk "add":
 
 ## 虚拟机 (VM)
 
-### 寄存器式 VM
+### 栈式 VM
 
-MaìLang 使用基于寄存器的虚拟机（实际上是基于栈的，但通过局部变量实现寄存器语义）：
+MaìLang 使用**栈式虚拟机 + slot 局部变量**（不是寄存器 VM）。操作数走栈，局部变量通过帧内 slot 索引访问：
 
 ```rust
 pub struct Vm {

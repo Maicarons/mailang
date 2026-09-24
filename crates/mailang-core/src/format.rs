@@ -45,12 +45,17 @@ fn format_stmt(stmt: &Stmt, level: usize, out: &mut String) {
             mutable,
             type_annotation,
             value,
+            pattern,
         } => {
             out.push_str(if *mutable { "var " } else { "let " });
-            out.push_str(name);
-            if let Some(t) = type_annotation {
-                out.push_str(": ");
-                out.push_str(&type_str(t));
+            if let Some(p) = pattern {
+                format_pattern(p, out);
+            } else {
+                out.push_str(name);
+                if let Some(t) = type_annotation {
+                    out.push_str(": ");
+                    out.push_str(&type_str(t));
+                }
             }
             if let Some(v) = value {
                 out.push_str(" = ");
@@ -75,12 +80,18 @@ fn format_stmt(stmt: &Stmt, level: usize, out: &mut String) {
         }
         Stmt::FunctionDef {
             name,
+            type_params,
             params,
             return_type,
             body,
         } => {
             out.push_str("fn ");
             out.push_str(name);
+            if !type_params.is_empty() {
+                out.push('<');
+                out.push_str(&type_params.join(", "));
+                out.push('>');
+            }
             out.push('(');
             out.push_str(&params_str(params));
             out.push(')');
@@ -93,12 +104,18 @@ fn format_stmt(stmt: &Stmt, level: usize, out: &mut String) {
         }
         Stmt::ClassDef {
             name,
+            type_params,
             superclass,
             traits,
             members,
         } => {
             out.push_str("class ");
             out.push_str(name);
+            if !type_params.is_empty() {
+                out.push('<');
+                out.push_str(&type_params.join(", "));
+                out.push('>');
+            }
             if let Some(s) = superclass {
                 out.push_str(" extends ");
                 out.push_str(s);
@@ -114,9 +131,17 @@ fn format_stmt(stmt: &Stmt, level: usize, out: &mut String) {
             indent(level, out);
             out.push_str("}\n");
         }
-        Stmt::TraitDef { name, methods } => {
+        Stmt::TraitDef {
+            name,
+            supertraits,
+            methods,
+        } => {
             out.push_str("trait ");
             out.push_str(name);
+            if !supertraits.is_empty() {
+                out.push_str(" extends ");
+                out.push_str(&supertraits.join(", "));
+            }
             out.push_str(" {\n");
             for m in methods {
                 match m {
@@ -311,6 +336,10 @@ fn params_str(params: &[Param]) -> String {
                 s.push_str(": ");
                 s.push_str(&type_str(t));
             }
+            if let Some(d) = &p.default {
+                s.push_str(" = ");
+                format_expr(d, &mut s);
+            }
             s
         })
         .collect::<Vec<_>>()
@@ -333,6 +362,12 @@ fn type_str(t: &TypeAnnotation) -> String {
         TypeAnnotation::Result(a, b) => format!("Result<{}, {}>", type_str(a), type_str(b)),
         TypeAnnotation::Option(inner) => format!("Option<{}>", type_str(inner)),
         TypeAnnotation::Custom(name) => name.clone(),
+        TypeAnnotation::Param(name) => name.clone(),
+        TypeAnnotation::Apply(name, args) => format!(
+            "{}<{}>",
+            name,
+            args.iter().map(type_str).collect::<Vec<_>>().join(", ")
+        ),
         TypeAnnotation::Infer => "null".into(),
     }
 }
@@ -356,8 +391,23 @@ fn format_expr(expr: &Expr, out: &mut String) {
             });
             format_expr(operand, out);
         }
-        Expr::Call { callee, args } => {
+        Expr::Call {
+            callee,
+            args,
+            type_args,
+        } => {
             format_expr(callee, out);
+            if !type_args.is_empty() {
+                out.push_str("::<");
+                out.push_str(
+                    &type_args
+                        .iter()
+                        .map(type_str)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
+                out.push('>');
+            }
             out.push('(');
             for (i, a) in args.iter().enumerate() {
                 if i > 0 {
@@ -469,14 +519,13 @@ fn format_expr(expr: &Expr, out: &mut String) {
             out.push_str(&params_str(params));
             out.push(')');
             match body.as_ref() {
-                // expression body (via Block with single Expression)
-                Expr::Block(stmts) if stmts.len() == 1 => {
-                    if let Stmt::Expression(e) = &stmts[0] {
-                        out.push_str(" -> ");
-                        format_expr(e, out);
-                    } else {
-                        out.push_str(" { ... }");
+                // Block body must stay a block (`fn(x) { ... }`); `->` only accepts expressions.
+                Expr::Block(stmts) => {
+                    out.push_str(" {\n");
+                    for s in stmts {
+                        format_stmt(s, 1, out);
                     }
+                    out.push('}');
                 }
                 other => {
                     out.push_str(" -> ");
@@ -505,6 +554,7 @@ fn format_expr(expr: &Expr, out: &mut String) {
             format_expr(scrutinee, out);
             out.push_str(" {\n");
             for arm in arms {
+                // Keep arms at a stable indent so nested matches stay idempotent.
                 out.push_str(INDENT);
                 format_pattern(&arm.pattern, out);
                 if let Some(g) = &arm.guard {
@@ -554,7 +604,7 @@ fn format_pattern(p: &Pattern, out: &mut String) {
                 format_pattern(x, out);
             }
         }
-        Pattern::Tuple(ps) | Pattern::Array(ps) => {
+        Pattern::Tuple(ps) => {
             out.push('(');
             for (i, x) in ps.iter().enumerate() {
                 if i > 0 {
@@ -563,6 +613,16 @@ fn format_pattern(p: &Pattern, out: &mut String) {
                 format_pattern(x, out);
             }
             out.push(')');
+        }
+        Pattern::Array(ps) => {
+            out.push('[');
+            for (i, x) in ps.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                format_pattern(x, out);
+            }
+            out.push(']');
         }
         Pattern::Range(a, b, inclusive) => {
             format_expr(a, out);
@@ -652,5 +712,117 @@ mod tests {
         let out = format_source(src).unwrap();
         assert!(out.contains("class P {"));
         assert!(out.contains("    let x"));
+    }
+
+    #[test]
+    fn formats_let_destructure_and_trait_extends() {
+        let src = "let (a, b) = pair\nvar [x, y] = arr\ntrait T extends A, B { fn f() -> int }\n";
+        let out = format_source(src).unwrap();
+        assert!(out.contains("let (a, b) = pair"));
+        assert!(out.contains("var [x, y] = arr"));
+        assert!(out.contains("trait T extends A, B {"));
+    }
+
+    #[test]
+    fn formats_postfix_match() {
+        let src = "x match {\n1 => 2\n_ => 3\n}\n";
+        let out = format_source(src).unwrap();
+        assert!(out.contains("match x {"));
+        assert!(out.contains("1 => 2"));
+    }
+
+    fn assert_idempotent(src: &str) {
+        let once = format_source(src).expect("first format");
+        let twice = format_source(&once).expect("second format");
+        assert_eq!(
+            once, twice,
+            "format not idempotent\nsrc: {src:?}\nonce: {once:?}\ntwice: {twice:?}"
+        );
+    }
+
+    #[test]
+    fn format_is_idempotent_let() {
+        assert_idempotent("let x=1\nvar y : int = x+2\nconst z = 3\n");
+        assert_idempotent("let (a, b) = pair\nvar [x, y] = arr\n");
+    }
+
+    #[test]
+    fn format_is_idempotent_fn() {
+        assert_idempotent("fn add(a,b){return a+b}\nfn id(x){x}\nfn n(){\n}\n");
+        assert_idempotent("fn f(a: int = 1, b) -> int {\n  return a\n}\n");
+        assert_idempotent("let f = fn(a) {\n  return a\n}\n");
+        assert_idempotent("let g = fn(a) -> a + 1\n");
+    }
+
+    #[test]
+    fn format_is_idempotent_class() {
+        assert_idempotent("class P { let x\n fn init(x){ this.x=x }\n }\n");
+        assert_idempotent(
+            "class C extends B implements T {\n var n: int = 0\n override fn f() -> int {\n return n\n }\n}\n",
+        );
+    }
+
+    #[test]
+    fn format_is_idempotent_match() {
+        assert_idempotent("x match {\n1 => 2\n_ => 3\n}\n");
+        assert_idempotent("match x {\n1 => 2\n2 | 3 => 4\nOk(v) => v\n_ => 0\n}\n");
+        assert_idempotent("match n {\nk if k > 0 => 1\n1..=5 => 2\n_ => 3\n}\n");
+    }
+
+    #[test]
+    fn format_is_idempotent_try() {
+        assert_idempotent("let v = f()?\n");
+        assert_idempotent("fn g() {\n return Ok(1)?\n}\n");
+        assert_idempotent("let x = g()?.field\n");
+    }
+
+    #[test]
+    fn format_is_idempotent_trait_and_mixed() {
+        assert_idempotent("trait T extends A, B {\n fn f() -> int\n fn g() {\n  return 1\n }\n}\n");
+        assert_idempotent(
+            "let x = 1\nfn add(a, b) {\n return a + b\n}\nclass P {\n let x\n}\nlet y = add(x, 2)?\n",
+        );
+    }
+
+    #[test]
+    fn formats_generic_fn_and_turbofish() {
+        let src = "fn id<T>(x: T) -> T {\nreturn x\n}\nlet a = id::<int>(3)\n";
+        let out = format_source(src).unwrap();
+        assert!(out.contains("fn id<T>(x: T) -> T {"));
+        assert!(out.contains("id::<int>(3)"));
+    }
+
+    #[test]
+    fn formats_generic_class_and_apply_type() {
+        let src = "class Box<T> {\nlet val: T\n}\nlet b: Box<int>\n";
+        let out = format_source(src).unwrap();
+        assert!(out.contains("class Box<T> {"));
+        assert!(out.contains("let b: Box<int>"));
+    }
+
+    #[test]
+    fn formats_generic_pair_turbofish() {
+        let src =
+            "fn pair<A, B>(a: A, b: B) -> (A, B) {\nreturn (a, b)\n}\npair::<int, str>(1, \"a\")\n";
+        let out = format_source(src).unwrap();
+        assert!(out.contains("fn pair<A, B>(a: A, b: B) -> (A, B) {"));
+        assert!(out.contains("pair::<int, str>(1, \"a\")"));
+    }
+
+    #[test]
+    fn format_is_idempotent_generics() {
+        assert_idempotent("fn id<T>(x: T) -> T {\n return x\n}\nlet a = id::<int>(3)\n");
+        assert_idempotent("class Box<T> {\n let val: T\n}\nlet b: Box<int>\n");
+        assert_idempotent(
+            "fn pair<A, B>(a: A, b: B) -> (A, B) {\n return (a, b)\n}\npair::<int, str>(1, \"a\")\n",
+        );
+    }
+
+    #[test]
+    fn lambda_block_body_is_preserved() {
+        let out = format_source("let g = fn(a) {\n  return a\n}\n").unwrap();
+        assert!(out.contains("fn(a) {"));
+        assert!(out.contains("return a"));
+        assert!(!out.contains("..."));
     }
 }

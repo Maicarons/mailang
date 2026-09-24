@@ -1,0 +1,79 @@
+// match_demo.mai — pattern matching: literals, ranges, Ok/Err/Some/None
+// Run: cargo run -p mailang-cli -- run examples/match_demo.mai
+
+fn classify(n) {
+    match n {
+        0 => "zero"
+        1..=9 => "small"
+        10..=99 => "medium"
+        _ => "large"
+    }
+}
+
+println(classify(0))
+println(classify(5))
+println(classify(50))
+println(classify(1000))
+
+let kind = match 7 {
+    1..10 => "in-range"
+    _ => "out-of-range"
+}
+println(kind)
+
+let kind2 = match 15 {
+    1..10 => "in-range"
+    _ => "out-of-range"
+}
+println(kind2)
+
+let inclusive = match 10 {
+    1..=10 => "in"
+    _ => "out"
+}
+println(inclusive)
+
+fn safe_div(a, b) {
+    if b == 0 {
+        return Err("div0")
+    }
+    return Ok(a / b)
+}
+
+let ok_r = match safe_div(10, 2) {
+    Ok(v) => v * 2
+    Err(e) => 0
+}
+println(ok_r)
+
+let err_r = match safe_div(1, 0) {
+    Ok(v) => v
+    Err(msg) => msg
+}
+println(err_r)
+
+fn lookup(key) {
+    if key == "answer" {
+        return Some(42)
+    }
+    return Some(0)
+}
+
+let some_v = match lookup("answer") {
+    Some(v) => v
+    None => -1
+}
+println(some_v)
+
+let none_v = match lookup("missing") {
+    Some(v) => v
+    None => -1
+}
+println(none_v)
+
+let label = match "x" {
+    "a" => "alpha"
+    "x" => "ex"
+    _ => "other"
+}
+println(label)

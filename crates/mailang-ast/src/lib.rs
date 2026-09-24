@@ -13,6 +13,10 @@ pub enum TypeAnnotation {
     Result(Box<TypeAnnotation>, Box<TypeAnnotation>),
     Option(Box<TypeAnnotation>),
     Custom(String),
+    /// Generic type parameter, e.g. `T` in `fn id<T>(x: T) -> T`.
+    Param(String),
+    /// Generic type application, e.g. `Box<int>`.
+    Apply(String, Vec<TypeAnnotation>),
     Infer,
 }
 
@@ -88,6 +92,9 @@ pub enum Expr {
     Call {
         callee: Box<Expr>,
         args: Vec<Expr>,
+        /// Explicit turbofish type arguments, e.g. `id::<int>(3)`.
+        #[serde(default)]
+        type_args: Vec<TypeAnnotation>,
     },
     MethodCall {
         object: Box<Expr>,
@@ -161,6 +168,10 @@ pub enum Stmt {
         mutable: bool,
         type_annotation: Option<TypeAnnotation>,
         value: Option<Expr>,
+        /// Destructuring binding target (`let (a, b) = ...`, `let [a, b] = ...`).
+        /// When set, `name` is unused (empty).
+        #[serde(default)]
+        pattern: Option<Pattern>,
     },
     Const {
         name: String,
@@ -169,18 +180,27 @@ pub enum Stmt {
     },
     FunctionDef {
         name: String,
+        /// Type parameters, e.g. `T` in `fn id<T>(x: T) -> T`.
+        #[serde(default)]
+        type_params: Vec<String>,
         params: Vec<Param>,
         return_type: Option<TypeAnnotation>,
         body: Vec<Stmt>,
     },
     ClassDef {
         name: String,
+        /// Type parameters, e.g. `T` in `class Box<T> { ... }`.
+        #[serde(default)]
+        type_params: Vec<String>,
         superclass: Option<String>,
         traits: Vec<String>,
         members: Vec<ClassMember>,
     },
     TraitDef {
         name: String,
+        /// Supertraits from `trait T extends A, B { ... }`.
+        #[serde(default)]
+        supertraits: Vec<String>,
         methods: Vec<TraitMethod>,
     },
     ModuleDef {

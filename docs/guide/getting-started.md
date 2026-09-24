@@ -1,5 +1,5 @@
 # 快速开�?
-> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.2](https://github.com/Maicarons/mailang/releases/tag/v0.2.2) · [Playground](https://maicarons.github.io/mailang/playground)
+> **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.6](https://github.com/Maicarons/mailang/releases/tag/v0.2.6) · [Playground](https://maicarons.github.io/mailang/playground)
 
 ## 系统要求
 
@@ -29,7 +29,7 @@ cargo build --release
 
 ```bash
 mailang --version
-# 输出：mailang 0.2.2
+# 输出：mailang 0.2.6
 ```
 
 ## Hello World
@@ -63,7 +63,7 @@ mailang
 ```
 
 ```
-MaìLang REPL v0.2.2
+MaìLang REPL v0.2.6
 Type 'exit' or 'quit' to exit.
 > 1 + 2
 3

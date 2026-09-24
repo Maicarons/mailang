@@ -27,7 +27,7 @@ jobs:
           name: mailang-ffi-${{ matrix.os }}
           path: target/release/*mailang_ffi*
 
-  test-python:
+  test-python-binding:
     name: Python Binding
     runs-on: ubuntu-latest
     needs: build-ffi
@@ -43,6 +43,33 @@ jobs:
       - name: Test
         run: python bindings/python/test_binding.py
         continue-on-error: true
+
+  ffi-smoke-tests:
+    name: FFI smoke (C / Python / Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build FFI library (debug)
+        run: cargo build -p mailang-ffi
+      - name: Build CLI (for Node smoke)
+        run: cargo build -p mailang-cli
+      - name: C FFI compile-check + link + run
+        run: |
+          gcc -Wall -Wextra -Werror -I crates/mailang-ffi/include \
+            -o /tmp/test_c ffi/tests/test_c.c \
+            -L target/debug -lmailang_ffi -Wl,-rpath,target/debug
+          /tmp/test_c
+      - name: Python ctypes smoke
+        run: python ffi/tests/test_python.py
+      - name: Node smoke
+        run: node ffi/tests/test_node.js
 
   build-wasm:
     name: WASM Build

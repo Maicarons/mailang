@@ -1,0 +1,48 @@
+// loop_demo.mai — cooperative event-loop style (no real async).
+// Tasks are closures run to completion inside a `while` "tick" loop.
+// `delay_ms` is the simulated HAL tick (host may bind a real delay via FFI).
+//
+// Run: cargo run -p mailang-cli -- run examples/loop_demo.mai
+
+// A task is just a callback: () -> int (returns remaining work, 0 = done).
+fn make_counter(name, limit) {
+    var n = 0
+    return fn() {
+        n = n + 1
+        println("[{name}] tick {n}/{limit}")
+        if n < limit {
+            return 1
+        }
+        return 0
+    }
+}
+
+fn drain(handlers) {
+    var next = []
+    var i = 0
+    while i < handlers.len {
+        let cb = handlers[i]
+        let more = cb()
+        if more != 0 {
+            next.push(cb)
+        }
+        i = i + 1
+    }
+    return next
+}
+
+// --- bootstrap the cooperative loop ---
+var queue = []
+queue.push(make_counter("sensor", 3))
+queue.push(make_counter("led", 2))
+queue.push(make_counter("net", 4))
+
+var frame = 0
+while queue.len > 0 {
+    frame = frame + 1
+    println("-- frame {frame} ({queue.len} task(s)) --")
+    queue = drain(queue)
+    delay_ms(10) // cooperative yield point (simulated)
+}
+
+println("event loop done after {frame} frames")

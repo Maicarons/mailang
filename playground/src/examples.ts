@@ -223,4 +223,157 @@ let interval = parse_config()
 println("配置完成，间隔={interval}秒")
 `,
   },
+  {
+    name: 'Match Patterns',
+    description: 'match：字面量、范围、Ok/Err/Some',
+    code: `// 字面量 + 通配
+let x = match 2 {
+    1 => "one"
+    2 => "two"
+    _ => "other"
+}
+println(x)
+
+// 范围模式
+let size = match 5 {
+    1..10 => "small"
+    _ => "big"
+}
+println(size)
+
+// Ok / Err
+let doubled = match Ok(7) {
+    Ok(v) => v * 2
+    Err(e) => 0
+}
+println(doubled)
+
+// Some / None
+let got = match Some(3) {
+    Some(v) => v * 2
+    None => 0
+}
+println(got)
+`,
+  },
+  {
+    name: 'Traits',
+    description: 'trait 定义与 implements',
+    code: `trait Printable {
+    fn to_string() -> str
+    fn print() {
+        println(this.to_string())
+    }
+}
+
+class Point implements Printable {
+    let x: float
+    let y: float
+
+    fn init(x: float, y: float) {
+        this.x = x
+        this.y = y
+    }
+
+    fn to_string() -> str {
+        return "({this.x}, {this.y})"
+    }
+}
+
+let p = Point(3.0, 4.0)
+p.print()
+`,
+  },
+  {
+    name: 'OOP Classes',
+    description: '类、继承与 override',
+    code: `class Animal {
+    let name: str
+    let age: int
+
+    fn init(name: str, age: int) {
+        this.name = name
+        this.age = age
+    }
+
+    fn speak() -> str {
+        return "{this.name} 发出声音"
+    }
+}
+
+class Dog extends Animal {
+    let breed: str
+
+    fn init(name: str, age: int, breed: str) {
+        super(name, age)
+        this.breed = breed
+    }
+
+    override fn speak() -> str {
+        return "{this.name} 汪汪叫！"
+    }
+}
+
+let dog = Dog("小黑", 3, "拉布拉多")
+println(dog.speak())
+`,
+  },
+  {
+    name: 'Result / Option + ?',
+    description: 'Result/Option 与 ? 传播',
+    code: `fn div(a: float, b: float) -> Result<float, str> {
+    if b == 0.0 {
+        return Err("div0")
+    }
+    return Ok(a / b)
+}
+
+// match 处理 Result
+let r = div(10.0, 2.0)
+match r {
+    Ok(v) => println("结果: {v}")
+    Err(e) => println("错误: {e}")
+}
+
+// ? 操作符：成功则解包，失败提前返回
+fn calc() {
+    let x = div(10.0, 2.0)?
+    return Ok(x * 2.0)
+}
+println(calc())
+
+fn find(flag: bool) -> Option<int> {
+    if flag {
+        return Some(7)
+    }
+    return None
+}
+
+match find(true) {
+    Some(v) => println("找到了: {v}")
+    None => println("未找到")
+}
+`,
+  },
+  {
+    name: 'Collection Methods',
+    description: '数组/字符串/字典方法',
+    code: `// 数组方法
+var arr = [3, 1, 4]
+arr.push(2)
+println(arr)
+println(arr.join(","))
+println(arr.contains(4))
+
+// 字符串方法
+let s = "  hello  "
+println(s.trim())
+println("a,b,c".split(","))
+
+// 字典方法
+var m = {"name": "MaìLang", "version": "0.2"}
+println(m.has("name"))
+println(m.keys())
+`,
+  },
 ]

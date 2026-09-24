@@ -94,3 +94,14 @@ jobs:
           ./target/debug/mailang build examples/hello.mai -o /tmp/hello.mailangbc
           ./target/debug/mailang run /tmp/hello.mailangbc
 
+  publish-dry-run:
+    name: cargo publish --dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Dry-run publish mailang-core (package only)
+        run: cargo publish --dry-run --no-verify -p mailang-core
+      - name: Dry-run publish mailang-bytecode
+        run: cargo publish --dry-run --no-verify -p mailang-bytecode
+

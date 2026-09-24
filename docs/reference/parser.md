@@ -301,23 +301,18 @@ pub enum ParseError {
 }
 ```
 
-### 错误恢复
+### 错误恢复（尚未实现）
 
-解析器在遇到错误时尝试恢复：
+解析器目前在第一个错误处失败并返回 `ParseError`，**没有** token 同步点恢复。以下为规划中的 API，**尚未实现**：
 
 ```rust
-fn recover_from_error(&mut self) {
-    // 跳过当前 token，直到找到同步点
-    while !self.is_at_sync_point() {
-        self.advance();
-    }
-}
-
-fn is_at_sync_point(&self) -> bool {
-    matches!(self.peek(),
-        Token::Newline | Token::Semicolon | Token::RightBrace | Token::Eof
-    )
-}
+// 规划中 — 尚未实现
+// fn recover_from_error(&mut self) {
+//     // 跳过当前 token，直到找到同步点
+//     while !self.is_at_sync_point() {
+//         self.advance();
+//     }
+// }
 ```
 
 ## 运算符优先级表

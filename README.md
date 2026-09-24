@@ -3,13 +3,13 @@
 [![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.2.2-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.2.2)
+[![Version](https://img.shields.io/badge/version-0.2.6-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.2.6)
 
 A modern programming language designed for IoT and cross-platform development, written in Rust.
 
 **Repository**: [github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
 **Documentation**: [Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
-**Releases**: [v0.2.2](https://github.com/Maicarons/mailang/releases/tag/v0.2.2)
+**Releases**: [v0.2.6](https://github.com/Maicarons/mailang/releases/tag/v0.2.6)
 
 ## Features
 
@@ -43,7 +43,7 @@ mailang eval 'println("Hello, 世界!")'
 
 ```
 // hello.mai
-fn greet(name = "世界") -> str {
+fn greet(name: str) -> str {
     return "你好，{name}！"
 }
 
@@ -145,6 +145,14 @@ cargo build --features "std,gc,io"
 # Embedded (no_std)
 cargo build --no-default-features --target thumbv7em-none-eabihf
 ```
+
+## Current limitations
+
+- **No package registry yet** — modules are loaded from local paths only; remote package install/resolve is not implemented.
+- **Generics are annotation-only** — `Result<T, E>` / `Option<T>` style annotations are accepted for readability; there is no true generic monomorphization or generic type checking.
+- **`async` is not supported** — no async/await runtime or syntax.
+- **GC is Rc + cycle-break only** — reference counting with manual `collect_cycles()`; no mark-sweep or incremental collector.
+- **IoT HAL is simulated by default** — `gpio_*` / `adc_read` / `delay_ms` use a host simulation unless a real HAL is registered via FFI.
 
 ## License
 

@@ -1,0 +1,9 @@
+// bme280 stub — basic usage
+// Values are simulated; host must supply real I2C/SPI for hardware.
+
+import "bme280"
+
+println("=== bme280 stub example ===")
+println("temp (sim) = {bme280.read_temp()} °C")
+println("humidity (sim) = {bme280.read_humidity()} %")
+println("Note: these are fixed sim values, not a physical sensor.")

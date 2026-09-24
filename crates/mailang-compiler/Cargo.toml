@@ -10,5 +10,9 @@ mailang-ast = { path = "../mailang-ast", version = "0.2.6" }
 mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.6" }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+mailang-parser = { path = "../mailang-parser", version = "0.2.6" }
+mailang-bytecode = { path = "../mailang-bytecode", version = "0.2.6" }
+
 [features]
 default = []

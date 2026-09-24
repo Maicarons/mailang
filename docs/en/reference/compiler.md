@@ -1,10 +1,10 @@
-﻿# Compiler Internals
+# Compiler Internals
 
 > **Project Links**: [GitHub](https://github.com/Maicarons/mailang) · [Compiler Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-compiler) · [VM Source](https://github.com/Maicarons/mailang/tree/master/crates/mailang-vm)
 
 ## Overview
 
-MaìLang uses a classic compilation pipeline to transform source code into bytecode executed by a register-based virtual machine.
+MaìLang uses a classic compilation pipeline to transform source code into bytecode executed by a stack-based virtual machine.
 
 ```
 Source Code (.mai)
@@ -153,9 +153,9 @@ Bytecode:
 
 ## VM
 
-### Register-Based Execution
+### Stack-Based Execution
 
-The VM uses a stack-based approach with local variable indexing (register-like):
+The VM uses a **stack-based** approach with slot-indexed locals (not a register VM):
 
 ```rust
 pub struct Vm {

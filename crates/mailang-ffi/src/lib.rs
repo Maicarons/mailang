@@ -90,7 +90,12 @@ pub const MAILANG_ERR_NULL: i32 = -1;
 pub const MAILANG_ERR_EVAL: i32 = -2;
 pub const MAILANG_ERR_UTF8: i32 = -3;
 pub const MAILANG_ERR_HOST: i32 = -4;
+pub const MAILANG_ERR_DECODE: i32 = -5;
+pub const MAILANG_ERR_IO: i32 = -6;
 pub const MAILANG_ERR_PANIC: i32 = -99;
+
+/// Status code returned by bytecode entry points.
+pub type MailangStatus = i32;
 
 fn set_result_ok(result: &mut MailangResult, output: String) {
     let c = CString::new(output).unwrap_or_default();
@@ -441,4 +446,178 @@ pub extern "C" fn mailang_version() -> *mut c_char {
             .into_raw()
     })
     .unwrap_or(ptr::null_mut())
+}
+
+fn format_decode_err(e: &mailang_bytecode::BytecodeFormatError) -> String {
+    use mailang_bytecode::BytecodeFormatError as E;
+    match e {
+        E::Truncated => "bytecode truncated".to_string(),
+        E::BadMagic => "bad bytecode magic (expected MAILBC01)".to_string(),
+        E::UnsupportedVersion(v) => format!("unsupported bytecode version {}", v),
+        E::InvalidOpcode(op) => format!("invalid opcode {}", op),
+        E::InvalidTag(tag) => format!("invalid value tag {}", tag),
+        E::InvalidUtf8 => "invalid utf-8 in bytecode".to_string(),
+        E::TrailingData => "trailing data after bytecode".to_string(),
+    }
+}
+
+fn store_out(out_result: *mut *mut c_char, s: String) {
+    let c = CString::new(s).unwrap_or_default();
+    unsafe {
+        *out_result = c.into_raw();
+    }
+}
+
+fn run_bytecode_bytes(data: &[u8]) -> Result<String, (i32, String)> {
+    let bc =
+        mailang_bytecode::decode(data).map_err(|e| (MAILANG_ERR_DECODE, format_decode_err(&e)))?;
+    let mut interp = mailang_core::MailangInterpreter::new();
+    interp.run_bytecode(bc).map_err(|e| (MAILANG_ERR_EVAL, e))
+}
+
+/// Decode a `.mailangbc` blob and run it in a fresh interpreter.
+///
+/// On success `*out_result` receives the program output; on failure it receives
+/// an error message. Free with `mailang_free_string`.
+#[no_mangle]
+pub unsafe extern "C" fn mailang_eval_bytecode(
+    data: *const u8,
+    len: usize,
+    out_result: *mut *mut c_char,
+) -> MailangStatus {
+    catch_unwind(AssertUnwindSafe(|| {
+        if out_result.is_null() {
+            return MAILANG_ERR_NULL;
+        }
+        if data.is_null() {
+            store_out(out_result, "null bytecode data pointer".to_string());
+            return MAILANG_ERR_NULL;
+        }
+        let bytes = core::slice::from_raw_parts(data, len);
+        match run_bytecode_bytes(bytes) {
+            Ok(output) => {
+                store_out(out_result, output);
+                MAILANG_OK
+            }
+            Err((code, msg)) => {
+                store_out(out_result, msg);
+                code
+            }
+        }
+    }))
+    .unwrap_or(MAILANG_ERR_PANIC)
+}
+
+/// Read a `.mailangbc` file, decode and run it in a fresh interpreter.
+///
+/// On success `*out_result` receives the program output; on failure it receives
+/// an error message. Free with `mailang_free_string`.
+#[no_mangle]
+pub unsafe extern "C" fn mailang_load_bytecode_file(
+    path: *const c_char,
+    out_result: *mut *mut c_char,
+) -> MailangStatus {
+    catch_unwind(AssertUnwindSafe(|| {
+        if out_result.is_null() {
+            return MAILANG_ERR_NULL;
+        }
+        if path.is_null() {
+            store_out(out_result, "null path pointer".to_string());
+            return MAILANG_ERR_NULL;
+        }
+        let path_str = match CStr::from_ptr(path).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                store_out(out_result, "path is not valid utf-8".to_string());
+                return MAILANG_ERR_UTF8;
+            }
+        };
+        let bytes = match std::fs::read(path_str) {
+            Ok(b) => b,
+            Err(e) => {
+                store_out(
+                    out_result,
+                    format!("Failed to read file '{}': {}", path_str, e),
+                );
+                return MAILANG_ERR_IO;
+            }
+        };
+        match run_bytecode_bytes(&bytes) {
+            Ok(output) => {
+                store_out(out_result, output);
+                MAILANG_OK
+            }
+            Err((code, msg)) => {
+                store_out(out_result, msg);
+                code
+            }
+        }
+    }))
+    .unwrap_or(MAILANG_ERR_PANIC)
+}
+
+#[cfg(test)]
+mod bytecode_ffi_tests {
+    use super::*;
+    use mailang_bytecode::{Bytecode, Opcode, Value};
+
+    fn minimal_halt_bc() -> Vec<u8> {
+        let mut bc = Bytecode::new();
+        bc.chunks[0].emit(Opcode::Halt, None, 1);
+        mailang_bytecode::encode(&bc)
+    }
+
+    #[test]
+    fn eval_bytecode_minimal_ok() {
+        let bytes = minimal_halt_bc();
+        let mut out: *mut c_char = ptr::null_mut();
+        let st = unsafe { mailang_eval_bytecode(bytes.as_ptr(), bytes.len(), &mut out) };
+        assert_eq!(st, MAILANG_OK);
+        assert!(!out.is_null());
+        let s = unsafe { CStr::from_ptr(out) }.to_str().unwrap().to_string();
+        assert_eq!(s, "null");
+        unsafe { mailang_free_string(out) };
+    }
+
+    #[test]
+    fn eval_bytecode_rejects_bad_magic() {
+        let mut out: *mut c_char = ptr::null_mut();
+        let junk = b"NOTMAGIC0000";
+        let st = unsafe { mailang_eval_bytecode(junk.as_ptr(), junk.len(), &mut out) };
+        assert_eq!(st, MAILANG_ERR_DECODE);
+        assert!(!out.is_null());
+        unsafe { mailang_free_string(out) };
+    }
+
+    #[test]
+    fn load_bytecode_file_minimal_ok() {
+        let bytes = minimal_halt_bc();
+        let path = std::env::temp_dir().join("mailang_ffi_minimal.mailangbc");
+        std::fs::write(&path, &bytes).unwrap();
+        let c_path = CString::new(path.to_str().unwrap()).unwrap();
+        let mut out: *mut c_char = ptr::null_mut();
+        let st = unsafe { mailang_load_bytecode_file(c_path.as_ptr(), &mut out) };
+        assert_eq!(st, MAILANG_OK);
+        assert!(!out.is_null());
+        let s = unsafe { CStr::from_ptr(out) }.to_str().unwrap().to_string();
+        assert_eq!(s, "null");
+        unsafe { mailang_free_string(out) };
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn eval_bytecode_simple_program() {
+        let mut bc = Bytecode::new();
+        let slot = bc.intern_global("x");
+        let main = &mut bc.chunks[0];
+        main.emit(Opcode::Push, Some(0), 1);
+        main.emit(Opcode::StoreGlobal, Some(slot), 1);
+        main.emit(Opcode::Halt, None, 2);
+        main.add_constant(Value::Int(42));
+        let bytes = mailang_bytecode::encode(&bc);
+        let mut out: *mut c_char = ptr::null_mut();
+        let st = unsafe { mailang_eval_bytecode(bytes.as_ptr(), bytes.len(), &mut out) };
+        assert_eq!(st, MAILANG_OK);
+        unsafe { mailang_free_string(out) };
+    }
 }

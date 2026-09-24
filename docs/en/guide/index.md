@@ -12,7 +12,7 @@ MaìLang is a modern programming language designed for **IoT and cross-platform 
 | Closures | Upvalue capture, first-class functions | ✅ Implemented |
 | Pattern Matching | Literals, wildcards, or-patterns, guards | ✅ Implemented |
 | UTF-8 Native | Identifiers support any Unicode script | ✅ Implemented |
-| Stack-based Bytecode VM | Slot-based high-performance execution | ✅ Implemented |
+| Stack-based Bytecode VM | Slot locals, high-performance execution | ✅ Implemented |
 | C FFI | 12-language binding support | ✅ Implemented |
 | WebAssembly | Browser/edge runtime | ✅ Implemented |
 | CLI + REPL | Command-line tool | ✅ Implemented |
@@ -35,10 +35,10 @@ MaìLang uses a hybrid syntax style, borrowing from Rust, Python, and JavaScript
 - JavaScript-like object operations
 
 ### High Performance
-Uses a **register-based bytecode virtual machine**, faster than tree-walk interpreters (like Rhai) and more efficient than stack-based VMs (like Rune):
+Uses a **stack-based bytecode virtual machine** with slot locals, faster than tree-walk interpreters (like Rhai):
 - Bytecode can be serialized and cached for faster startup
-- Reduced memory access, suitable for IoT scenarios
-- Register allocation optimization
+- Locals use slot indices (no hash lookup), suitable for IoT scenarios
+- Hot-path specialization and CallDirect calls
 
 ### Universal Platform Support
 Through three-tier feature gating, MaìLang can run on all platforms from 64KB IoT chips to desktop servers:
@@ -66,7 +66,7 @@ let 🔥 = "支持emoji"
 
 | Feature | MaìLang | Rhai | Rune | RustPython |
 |---------|---------|------|------|------------|
-| Execution Model | Register VM | Tree Walk | Stack VM | Stack VM |
+| Execution Model | Stack VM + slot locals | Tree Walk | Stack VM | Stack VM |
 | OOP Support | ✅ Full | ❌ Limited | ❌ Limited | ✅ Full |
 | Embedded Support | ✅ 64KB+ | ✅ | ❌ | ❌ |
 | FFI | ✅ 12 Languages | ✅ Rust | ❌ | ✅ Python |

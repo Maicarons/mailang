@@ -1,4 +1,4 @@
-﻿# 错误码
+# 错误码
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [VM 错误源码](https://github.com/Maicarons/mailang/blob/master/crates/mailang-vm/src/error.rs)
 
@@ -95,7 +95,7 @@ MaìLang 使用 Result 类型进行错误处理，不抛出异常。所有可能
 ### 使用 match 处理错误
 
 ```
-let result = divide(10.0, 0.0) match {
+let result = match divide(10.0, 0.0) {
     Ok(v) => println("结果: {v}"),
     Err(e) => println("错误: {e}")
 }

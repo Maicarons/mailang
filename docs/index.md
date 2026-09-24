@@ -31,7 +31,7 @@ features:
     details: 标识符支持任何 Unicode 文字，中文变量名直接可用
   - icon: ⚡
     title: 栈式字节码 VM
-    details: 基于 slot 的高性能执行，50+ 指令
+    details: slot 局部变量的高性能执行，50+ 指令
   - icon: 🔌
     title: 12 种语言 FFI
     details: C、Python、JavaScript、Java、Go、Lua 等

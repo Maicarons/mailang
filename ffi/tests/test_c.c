@@ -36,6 +36,79 @@ static int fail(const char *msg) {
     return 1;
 }
 
+/* Minimal .mailangbc: one "main" chunk with a single Halt (opcode 69).
+ * Layout matches crates/mailang-bytecode/src/format.rs (LE integers). */
+static const uint8_t MINIMAL_MAILANGBC[] = {
+    /* magic */ 'M', 'A', 'I', 'L', 'B', 'C', '0', '1',
+    /* version = 1 */ 0x01, 0x00,
+    /* flags = 0 */ 0x00, 0x00,
+    /* main chunk = 0 */ 0x00, 0x00, 0x00, 0x00,
+    /* n_globals = 0 */ 0x00, 0x00, 0x00, 0x00,
+    /* n_chunks = 1 */ 0x01, 0x00, 0x00, 0x00,
+    /* name_len = 4 */ 0x04, 0x00, 0x00, 0x00,
+    /* name = "main" */ 'm', 'a', 'i', 'n',
+    /* n_const = 0 */ 0x00, 0x00, 0x00, 0x00,
+    /* n_instr = 1 */ 0x01, 0x00, 0x00, 0x00,
+    /* opcode = Halt (69) */ 0x45,
+    /* has_operand = 0 */ 0x00,
+    /* line = 1 */ 0x01, 0x00, 0x00, 0x00,
+};
+
+static int smoke_bytecode_apis(void) {
+    char *out = NULL;
+    MailangStatus st = mailang_eval_bytecode(
+        MINIMAL_MAILANGBC, sizeof(MINIMAL_MAILANGBC), &out);
+    if (st != MAILANG_OK) {
+        fprintf(stderr, "eval_bytecode status=%d out=%s\n", st, out ? out : "(null)");
+        if (out) mailang_free_string(out);
+        return fail("mailang_eval_bytecode");
+    }
+    printf("eval_bytecode => %s\n", out ? out : "(null)");
+    if (!out || strcmp(out, "null") != 0) {
+        if (out) mailang_free_string(out);
+        return fail("eval_bytecode result");
+    }
+    mailang_free_string(out);
+
+    /* write blob to a temp file and load it */
+    const char *bc_path = "ffi_test_minimal.mailangbc";
+    FILE *fp = fopen(bc_path, "wb");
+    if (!fp) return fail("open bytecode file");
+    if (fwrite(MINIMAL_MAILANGBC, 1, sizeof(MINIMAL_MAILANGBC), fp) != sizeof(MINIMAL_MAILANGBC)) {
+        fclose(fp);
+        return fail("write bytecode file");
+    }
+    fclose(fp);
+
+    out = NULL;
+    st = mailang_load_bytecode_file(bc_path, &out);
+    if (st != MAILANG_OK) {
+        fprintf(stderr, "load_bytecode_file status=%d out=%s\n", st, out ? out : "(null)");
+        if (out) mailang_free_string(out);
+        remove(bc_path);
+        return fail("mailang_load_bytecode_file");
+    }
+    printf("load_bytecode_file => %s\n", out ? out : "(null)");
+    if (!out || strcmp(out, "null") != 0) {
+        if (out) mailang_free_string(out);
+        remove(bc_path);
+        return fail("load_bytecode_file result");
+    }
+    mailang_free_string(out);
+    remove(bc_path);
+
+    /* bad magic must fail decode */
+    static const uint8_t BAD[] = {'N', 'O', 'T', 'M', 'A', 'G', 'I', 'C', '0', '0', '0', '0'};
+    out = NULL;
+    st = mailang_eval_bytecode(BAD, sizeof(BAD), &out);
+    if (st != MAILANG_ERR_DECODE) {
+        if (out) mailang_free_string(out);
+        return fail("expected MAILANG_ERR_DECODE");
+    }
+    if (out) mailang_free_string(out);
+    return 0;
+}
+
 int main(void) {
     MailangInterpreter *interp = mailang_create();
     if (!interp) return fail("create");
@@ -99,6 +172,12 @@ int main(void) {
         return fail("expected eval error");
     printf("error code=%d last=%s\n", r.code, mailang_last_error(interp) ? mailang_last_error(interp) : "(null)");
     mailang_free_string(r.output);
+
+    /* precompiled .mailangbc via C API */
+    if (smoke_bytecode_apis() != 0) {
+        mailang_destroy(interp);
+        return 1;
+    }
 
     mailang_destroy(interp);
     printf("C FFI OK\n");

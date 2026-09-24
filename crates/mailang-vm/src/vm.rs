@@ -17,6 +17,8 @@ struct CallFrame {
     upvalues: Vec<usize>,
     /// True for CallDirect: no function slot below `stack_base`.
     direct: bool,
+    /// Number of arguments actually supplied (for default parameter prologues).
+    argc: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -40,9 +42,18 @@ pub struct Vm {
     chunk_index: usize,
     class_table: Vec<RegisteredClass>,
     upvalue_store: Vec<Value>,
+    /// Remaining instruction budget (`None` = unlimited). Plugin/sandbox mode.
+    fuel: Option<u64>,
+    /// Maximum nested calls (guards runaway recursion on hosts).
+    max_call_depth: usize,
+    /// Mark-sweep heap census (cycle collection).
+    gc: mailang_gc::MarkSweepHeap,
 }
 
 impl Vm {
+    /// Default nested-call cap. Generous for real programs, safe for hosts.
+    pub const DEFAULT_MAX_CALL_DEPTH: usize = 512;
+
     pub fn new(bytecode: Bytecode) -> Self {
         let mut builtins: HashMap<String, BuiltinFn> = HashMap::new();
         builtins.insert("println".to_string(), |args| {
@@ -132,6 +143,35 @@ impl Vm {
         builtins.insert("adc_read".to_string(), |args| {
             mailang_stdlib::hal::builtin_adc_read(args)
         });
+        builtins.insert("pwm_write".to_string(), |args| {
+            mailang_stdlib::hal::builtin_pwm_write(args)
+        });
+        builtins.insert("pwm_freq".to_string(), |args| {
+            mailang_stdlib::hal::builtin_pwm_freq(args)
+        });
+        builtins.insert("uart_write".to_string(), |args| {
+            mailang_stdlib::hal::builtin_uart_write(args)
+        });
+        builtins.insert("uart_read".to_string(), |args| {
+            mailang_stdlib::hal::builtin_uart_read(args)
+        });
+        builtins.insert("i2c_xfer".to_string(), |args| {
+            mailang_stdlib::hal::builtin_i2c_xfer(args)
+        });
+        builtins.insert("spi_xfer".to_string(), |args| {
+            mailang_stdlib::hal::builtin_spi_xfer(args)
+        });
+        // JSON / process
+        builtins.insert("json_parse".to_string(), |args| {
+            mailang_stdlib::builtin_json_parse(args)
+        });
+        builtins.insert("json_stringify".to_string(), |args| {
+            mailang_stdlib::builtin_json_stringify(args)
+        });
+        builtins.insert("env".to_string(), mailang_stdlib::builtin_env);
+        builtins.insert("process_exit".to_string(), |args| {
+            mailang_stdlib::builtin_process_exit(args)
+        });
 
         let mut globals = vec![Value::Null; bytecode.global_names.len()];
         for (slot, name) in bytecode.global_names.iter().enumerate() {
@@ -154,6 +194,9 @@ impl Vm {
             chunk_index: 0,
             class_table: Vec::new(),
             upvalue_store: Vec::new(),
+            fuel: None,
+            max_call_depth: Self::DEFAULT_MAX_CALL_DEPTH,
+            gc: mailang_gc::MarkSweepHeap::new(),
         }
     }
 
@@ -198,27 +241,131 @@ impl Vm {
 
     /// Break Rc cycles reachable from the operand stack and globals.
     /// Returns the number of back-edges cut.
+    /// Mark-sweep collect. Returns the number of heap nodes freed.
     pub fn collect_cycles(&mut self) -> usize {
-        let mut roots: Vec<Value> = self.stack.clone();
-        roots.extend(self.globals.iter().cloned());
+        let mut roots = self.stack.clone();
+        roots.extend_from_slice(&self.globals);
+        roots.extend(self.upvalue_store.iter().cloned());
+        // Classic edge-cut first (reports broken edges — used by tests).
         let broken = mailang_gc::collect_cycles(&mut roots);
-        if broken > 0 {
-            // Write mutated values back.
-            let n_stack = self.stack.len();
-            for (i, v) in roots.iter().take(n_stack).enumerate() {
-                self.stack[i] = v.clone();
-            }
-            for (i, v) in roots.iter().skip(n_stack).enumerate() {
-                if i < self.globals.len() {
-                    self.globals[i] = v.clone();
-                }
-            }
+        // Real mark-sweep over the tracked heap census.
+        for v in roots.iter() {
+            self.gc.track(v);
         }
-        broken
+        let freed = self.gc.collect(&roots);
+        if broken > 0 {
+            broken
+        } else {
+            freed
+        }
+    }
+
+    /// Track a newly allocated heap node with the mark-sweep census.
+    pub fn track_heap(&mut self, v: &Value) {
+        self.gc.track(v);
+    }
+
+    /// Heap statistics (tracked nodes, collections, freed).
+    pub fn gc_stats(&self) -> (usize, usize, usize) {
+        (
+            self.gc.tracked_count(),
+            self.gc.collections,
+            self.gc.freed_total,
+        )
+    }
+
+    fn maybe_auto_collect(&mut self) {
+        if self.gc.should_collect() {
+            let mut roots = self.stack.clone();
+            roots.extend_from_slice(&self.globals);
+            roots.extend(self.upvalue_store.iter().cloned());
+            for v in roots.iter() {
+                self.gc.track(v);
+            }
+            self.gc.collect(&roots);
+        }
     }
 
     pub fn run(&mut self) -> Result<Value, VmError> {
+        self.run_inner().map_err(|e| {
+            let location = self.current_location();
+            let frames = self.stack_trace();
+            e.located(location, frames)
+        })
+    }
+
+    /// Source location of the faulting instruction (`file:line` style: `chunk:line`).
+    fn current_location(&self) -> String {
+        let chunk = self
+            .bytecode
+            .chunks
+            .get(self.chunk_index)
+            .map(|c| c.name.as_str())
+            .unwrap_or("?");
+        let line = self
+            .bytecode
+            .chunks
+            .get(self.chunk_index)
+            .and_then(|c| self.ip.checked_sub(1).and_then(|i| c.instructions.get(i)))
+            .map(|ins| ins.line)
+            .unwrap_or(0);
+        format!("{}:{}", chunk, line)
+    }
+
+    /// Human-readable call frames, innermost last.
+    fn stack_trace(&self) -> Vec<String> {
+        let mut frames = Vec::new();
+        for frame in self.call_stack.iter().rev() {
+            let name = self
+                .bytecode
+                .chunks
+                .get(frame.chunk_index)
+                .map(|c| c.name.clone())
+                .unwrap_or_else(|| "?".into());
+            let line = self
+                .bytecode
+                .chunks
+                .get(frame.chunk_index)
+                .and_then(|c| c.instructions.get(frame.ip))
+                .map(|ins| ins.line)
+                .unwrap_or(0);
+            frames.push(format!("{} (line {})", name, line));
+        }
+        frames
+    }
+
+    /// Set an instruction budget for sandboxed execution (`None` = unlimited).
+    pub fn set_fuel(&mut self, fuel: Option<u64>) {
+        self.fuel = fuel;
+    }
+
+    pub fn set_max_call_depth(&mut self, limit: usize) {
+        self.max_call_depth = limit.max(1);
+    }
+
+    fn burn_fuel(&mut self) -> Result<(), VmError> {
+        if let Some(f) = self.fuel.as_mut() {
+            if *f == 0 {
+                return Err(VmError::FuelExhausted);
+            }
+            *f -= 1;
+        }
+        Ok(())
+    }
+
+    fn enter_frame(&mut self, frame: CallFrame) -> Result<(), VmError> {
+        if self.call_stack.len() >= self.max_call_depth {
+            return Err(VmError::CallDepthExceeded {
+                limit: self.max_call_depth,
+            });
+        }
+        self.call_stack.push(frame);
+        Ok(())
+    }
+
+    fn run_inner(&mut self) -> Result<Value, VmError> {
         loop {
+            self.burn_fuel()?;
             let instructions = &self.bytecode.chunks[self.chunk_index].instructions;
             if self.ip >= instructions.len() {
                 return Err(VmError::Internal("IP out of bounds".to_string()));
@@ -592,20 +739,22 @@ impl Vm {
                     // Fast path: plain function without cloning the Value.
                     if let Value::Function(f) = &self.stack[func_index] {
                         let arity = f.arity;
+                        let required = f.required;
                         let chunk_index = f.chunk_index;
-                        if arity != arg_count {
+                        if arg_count > arity || arg_count < required {
                             return Err(VmError::WrongArgumentCount {
                                 expected: arity,
                                 found: arg_count,
                             });
                         }
-                        self.call_stack.push(CallFrame {
+                        self.enter_frame(CallFrame {
                             chunk_index: self.chunk_index,
                             ip: self.ip,
                             stack_base: func_index + 1,
                             upvalues: Vec::new(),
                             direct: false,
-                        });
+                            argc: arg_count,
+                        })?;
                         self.chunk_index = chunk_index;
                         self.ip = 0;
                         continue;
@@ -615,7 +764,7 @@ impl Vm {
 
                     match func {
                         Value::Function(f) => {
-                            if f.arity != arg_count {
+                            if arg_count > f.arity || arg_count < f.required {
                                 return Err(VmError::WrongArgumentCount {
                                     expected: f.arity,
                                     found: arg_count,
@@ -627,13 +776,14 @@ impl Vm {
                                 stack_base: func_index + 1,
                                 upvalues: Vec::new(),
                                 direct: false,
+                                argc: arg_count,
                             };
-                            self.call_stack.push(frame);
+                            self.enter_frame(frame)?;
                             self.chunk_index = f.chunk_index;
                             self.ip = 0;
                         }
                         Value::Closure(c) => {
-                            if c.arity != arg_count {
+                            if arg_count > c.arity || arg_count < c.required {
                                 return Err(VmError::WrongArgumentCount {
                                     expected: c.arity,
                                     found: arg_count,
@@ -645,8 +795,9 @@ impl Vm {
                                 stack_base: func_index + 1,
                                 upvalues: c.upvalues.clone(),
                                 direct: false,
+                                argc: arg_count,
                             };
-                            self.call_stack.push(frame);
+                            self.enter_frame(frame)?;
                             self.chunk_index = c.function_index;
                             self.ip = 0;
                         }
@@ -687,8 +838,9 @@ impl Vm {
                                     stack_base: func_index + 1,
                                     upvalues: Vec::new(),
                                     direct: false,
+                                    argc: arg_count,
                                 };
-                                self.call_stack.push(frame);
+                                self.enter_frame(frame)?;
                                 self.chunk_index = chunk_index;
                                 self.ip = 0;
                             } else {
@@ -826,7 +978,7 @@ impl Vm {
 
                     match func {
                         Value::Function(f) => {
-                            if f.arity != arg_count {
+                            if arg_count > f.arity || arg_count < f.required {
                                 return Err(VmError::WrongArgumentCount {
                                     expected: f.arity,
                                     found: arg_count,
@@ -848,13 +1000,14 @@ impl Vm {
                                 if let Some(frame) = self.call_stack.last_mut() {
                                     frame.stack_base = old_base + 1;
                                     frame.upvalues.clear();
+                                    frame.argc = arg_count;
                                 }
                             }
                             self.chunk_index = f.chunk_index;
                             self.ip = 0;
                         }
                         Value::Closure(c) => {
-                            if c.arity != arg_count {
+                            if arg_count > c.arity || arg_count < c.required {
                                 return Err(VmError::WrongArgumentCount {
                                     expected: c.arity,
                                     found: arg_count,
@@ -873,6 +1026,7 @@ impl Vm {
                                 if let Some(frame) = self.call_stack.last_mut() {
                                     frame.stack_base = old_base + 1;
                                     frame.upvalues = c.upvalues.clone();
+                                    frame.argc = arg_count;
                                 }
                             }
                             self.chunk_index = c.function_index;
@@ -938,8 +1092,9 @@ impl Vm {
                                     stack_base: func_index + 1,
                                     upvalues: Vec::new(),
                                     direct: false,
+                                    argc: arg_count,
                                 };
-                                self.call_stack.push(frame);
+                                self.enter_frame(frame)?;
                                 self.chunk_index = chunk_index;
                                 self.ip = 0;
                             } else {
@@ -963,13 +1118,14 @@ impl Vm {
                         .len()
                         .checked_sub(arg_count)
                         .ok_or(VmError::StackUnderflow)?;
-                    self.call_stack.push(CallFrame {
+                    self.enter_frame(CallFrame {
                         chunk_index: self.chunk_index,
                         ip: self.ip,
                         stack_base,
                         upvalues: Vec::new(),
                         direct: true,
-                    });
+                        argc: arg_count,
+                    })?;
                     self.chunk_index = chunk_index;
                     self.ip = 0;
                 }
@@ -1171,8 +1327,9 @@ impl Vm {
                                         stack_base: obj_index + 1,
                                         upvalues: Vec::new(),
                                         direct: false,
+                                        argc: arg_count,
                                     };
-                                    self.call_stack.push(frame);
+                                    self.enter_frame(frame)?;
                                     self.chunk_index = chunk_index;
                                     self.ip = 0;
                                 }
@@ -1198,7 +1355,7 @@ impl Vm {
                             let func = self.stack[obj_index].clone();
                             match func {
                                 Value::Function(f) => {
-                                    if f.arity != arg_count {
+                                    if arg_count > f.arity || arg_count < f.required {
                                         return Err(VmError::WrongArgumentCount {
                                             expected: f.arity,
                                             found: arg_count,
@@ -1210,8 +1367,9 @@ impl Vm {
                                         stack_base: obj_index + 1,
                                         upvalues: Vec::new(),
                                         direct: false,
+                                        argc: arg_count,
                                     };
-                                    self.call_stack.push(frame);
+                                    self.enter_frame(frame)?;
                                     self.chunk_index = f.chunk_index;
                                     self.ip = 0;
                                 }
@@ -1379,6 +1537,7 @@ impl Vm {
                             self.push(Value::Closure(Rc::new(ClosureObj {
                                 function_index: f.chunk_index,
                                 arity: f.arity,
+                                required: f.required,
                                 upvalues: uv_indices,
                             })))?;
                         }
@@ -1396,6 +1555,10 @@ impl Vm {
                 Opcode::TryBegin => {}
                 Opcode::TryEnd => {}
                 Opcode::Nop => {}
+                Opcode::Argc => {
+                    let argc = self.call_stack.last().map(|f| f.argc).unwrap_or(0);
+                    self.push(Value::Int(argc as i64))?;
+                }
                 Opcode::Halt => {
                     if self.stack.is_empty() {
                         return Ok(Value::Null);
@@ -1410,7 +1573,10 @@ impl Vm {
         if self.stack.len() >= 100_000 {
             return Err(VmError::StackOverflow);
         }
+        // Register heap nodes and periodically mark-sweep.
+        self.gc.track(&value);
         self.stack.push(value);
+        self.maybe_auto_collect();
         Ok(())
     }
 
@@ -1430,6 +1596,7 @@ impl Vm {
             stack_base: 0,
             upvalues: Vec::new(),
             direct: false,
+            argc: 0,
         })
     }
 
@@ -1629,7 +1796,7 @@ impl Vm {
     }
 }
 
-fn invoke_array_method(
+pub(crate) fn invoke_array_method(
     arr: &Rc<RefCell<Vec<Value>>>,
     name: &str,
     args: &[Value],
@@ -1681,7 +1848,7 @@ fn invoke_array_method(
     }
 }
 
-fn invoke_map_method(
+pub(crate) fn invoke_map_method(
     entries: &Rc<RefCell<Vec<(Value, Value)>>>,
     name: &str,
     args: &[Value],
@@ -1714,7 +1881,7 @@ fn invoke_map_method(
     }
 }
 
-fn invoke_str_method(s: &Rc<str>, name: &str, args: &[Value]) -> Result<Value, VmError> {
+pub(crate) fn invoke_str_method(s: &Rc<str>, name: &str, args: &[Value]) -> Result<Value, VmError> {
     let text = s.as_ref();
     match name {
         "starts_with" => {

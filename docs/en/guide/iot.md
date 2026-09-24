@@ -61,6 +61,15 @@ strip = "symbols"
 | WASM | `wasm32-unknown-unknown` | N/A |
 | Linux ARM | `aarch64-unknown-linux-gnu` | 16MB |
 
+## Real Hardware (GPIO / ADC / delay)
+
+`SimulatedHal` is host-only. To bind scripts to real ESP32-C3 / Cortex-M4 peripherals, see:
+
+- **[Real Hardware](/en/guide/hardware)** — build `mailang-ffi`, wire `mailang_register_host_fn` to a real HAL, ship `.mailangbc`
+- **[ESP32 Blink End-to-End](/en/guide/esp32-blink)** — copy-paste IDF-style C host + expected serial output
+
 ## Next Steps
 
+- [Real Hardware](/en/guide/hardware) - ESP32-C3 / Cortex-M4 embedding guide
+- [ESP32 Blink](/en/guide/esp32-blink) - End-to-end blink host
 - [API Reference](/reference/) - Complete API docs

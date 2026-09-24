@@ -130,12 +130,14 @@ impl Writer {
                 self.u8(9);
                 self.str(&f.name);
                 self.u32(f.arity as u32);
+                self.u32(f.required as u32);
                 self.u32(f.chunk_index as u32);
             }
             Value::Closure(c) => {
                 self.u8(10);
                 self.u32(c.function_index as u32);
                 self.u32(c.arity as u32);
+                self.u32(c.required as u32);
                 self.u32(c.upvalues.len() as u32);
                 for u in &c.upvalues {
                     self.u32(*u as u32);
@@ -301,16 +303,19 @@ impl<'a> Reader<'a> {
             9 => {
                 let name = self.str()?;
                 let arity = self.u32()? as usize;
+                let required = self.u32()? as usize;
                 let chunk_index = self.u32()? as usize;
                 Ok(Value::Function(Rc::new(FunctionObj {
                     name: Rc::from(name.as_str()),
                     arity,
+                    required,
                     chunk_index,
                 })))
             }
             10 => {
                 let function_index = self.u32()? as usize;
                 let arity = self.u32()? as usize;
+                let required = self.u32()? as usize;
                 let n = self.u32()? as usize;
                 let mut upvalues = Vec::with_capacity(n);
                 for _ in 0..n {
@@ -319,6 +324,7 @@ impl<'a> Reader<'a> {
                 Ok(Value::Closure(Rc::new(ClosureObj {
                     function_index,
                     arity,
+                    required,
                     upvalues,
                 })))
             }

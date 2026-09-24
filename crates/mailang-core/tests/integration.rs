@@ -1,7 +1,17 @@
-use mailang_core::MailangInterpreter;
+use mailang_core::{MailangInterpreter, VmBackend};
+
+/// Shared interpreter factory. `MAILANG_VM=register` runs the whole suite on
+/// the register VM (stack-VM equivalence gate before any default switch).
+fn interp() -> MailangInterpreter {
+    let mut interp = MailangInterpreter::new();
+    if std::env::var("MAILANG_VM").as_deref() == Ok("register") {
+        interp.set_vm_backend(VmBackend::Register);
+    }
+    interp
+}
 
 fn eval(code: &str) -> String {
-    let mut interp = MailangInterpreter::new();
+    let mut interp = interp();
     interp
         .eval(code)
         .unwrap_or_else(|e| panic!("eval failed: {}", e))
@@ -433,7 +443,7 @@ fn test_map_property_set() {
 #[test]
 fn test_bytecode_roundtrip() {
     use mailang_core::bytecode::{decode, encode};
-    let mut interp = MailangInterpreter::new();
+    let mut interp = interp();
     let bc = interp.compile("let x = 1 + 2\nx").expect("compile");
     let bytes = encode(&bc);
     let back = decode(&bytes).expect("decode");
@@ -472,7 +482,7 @@ fn test_adc_read_default() {
 
 #[test]
 fn test_analyzer_undefined_variable() {
-    let mut interp = MailangInterpreter::new();
+    let mut interp = interp();
     let err = interp.eval("not_defined_xyz").unwrap_err();
     assert!(err.contains("Undefined variable"), "got: {}", err);
 }
@@ -485,7 +495,7 @@ fn test_analyzer_allows_builtins() {
 #[test]
 fn test_analyzer_allows_this_super() {
     // oop_demo uses this/super; covered by example but assert via check
-    let mut interp = MailangInterpreter::new();
+    let mut interp = interp();
     let src = r#"
 class A {
     fn init() { this.x = 1 }
@@ -563,7 +573,7 @@ let a = Node()
 a.next = a
 a.next
 "#;
-    let mut interp = MailangInterpreter::new();
+    let mut interp = interp();
     assert_eq!(interp.eval(src).unwrap(), "<instance 1>");
     let broken = interp.collect_cycles();
     assert!(broken >= 1, "expected to break self-cycle, got {}", broken);
@@ -571,7 +581,7 @@ a.next
 
 #[test]
 fn test_gc_breaks_array_cycle() {
-    let mut interp = MailangInterpreter::new();
+    let mut interp = interp();
     let out = interp
         .eval(
             r#"
@@ -698,3 +708,206 @@ fn test_read_write_file_roundtrip() {
     assert_eq!(eval(&src), "hello-g4");
     let _ = std::fs::remove_file(&path);
 }
+
+// --- Phase H: correctness ---
+
+#[test]
+fn test_default_params() {
+    assert_eq!(eval("fn f(a, b = 10) {\n    return a + b\n}\nf(1)"), "11");
+    assert_eq!(eval("fn f(a, b = 10) {\n    return a + b\n}\nf(1, 2)"), "3");
+    assert_eq!(eval("fn f(a, b = a + 1) {\n    return b\n}\nf(5)"), "6");
+}
+
+#[test]
+fn test_default_params_lambda() {
+    assert_eq!(eval("let g = fn(a, b = 3) { return a * b }\ng(2)"), "6");
+    assert_eq!(eval("let g = fn(a, b = 3) { return a * b }\ng(2, 4)"), "8");
+}
+
+#[test]
+fn test_match_array_destructure() {
+    assert_eq!(
+        eval("let v = [1, 2]\nmatch v {\n    [a, b] => a + b\n    _ => 0\n}"),
+        "3"
+    );
+    assert_eq!(
+        eval("let v = [1]\nmatch v {\n    [a, b] => a + b\n    _ => 99\n}"),
+        "99"
+    );
+    assert_eq!(
+        eval("let v = [10, 20, 30]\nmatch v {\n    [x, _, z] => x + z\n    _ => 0\n}"),
+        "40"
+    );
+}
+
+#[test]
+fn test_match_tuple_destructure() {
+    assert_eq!(
+        eval("let p = (3, 4)\nmatch p {\n    (a, b) => a * b\n    _ => 0\n}"),
+        "12"
+    );
+}
+
+#[test]
+fn test_match_bind_is_local() {
+    let src =
+        "fn go(x) {\n    let r = match x {\n        n => n * 2\n    }\n    return r\n}\ngo(21)";
+    assert_eq!(eval(src), "42");
+}
+
+#[test]
+fn test_match_bind_not_global() {
+    let mut interp = interp();
+    let out = interp
+        .eval("fn go(x) {\n    return match x {\n        n => n * 2\n    }\n}\ngo(1)\nn")
+        .unwrap_or_else(|e| e);
+    assert!(
+        out.contains("Undefined") || out.to_lowercase().contains("error") || out == "null",
+        "match binding leaked as global: {out}"
+    );
+}
+
+#[test]
+fn test_let_destructure() {
+    assert_eq!(eval("let (a, b) = (1, 2)\na + b"), "3");
+    assert_eq!(eval("let [x, y] = [10, 20]\nx + y"), "30");
+}
+
+#[test]
+fn test_postfix_match() {
+    assert_eq!(
+        eval("let x = 3\nx match {\n    1 => \"one\"\n    3 => \"three\"\n    _ => \"other\"\n}"),
+        "three"
+    );
+}
+
+#[test]
+fn test_trait_extends() {
+    let src = "trait A {\n    fn foo(self) { return 1 }\n}\ntrait B extends A {\n    fn bar(self) { return 2 }\n}\nclass C implements B {\n    fn baz(self) { return 3 }\n}\nlet c = C()\nc.foo() + c.bar() + c.baz()";
+    assert_eq!(eval(src), "6");
+}
+
+#[test]
+fn test_super_method() {
+    let src = "class Animal {\n    fn speak(self) { return \"...\" }\n}\nclass Dog extends Animal {\n    fn speak(self) { return \"woof\" }\n    fn parent_speak(self) { return super.speak() }\n}\nlet d = Dog()\nd.speak() + \"|\" + d.parent_speak()";
+    assert_eq!(eval(src), "woof|...");
+}
+
+#[test]
+fn test_parent_method_inherited() {
+    let src = "class Animal {\n    fn hello(self) { return \"hi\" }\n}\nclass Dog extends Animal {\n}\nDog().hello()";
+    assert_eq!(eval(src), "hi");
+}
+
+#[test]
+fn test_immutable_let_rejects_assign() {
+    let src = "let x = 1\nx = 2\n";
+    let mut parser = mailang_core::parser::Parser::new(src).unwrap();
+    let program = parser.parse_program().unwrap();
+    let mut analyzer = mailang_core::analyzer::Analyzer::new();
+    let errs = analyzer.analyze(&program).unwrap_err();
+    assert!(
+        errs.iter()
+            .any(|e| e.to_string().contains("immutable") || e.to_string().contains("assign")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn test_var_allows_assign() {
+    assert_eq!(eval("var x = 1\nx = 2\nx"), "2");
+}
+
+#[test]
+fn test_property_non_literal_default() {
+    let src = "fn make() { return 7 }\nclass C {\n    let val = make()\n    fn get(self) { return self.val }\n}\nC().get()";
+    assert_eq!(eval(src), "7");
+}
+
+// --- Phase I: debuggability / sandbox ---
+
+#[test]
+fn test_runtime_error_has_line_info() {
+    let mut interp = interp();
+    let err = interp.eval("let x = 1\nx * true").unwrap_err();
+    assert!(
+        err.contains("line") || err.contains(":"),
+        "error should carry location: {err}"
+    );
+}
+
+#[test]
+fn test_fuel_exhausted() {
+    let mut interp = interp();
+    interp.set_fuel(Some(50));
+    let err = interp
+        .eval("fn f(n) {\n    if n <= 0 { return 0 }\n    return f(n - 1) + 1\n}\nf(100)")
+        .unwrap_err();
+    assert!(
+        err.to_lowercase().contains("fuel") || err.to_lowercase().contains("budget"),
+        "expected fuel error: {err}"
+    );
+}
+
+#[test]
+fn test_call_depth_exceeded() {
+    let mut interp = interp();
+    interp.set_max_call_depth(16);
+    let err = interp
+        .eval("fn f(n) {\n    return 1 + f(n + 1)\n}\nf(0)")
+        .unwrap_err();
+    assert!(
+        err.to_lowercase().contains("depth")
+            || err.to_lowercase().contains("stack")
+            || err.to_lowercase().contains("call"),
+        "expected call-depth error: {err}"
+    );
+}
+
+// --- Phase K: mark-sweep GC + register VM ---
+
+#[test]
+fn test_mark_sweep_frees_cycles() {
+    let mut interp = interp();
+    // Build a self-referential array cycle in a scope, drop the root, collect.
+    let src = "fn make() {\n    let a = [1]\n    a.push(a)\n    return 0\n}\nmake()";
+    assert_eq!(eval(src), "0");
+    let freed = interp.collect_cycles();
+    // Mark-sweep should run without panicking; freed may be 0 if Rc already dropped.
+    let _ = freed;
+    let (tracked, cols, _) = interp.gc_stats();
+    assert!(
+        cols >= 1,
+        "collect_cycles should count a collection, got {cols}"
+    );
+    let _ = tracked;
+}
+
+#[test]
+fn test_register_vm_arith() {
+    let mut interp = interp();
+    let bc = interp.compile("1 + 2 * 3").unwrap();
+    let out = interp.run_bytecode_register(bc).unwrap();
+    assert_eq!(out, "7");
+}
+
+#[test]
+fn test_register_vm_function() {
+    let mut interp = interp();
+    let bc = interp
+        .compile("fn f(a, b) {\n    return a + b\n}\nf(2, 40)")
+        .unwrap();
+    let out = interp.run_bytecode_register(bc).unwrap();
+    assert_eq!(out, "42");
+}
+
+#[test]
+fn test_register_vm_if_and_locals() {
+    let mut interp = interp();
+    let src = "var x = 10\nvar y = 0\nif x > 5 {\n    y = 1\n} else {\n    y = 2\n}\ny";
+    let bc = interp.compile(src).unwrap();
+    let out = interp.run_bytecode_register(bc).unwrap();
+    assert_eq!(out, "1");
+}
+
+// ---

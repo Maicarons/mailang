@@ -143,7 +143,8 @@ fn add(a: int, b: int) -> int {
     return a + b
 }
 
-fn greet(name = "World") -> str {
+// Default parameters are not implemented yet (in progress)
+fn greet(name: str) -> str {
     return "Hello, {name}!"
 }
 
@@ -190,7 +191,8 @@ fn divide(a: float, b: float) -> Result<float, str> {
     return Ok(a / b)
 }
 
-let value = divide(10.0, 3.0) match {
+// Note: postfix `expr match { ... }` is not implemented yet (in progress)
+let value = match divide(10.0, 3.0) {
     Ok(v) => v,
     Err(e) => {
         println("Error: {e}")

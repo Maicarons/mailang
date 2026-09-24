@@ -468,6 +468,7 @@ name = "mailang-analyzer"
 version = "0.2.6"
 dependencies = [
  "mailang-ast",
+ "mailang-parser",
  "thiserror",
 ]
 
@@ -492,6 +493,7 @@ dependencies = [
  "clap",
  "mailang-core",
  "mailang-lsp",
+ "mailang-module",
  "tokio",
 ]
 
@@ -501,6 +503,7 @@ version = "0.2.6"
 dependencies = [
  "mailang-ast",
  "mailang-bytecode",
+ "mailang-parser",
  "thiserror",
 ]
 
@@ -578,6 +581,8 @@ dependencies = [
  "mailang-bytecode",
  "mailang-compiler",
  "mailang-parser",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

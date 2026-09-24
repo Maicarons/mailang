@@ -62,6 +62,7 @@ defineProps<{
   font-size: 14px;
   line-height: 1.6;
   white-space: pre-wrap;
+  word-break: break-word;
   margin: 0;
 }
 

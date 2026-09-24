@@ -59,7 +59,7 @@ Source (.mai) → Lexer → Parser → Compiler → VM
 - **mailang-analyzer**: Semantic analysis and type checking (stub/in-progress). Depends on mailang-ast.
 - **mailang-compiler**: Bytecode compiler. AST (`Program`) → `Bytecode`. Depends on mailang-ast, mailang-bytecode.
 - **mailang-bytecode**: Bytecode IR definitions (`Opcode`, `Value`, `Instruction`, `Chunk`, `Bytecode`). Shared between compiler and VM.
-- **mailang-vm**: Register-based bytecode virtual machine. Executes `Bytecode`, returns `Value`.
+- **mailang-vm**: Stack-based bytecode virtual machine with slot locals. Executes `Bytecode`, returns `Value`.
 - **mailang-stdlib**: Built-in functions (`println`, `sqrt`, `len`, `parse_int`, etc.) operating on `mailang_bytecode::Value`.
 - **mailang-core**: Glue crate. Re-exports all above. Contains `MailangInterpreter` which orchestrates Parser → Compiler → VM pipeline. This is the main integration point.
 - **mailang-cli**: CLI binary. Uses `clap` for subcommands (`run`, `eval`) and provides an interactive REPL.
@@ -71,7 +71,7 @@ Source (.mai) → Lexer → Parser → Compiler → VM
 
 ### Key Design Decisions
 
-- **Register-based bytecode VM** (not stack-based) for better performance on IoT devices.
+- **Stack-based bytecode VM + slot locals** (not a register VM) for predictable performance on IoT devices.
 - **Value enum** in mailang-bytecode is the universal runtime type: `Null`, `Bool`, `Int(i64)`, `Float(f64)`, `Str`, `Char`, `Array`, `Map`, `Tuple`, `Function`, `Closure`, `Class`, `Instance`, `Ok`, `Err`, `Some`.
 - **Local vs global variable resolution**: Compiler resolves locals by stack index, globals by constant-pool name. Closures capture via upvalues.
 - **Chunk-based bytecode**: Each function gets its own `Chunk` with independent instruction and constant lists. Main code is chunk 0.
@@ -91,4 +91,12 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-**v0.2.4** (Phases B–G core items). Runtime supports OOP (inherited constructors), traits, pattern matching, `?`, TCO, collections/str methods, `read_file`/`write_file`, `.mailangbc`, HAL, C FFI, analyzer/LSP/fmt, module v2, and Rc cycle collection. Fib(30) ~137 ms (~4.25× baseline). 81+ integration tests.
+**Phase H (v0.2.6 docs baseline + language completeness)**. Runtime supports OOP (inherited constructors, `super()` ctor, `super.method()`, inherited methods), traits (`implements`, `trait extends`), pattern matching (literals/ranges/`Ok`/`Err`/`Some`/or/guards + **array/tuple match destructure**), **`let`/`var` destructuring**, **default parameter values**, **postfix `expr match { }`**, **mutability enforcement** (`let`/`const` reject assignment), `?`, TCO, collections/str methods (`push`/`pop`/`insert`/`contains`/`join`/`reverse`/`clear`; map `keys`/`values`/`has`/`remove`/`clear`; str `trim`/`split`/`replace`/`starts_with`/`ends_with`/`contains`/`to_upper`/`to_lower`/`repeat`), global `read_file`/`write_file`, `.mailangbc`, simulated HAL, C FFI, analyzer/LSP/fmt, module v2 with **`mailang.toml` path dependencies** (`mailang deps`), and Rc cycle collection via `collect_cycles()`. Fib(30) ~137 ms (~4.25× baseline). **95+ integration tests**.
+
+### Remaining gaps (honest)
+
+- No package registry (local modules only); generics are annotation-only (no monomorphization); `async` not supported.
+- GC is Rc + manual cycle-break only (no mark-sweep / incremental).
+- IoT HAL is simulated by default until a real HAL is registered via FFI.
+- Parser has no `recover_from_error` token-sync recovery (fails on first parse error).
+- VM has no `set_debug` / `memory_stats` APIs.

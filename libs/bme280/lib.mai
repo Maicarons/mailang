@@ -1,0 +1,16 @@
+// bme280 — BME280 temperature/humidity driver STUB
+// Version: 0.1.0
+//
+// Honest note: no I2C/SPI here. Values are simulation constants.
+// A real deployment must register host transport (register read/write)
+// via mailang_register_host_fn and wire lib.mai to those callbacks.
+
+// Simulated temperature in °C (fixed stub value)
+fn read_temp() {
+    return 25.0
+}
+
+// Simulated relative humidity in % (fixed stub value)
+fn read_humidity() {
+    return 40.0
+}

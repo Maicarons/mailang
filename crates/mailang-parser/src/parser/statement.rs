@@ -42,6 +42,29 @@ impl Parser {
         } else {
             false
         };
+        self.parse_binding(mutable)
+    }
+
+    fn parse_var_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.expect(&Token::Var)?;
+        self.parse_binding(true)
+    }
+
+    /// Parse a let/var binding target: simple `name[: T] [= v]` or
+    /// destructuring `(a, b) = v` / `[a, b] = v`.
+    fn parse_binding(&mut self, mutable: bool) -> Result<Stmt, ParseError> {
+        if matches!(self.peek(), Token::LeftParen | Token::LeftBracket) {
+            let pattern = self.parse_pattern()?;
+            self.expect(&Token::Assign)?;
+            let value = self.parse_expression()?;
+            return Ok(Stmt::Let {
+                name: String::new(),
+                mutable,
+                type_annotation: None,
+                value: Some(value),
+                pattern: Some(pattern),
+            });
+        }
         let name = self.expect_identifier()?;
         let type_annotation = if self.peek() == &Token::Colon {
             self.advance();
@@ -60,29 +83,7 @@ impl Parser {
             mutable,
             type_annotation,
             value,
-        })
-    }
-
-    fn parse_var_statement(&mut self) -> Result<Stmt, ParseError> {
-        self.expect(&Token::Var)?;
-        let name = self.expect_identifier()?;
-        let type_annotation = if self.peek() == &Token::Colon {
-            self.advance();
-            Some(self.parse_type_annotation()?)
-        } else {
-            None
-        };
-        let value = if self.peek() == &Token::Assign {
-            self.advance();
-            Some(self.parse_expression()?)
-        } else {
-            None
-        };
-        Ok(Stmt::Let {
-            name,
-            mutable: true,
-            type_annotation,
-            value,
+            pattern: None,
         })
     }
 
@@ -107,6 +108,9 @@ impl Parser {
     pub(crate) fn parse_function_definition(&mut self) -> Result<Stmt, ParseError> {
         self.expect(&Token::Fn)?;
         let name = self.expect_identifier()?;
+        let type_params = self.parse_type_parameter_list()?;
+        let saved = self.type_params.len();
+        self.type_params.extend(type_params.iter().cloned());
         self.expect(&Token::LeftParen)?;
         let params = self.parse_parameter_list()?;
         self.expect(&Token::RightParen)?;
@@ -119,8 +123,10 @@ impl Parser {
         self.expect(&Token::LeftBrace)?;
         let body = self.parse_block()?;
         self.expect(&Token::RightBrace)?;
+        self.type_params.truncate(saved);
         Ok(Stmt::FunctionDef {
             name,
+            type_params,
             params,
             return_type,
             body,
@@ -183,7 +189,7 @@ impl Parser {
                     let ok_type = self.parse_type_annotation()?;
                     self.expect(&Token::Comma)?;
                     let err_type = self.parse_type_annotation()?;
-                    self.expect(&Token::Greater)?;
+                    self.expect_greater()?;
                     Ok(TypeAnnotation::Result(
                         Box::new(ok_type),
                         Box::new(err_type),
@@ -193,28 +199,20 @@ impl Parser {
                     // Option<T>
                     self.expect(&Token::Less)?;
                     let inner = self.parse_type_annotation()?;
-                    self.expect(&Token::Greater)?;
+                    self.expect_greater()?;
                     Ok(TypeAnnotation::Option(Box::new(inner)))
                 }
                 _ => {
-                    // Check for generic type: Name<T, ...>
+                    // Type parameter in the current generic scope: `T` in `fn id<T>(x: T)`.
+                    if self.is_type_param(&name) {
+                        return Ok(TypeAnnotation::Param(name));
+                    }
+                    // Generic application: Name<T, ...>
                     if self.peek() == &Token::Less {
                         self.advance(); // consume <
-                        let mut type_args = Vec::new();
-                        type_args.push(self.parse_type_annotation()?);
-                        while self.peek() == &Token::Comma {
-                            self.advance();
-                            type_args.push(self.parse_type_annotation()?);
-                        }
-                        self.expect(&Token::Greater)?;
-                        // Represent generic as Custom with encoded args
-                        let args_str: Vec<String> =
-                            type_args.iter().map(|t| format!("{:?}", t)).collect();
-                        Ok(TypeAnnotation::Custom(format!(
-                            "{}<{}>",
-                            name,
-                            args_str.join(",")
-                        )))
+                        let type_args = self.parse_type_argument_list()?;
+                        self.expect_greater()?;
+                        Ok(TypeAnnotation::Apply(name, type_args))
                     } else {
                         Ok(TypeAnnotation::Custom(name))
                     }
@@ -251,6 +249,9 @@ impl Parser {
     fn parse_class_definition(&mut self) -> Result<Stmt, ParseError> {
         self.expect(&Token::Class)?;
         let name = self.expect_identifier()?;
+        let type_params = self.parse_type_parameter_list()?;
+        let saved = self.type_params.len();
+        self.type_params.extend(type_params.iter().cloned());
         let superclass = if self.peek() == &Token::Extends {
             self.advance();
             Some(self.expect_identifier()?)
@@ -272,8 +273,10 @@ impl Parser {
         self.expect(&Token::LeftBrace)?;
         let members = self.parse_class_members()?;
         self.expect(&Token::RightBrace)?;
+        self.type_params.truncate(saved);
         Ok(Stmt::ClassDef {
             name,
+            type_params,
             superclass,
             traits,
             members,
@@ -365,10 +368,26 @@ impl Parser {
     fn parse_trait_definition(&mut self) -> Result<Stmt, ParseError> {
         self.expect(&Token::Trait)?;
         let name = self.expect_identifier()?;
+        let supertraits = if self.peek() == &Token::Extends {
+            self.advance();
+            let mut supertraits = Vec::new();
+            supertraits.push(self.expect_identifier()?);
+            while self.peek() == &Token::Comma {
+                self.advance();
+                supertraits.push(self.expect_identifier()?);
+            }
+            supertraits
+        } else {
+            Vec::new()
+        };
         self.expect(&Token::LeftBrace)?;
         let methods = self.parse_trait_methods()?;
         self.expect(&Token::RightBrace)?;
-        Ok(Stmt::TraitDef { name, methods })
+        Ok(Stmt::TraitDef {
+            name,
+            supertraits,
+            methods,
+        })
     }
 
     fn parse_trait_methods(&mut self) -> Result<Vec<TraitMethod>, ParseError> {

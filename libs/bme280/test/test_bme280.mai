@@ -1,0 +1,35 @@
+// bme280 stub tests — expect fixed sim values
+
+import "bme280"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+println("=== bme280 stub tests ===")
+
+let t = bme280.read_temp()
+assert(t == 25.0, "read_temp() == 25.0 (sim)")
+
+let h = bme280.read_humidity()
+assert(h == 40.0, "read_humidity() == 40.0 (sim)")
+
+assert(t > 0 && t < 85, "temp in plausible °C range")
+assert(h >= 0 && h <= 100, "humidity in 0..100")
+
+println("")
+println("通过: {passed}")
+println("失败: {failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

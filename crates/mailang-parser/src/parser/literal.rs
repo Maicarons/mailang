@@ -68,9 +68,25 @@ impl Parser {
             }
             Token::LeftParen => {
                 self.advance();
-                let expr = self.parse_expression()?;
+                if self.peek() == &Token::RightParen {
+                    self.advance();
+                    return Ok(Expr::Tuple(Vec::new()));
+                }
+                let first = self.parse_expression()?;
+                if self.peek() == &Token::Comma {
+                    let mut items = vec![first];
+                    while self.peek() == &Token::Comma {
+                        self.advance();
+                        if self.peek() == &Token::RightParen {
+                            break;
+                        }
+                        items.push(self.parse_expression()?);
+                    }
+                    self.expect(&Token::RightParen)?;
+                    return Ok(Expr::Tuple(items));
+                }
                 self.expect(&Token::RightParen)?;
-                Ok(expr)
+                Ok(first)
             }
             Token::LeftBracket => self.parse_array_literal(),
             Token::LeftBrace => self.parse_map_literal(),
@@ -204,6 +220,16 @@ impl Parser {
         self.expect(&Token::Match)?;
         let scrutinee = self.parse_expression()?;
         self.expect(&Token::LeftBrace)?;
+        let arms = self.parse_match_arms()?;
+        self.expect(&Token::RightBrace)?;
+        Ok(Expr::Match {
+            scrutinee: Box::new(scrutinee),
+            arms,
+        })
+    }
+
+    /// Parse match arms between an already-consumed `{` and a closing `}`.
+    pub(crate) fn parse_match_arms(&mut self) -> Result<Vec<MatchArm>, ParseError> {
         let mut arms = Vec::new();
         self.skip_newlines();
 
@@ -230,14 +256,10 @@ impl Parser {
             }
         }
 
-        self.expect(&Token::RightBrace)?;
-        Ok(Expr::Match {
-            scrutinee: Box::new(scrutinee),
-            arms,
-        })
+        Ok(arms)
     }
 
-    fn parse_pattern(&mut self) -> Result<Pattern, ParseError> {
+    pub(crate) fn parse_pattern(&mut self) -> Result<Pattern, ParseError> {
         let first = self.parse_pattern_atom()?;
 
         // Check for range pattern: start..end or start..=end

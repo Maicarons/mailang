@@ -266,12 +266,14 @@ class Circle extends Shape {
 
 ### 接口继承
 
+> **尚未实现（开发中）**：`trait ... extends ...` 语法当前不可用。以下为目标形态。
+
 ```
 trait Shape {
     fn area() -> float
 }
 
-trait Transformable extends Shape {
+trait Transformable extends Shape {  // NOT IMPLEMENTED yet
     fn scale(factor: float)
     fn translate(dx: float, dy: float)
 }
@@ -280,6 +282,8 @@ class TransformableShape implements Transformable {
     // 必须实现 Shape 和 Transformable 的所有方法
 }
 ```
+
+当前请分别 `implements` 多个 trait，或在类中手动实现全部方法。
 
 ## 设计模式
 

@@ -4,11 +4,9 @@
 
 ## 概述
 
-MaìLang 标准库提供了常用的功能模块，无需额外安装即可使用。
+MaìLang 标准库以内置全局函数 + 内置方法的形式提供，无需导入即可使用。下文只列出当前运行时真实支持的 API。
 
-## io 模块
-
-### 输入输出
+## 输入输出
 
 ```
 // 打印到标准输出（带换行）
@@ -19,265 +17,122 @@ println("多项: {1}, {2}, {3}")
 // 打印到标准输出（不带换行）
 print("请输入: ")
 
-// 从标准输入读取
+// 从标准输入读取一行
 let name = input("请输入姓名: ")
 let password = input()  // 无提示
 ```
 
-### 文件操作
+## 文件读写（全局函数）
 
 ```
-// 读取文件
-let content = io.read_file("config.json")
+// 读取文件全部内容 → str
+let content = read_file("config.json")
 println(content)
 
-// 写入文件
-io.write_file("output.txt", "Hello, World!")
-
-// 追加写入
-io.append_file("log.txt", "新的日志\n")
-
-// 检查文件是否存在
-if io.exists("config.json") {
-    println("配置文件存在")
-}
-
-// 删除文件
-io.remove_file("temp.txt")
+// 写入文件（覆盖）→ null
+write_file("output.txt", "Hello, World!")
 ```
 
-## math 模块
+**说明**：没有 `io.read_file` / `io.write_file` / `io.append_file` / `io.exists` / `io.remove_file`。文件 API 仅有全局的 `read_file` 与 `write_file`。
 
-### 基本数学函数
-
-```
-// 绝对值
-math.abs(-5)       // 5
-math.abs(-3.14)    // 3.14
-
-// 平方根
-math.sqrt(16.0)    // 4.0
-math.sqrt(2.0)     // 1.4142135...
-
-// 三角函数
-math.sin(0.0)      // 0.0
-math.cos(0.0)      // 1.0
-math.tan(0.0)      // 0.0
-
-// 反三角函数
-math.asin(0.0)     // 0.0
-math.acos(1.0)     // 0.0
-math.atan(0.0)     // 0.0
-
-// 指数和对数
-math.exp(1.0)      // 2.71828... (e)
-math.log(2.71828)  // 1.0
-math.log2(8.0)     // 3.0
-math.log10(100.0)  // 2.0
-math.pow(2.0, 3.0) // 8.0
-
-// 取整
-math.floor(3.7)    // 3
-math.ceil(3.2)     // 4
-math.round(3.5)    // 4
-math.trunc(3.7)    // 3
-
-// 最大最小值
-math.max(1, 2, 3)  // 3
-math.min(1, 2, 3)  // 1
-
-// 常量
-math.PI            // 3.141592653589793
-math.E             // 2.718281828459045
-math.INFINITY      // 无穷大
-math.NAN           // 非数字
-```
-
-### 随机数
+## 数学函数（全局）
 
 ```
-// 0.0 到 1.0 之间的随机浮点数
-let r = math.random()
-
-// 指定范围的随机整数
-let dice = math.random_int(1, 6)
-
-// 随机选择
-let colors = ["红", "绿", "蓝"]
-let color = math.random_choice(colors)
+abs(-5)            // 5
+sqrt(16.0)         // 4.0
+sin(0.0)           // 0.0
+cos(0.0)           // 1.0
+floor(3.7)         // 3
+ceil(3.2)          // 4
+round(3.5)         // 4
+min(1, 2, 3)       // 1
+max(1, 2, 3)       // 3
 ```
 
-## string 模块
+**说明**：当前没有 `math.` 模块命名空间，也没有 `random` / `pow` / `log` / 三角反函数等更完整的数学库。
 
-### 字符串操作
+## 字符串方法
 
 ```
 let s = "Hello, MaìLang!"
 
-// 长度
-s.len()           // 15
-
-// 大小写转换
-s.upper()         // "HELLO, MAÌLANG!"
-s.lower()         // "hello, maìlang!"
-
-// 查找
-s.contains("Maì")    // true
+s.len              // 15（字符数，属性）
+s.trim()           // 去除首尾空白
+s.to_upper()       // 转大写（别名 to_uppercase）
+s.to_lower()       // 转小写（别名 to_lowercase）
 s.starts_with("Hello") // true
-s.ends_with("!")     // true
-s.find("Maì")        // 7 (索引)
-s.rfind("l")         // 13 (从后向前)
-
-// 截取
-s.slice(0, 5)     // "Hello"
-s.slice(7)        // "MaìLang!"
-
-// 替换
-s.replace("World", "MaìLang")  // "Hello, MaìLang!"
-s.replace_all("l", "L")        // "HeLLo, MaìLang!"
-
-// 分割与连接
-"a,b,c".split(",")     // ["a", "b", "c"]
-["a", "b", "c"].join("-") // "a-b-c"
-
-// 去除空白
-"  hello  ".trim()       // "hello"
-"  hello  ".trim_start() // "hello  "
-"  hello  ".trim_end()   // "  hello"
-
-// 重复
-"ha".repeat(3)           // "hahaha"
-
-// 填充
-"42".pad_start(5, "0")   // "00042"
-"42".pad_end(5, ".")     // "42..."
-
-// 类型转换
-"42".to_int()            // 42
-"3.14".to_float()        // 3.14
-42.to_string()           // "42"
-3.14.to_string()         // "3.14"
+s.ends_with("!")       // true
+s.contains("Maì")      // true
+s.split(",")           // 按分隔符分割 → 数组
+s.replace("World", "MaìLang")  // 替换（全部匹配）
+s.repeat(3)            // 重复 n 次
 ```
 
-## collections 模块
-
-### 数组操作
+## 数组方法
 
 ```
-var arr = [3, 1, 4, 1, 5, 9, 2, 6]
+var arr = [3, 1, 4]
 
-// 添加元素
-arr.push(5)           // [3, 1, 4, 1, 5, 9, 2, 6, 5]
-arr.insert(0, 0)      // [0, 3, 1, 4, 1, 5, 9, 2, 6, 5]
-
-// 删除元素
-arr.pop()              // 返回 5, 数组变为 [0, 3, 1, 4, 1, 5, 9, 2, 6]
-arr.remove(0)          // 返回 0, 数组变为 [3, 1, 4, 1, 5, 9, 2, 6]
-
-// 查找
-arr.contains(4)        // true
-arr.index_of(4)        // 2
-arr.last_index_of(1)   // 3
-
-// 排序
-arr.sort()             // [1, 1, 2, 3, 4, 5, 6, 9]
-arr.reverse()          // [9, 6, 5, 4, 3, 2, 1, 1]
-
-// 切片
-arr.slice(0, 3)        // [9, 6, 5]
-arr.slice(2)           // [5, 4, 3, 2, 1, 1]
-
-// 其他
-arr.len()              // 8
-arr.is_empty()         // false
-arr.first()            // 9
-arr.last()             // 1
-arr.sum()              // 31
-arr.min()              // 1
-arr.max()              // 9
-arr.average()          // 3.875
-
-// 高阶函数
-arr.map(fn(x) -> x * 2)           // [18, 12, 10, 8, 6, 4, 2, 2]
-arr.filter(fn(x) -> x > 3)        // [9, 6, 5, 4]
-arr.reduce(0, fn(acc, x) -> acc + x) // 31
-arr.find(fn(x) -> x > 5)          // 9
-arr.every(fn(x) -> x > 0)         // true
-arr.some(fn(x) -> x > 8)          // true
+arr.len              // 3（属性）
+arr.push(5)          // 追加
+arr.pop()            // 弹出并返回末尾元素
+arr.insert(0, 0)     // 在指定下标插入
+arr.contains(4)      // 是否包含
+arr.join(",")        // 连接为字符串
+arr.reverse()        // 反转
+arr.clear()          // 清空
 ```
 
-### 字典操作
+## 字典方法
 
 ```
-var map = {"name": "MaìLang", "version": "0.1.0"}
+var map = {"name": "MaìLang"}
 
-// 添加/修改
-map["author"] = "MaìLang Team"
-
-// 访问
-map["name"]           // "MaìLang"
-map.get("name")       // "MaìLang"
-map.get_or("year", 2024) // 2024 (如果不存在)
-
-// 检查
-map.has_key("name")   // true
-map.has_value("MaìLang") // true
-
-// 删除
-map.remove("version")
-
-// 获取键值对
-map.keys()            // ["name", "author"]
-map.values()          // ["MaìLang", "MaìLang Team"]
-map.entries()         // [["name", "MaìLang"], ["author", "MaìLang Team"]]
-
-// 大小
-map.len()             // 2
-map.is_empty()        // false
+map["name"]          // 读取
+map["version"] = "0.2.6"  // 写入
+map.has("name")      // 是否包含键
+map.keys()           // 所有键 → 数组
+map.values()         // 所有值 → 数组
+map.remove("name")   // 删除键
+map.clear()          // 清空
 ```
 
-## 转换函数
+## 类型转换（全局）
 
 ```
-// 字符串转数字
-parse_int("42")       // 42
-parse_float("3.14")   // 3.14
-
-// 数字转字符串
-to_string(42)         // "42"
-to_string(3.14)       // "3.14"
-
-// 类型检查
-is_int(42)            // true
-is_float(3.14)        // true
-is_str("hello")       // true
-is_bool(true)         // true
-is_null(null)         // true
-is_array([1, 2])      // true
-is_map({"a": 1})      // true
+to_string(42)        // "42"
+parse_int("42")      // 42
+parse_float("3.14")  // 3.14
+len(arr_or_str)      // 长度（也可用 .len 属性）
 ```
 
-## 系统模块
+## 时间（全局）
 
 ```
-// 获取当前时间戳（秒）
-let timestamp = sys.time()
-
-// 获取环境变量
-let home = sys.env("HOME")
-let path = sys.env("PATH")
-
-// 命令行参数
-let args = sys.args()
-
-// 退出程序
-sys.exit(0)
-sys.exit(1)  // 非零表示错误
-
-// 平台信息
-sys.os()      // "windows", "linux", "macos"
-sys.arch()    // "x86_64", "aarch64"
+time_now()           // 当前时间戳（毫秒）
+time_now_secs()      // 当前时间戳（秒）
+time_year()
+time_month()
+time_day()
+time_hour()
+time_minute()
+time_second()
+time_date()          // "YYYY-MM-DD"
+time_datetime()      // "YYYY-MM-DD HH:MM:SS"
+time_elapsed()       // 从给定起点经过的毫秒数
+time_sleep(ms)       // 休眠
 ```
+
+## IoT HAL（全局，默认模拟实现）
+
+```
+gpio_write(pin, level)
+gpio_read(pin)
+adc_read(channel)
+delay_ms(ms)
+```
+
+默认由宿主模拟实现；嵌入式部署可通过 FFI 注册真实 HAL。
 
 ## 错误处理
 

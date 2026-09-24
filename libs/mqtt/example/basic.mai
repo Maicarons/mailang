@@ -1,0 +1,9 @@
+// mqtt stub — publish example
+// Returns Ok("sim"); host must supply real transport for delivery.
+
+import "mqtt"
+
+println("=== mqtt stub example ===")
+let r = mqtt.publish("devices/demo/temp", "25.0")
+println("publish result: {r}")
+println("Note: no packets left this machine (stub).")

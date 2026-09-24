@@ -1,0 +1,53 @@
+// collections_demo.mai — array / map / string methods
+// Run: cargo run -p mailang-cli -- run examples/collections_demo.mai
+
+// --- Array ---
+let a = [1]
+a.push(2)
+a.push(3)
+println(a)
+println(a.len)
+println(a.join(","))
+println(a.contains(2))
+println(a.contains(99))
+
+let last = a.pop()
+println(last)
+println(a)
+
+a.insert(0, 0)
+println(a)
+a.reverse()
+println(a)
+
+let b = ["x", "y", "z"]
+println(b.join("-"))
+println(b.contains("y"))
+
+// --- Map ---
+let m = {"name": "mailang", "kind": "iot"}
+println(m)
+println(m.has("name"))
+println(m.keys())
+println(m.values())
+println(m["name"])
+
+m.remove("kind")
+println(m.has("kind"))
+m.clear()
+println(m)
+
+// --- String ---
+let s = "  Hello, Mailang  "
+println(s.trim())
+println(s.trim().to_upper())
+println("abc".to_lower())
+println("a,b,c".split(","))
+println("a,b,c".split(",")[1])
+println("hi".contains("h"))
+println("hi".starts_with("h"))
+println("hi".ends_with("i"))
+println("ab".repeat(3))
+println("a-b".replace("-", "+"))
+println("你好".len)
+println("hello".len)

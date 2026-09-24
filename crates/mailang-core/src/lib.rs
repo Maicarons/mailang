@@ -27,6 +27,21 @@ pub struct MailangInterpreter {
     host_fns: HashMap<String, HostFn>,
     /// Globals set by the host; re-applied after each `eval`.
     host_globals: HashMap<String, mailang_bytecode::Value>,
+    /// Sandbox fuel re-applied when `eval` rebuilds the VM.
+    fuel: Option<u64>,
+    /// Call-depth cap re-applied when `eval` rebuilds the VM.
+    max_call_depth: usize,
+    /// Execute compiled bytecode on the register VM instead of the stack VM.
+    prefer_register: bool,
+}
+
+/// Which VM backend executes compiled bytecode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VmBackend {
+    /// Classic stack-based bytecode VM (default).
+    Stack,
+    /// Register (three-address) VM. Stack bytecode is lowered first.
+    Register,
 }
 
 impl MailangInterpreter {
@@ -36,6 +51,9 @@ impl MailangInterpreter {
             module_loader: None,
             host_fns: HashMap::new(),
             host_globals: HashMap::new(),
+            fuel: None,
+            max_call_depth: Vm::DEFAULT_MAX_CALL_DEPTH,
+            prefer_register: false,
         }
     }
 
@@ -46,7 +64,22 @@ impl MailangInterpreter {
             module_loader: Some(create_loader(base_dir)),
             host_fns: HashMap::new(),
             host_globals: HashMap::new(),
+            fuel: None,
+            max_call_depth: Vm::DEFAULT_MAX_CALL_DEPTH,
+            prefer_register: false,
         }
+    }
+
+    /// Select the VM backend used by [`eval`](Self::eval) / [`run_bytecode`](Self::run_bytecode).
+    /// Default is [`VmBackend::Stack`]; register mode is experimental and should
+    /// match stack semantics before becoming the default.
+    pub fn set_vm_backend(&mut self, backend: VmBackend) {
+        self.prefer_register = backend == VmBackend::Register;
+    }
+
+    fn apply_sandbox(&self, vm: &mut Vm) {
+        vm.set_fuel(self.fuel);
+        vm.set_max_call_depth(self.max_call_depth);
     }
 
     /// Set the module loader
@@ -88,6 +121,46 @@ impl MailangInterpreter {
     /// Break Rc cycles reachable from the VM stack and globals.
     pub fn collect_cycles(&mut self) -> usize {
         self.vm.collect_cycles()
+    }
+
+    /// Mark-sweep heap statistics: (tracked, collections, freed).
+    pub fn gc_stats(&self) -> (usize, usize, usize) {
+        self.vm.gc_stats()
+    }
+
+    /// Run bytecode on the **register VM** (stack bytecode is lowered to
+    /// three-address register IR first).
+    pub fn run_bytecode_register(
+        &mut self,
+        bytecode: mailang_bytecode::Bytecode,
+    ) -> Result<String, String> {
+        let mut rvm = mailang_vm::RegisterVm::new(bytecode);
+        self.apply_sandbox_to_register(&mut rvm);
+        for (name, f) in &self.host_fns {
+            rvm.register_host_fn(name.clone(), f.clone());
+        }
+        for (name, value) in &self.host_globals {
+            rvm.set_global(name, value.clone());
+        }
+        let result = rvm.run().map_err(|e| e.to_string())?;
+        Ok(mailang_stdlib::value_to_string(&result))
+    }
+
+    fn apply_sandbox_to_register(&self, vm: &mut mailang_vm::RegisterVm) {
+        vm.set_fuel(self.fuel);
+        vm.set_max_call_depth(self.max_call_depth);
+    }
+
+    /// Set an instruction budget for sandboxed execution (`None` = unlimited).
+    pub fn set_fuel(&mut self, fuel: Option<u64>) {
+        self.fuel = fuel;
+        self.vm.set_fuel(fuel);
+    }
+
+    /// Cap nested calls (runaway recursion / plugin safety).
+    pub fn set_max_call_depth(&mut self, limit: usize) {
+        self.max_call_depth = limit.max(1);
+        self.vm.set_max_call_depth(self.max_call_depth);
     }
 
     /// Run semantic analysis. Returns hard errors (unused-variable hints are ignored).
@@ -134,7 +207,12 @@ impl MailangInterpreter {
             compiler.compile(&program).map_err(|e| e.to_string())?
         };
 
-        let vm = Vm::new(bytecode);
+        if self.prefer_register {
+            return self.run_bytecode_register(bytecode);
+        }
+
+        let mut vm = Vm::new(bytecode);
+        self.apply_sandbox(&mut vm);
         self.vm = self.reapply_host_fns(vm);
         let result = self.vm.run().map_err(|e| e.to_string())?;
         Ok(mailang_stdlib::value_to_string(&result))
@@ -180,7 +258,11 @@ impl MailangInterpreter {
 
     /// Run previously compiled bytecode.
     pub fn run_bytecode(&mut self, bytecode: mailang_bytecode::Bytecode) -> Result<String, String> {
-        let vm = Vm::new(bytecode);
+        if self.prefer_register {
+            return self.run_bytecode_register(bytecode);
+        }
+        let mut vm = Vm::new(bytecode);
+        self.apply_sandbox(&mut vm);
         self.vm = self.reapply_host_fns(vm);
         let result = self.vm.run().map_err(|e| e.to_string())?;
         Ok(mailang_stdlib::value_to_string(&result))

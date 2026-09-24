@@ -1,4 +1,4 @@
-﻿# 语法指南
+# 语法指南
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.1.0-parser](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-parser) · [v0.1.0-lexer](https://github.com/Maicarons/mailang/releases/tag/v0.1.0-lexer)
 
@@ -380,7 +380,8 @@ fn divide(a: float, b: float) -> Result<float, str> {
 }
 
 // 使用 match 处理
-let result = divide(10.0, 3.0) match {
+// 注意：后缀写法 `expr match { ... }` 尚未实现（开发中）
+let result = match divide(10.0, 3.0) {
     Ok(v) => v,
     Err(e) => {
         println("错误: {e}")
@@ -401,7 +402,8 @@ fn find(arr: [int], target: int) -> Option<int> {
     return None
 }
 
-let found = find([1, 2, 3], 2) match {
+// 注意：后缀写法 `expr match { ... }` 尚未实现（开发中）
+let found = match find([1, 2, 3], 2) {
     Some(v) => "找到了: {v}",
     None => "未找到"
 }

@@ -325,6 +325,25 @@ impl Parser {
 
         loop {
             match self.peek() {
+                Token::Colon
+                    if matches!(self.peek_at(1), Token::Colon)
+                        && matches!(self.peek_at(2), Token::Less) =>
+                {
+                    // Turbofish: `id::<int>(3)`
+                    self.advance(); // :
+                    self.advance(); // :
+                    self.advance(); // <
+                    let type_args = self.parse_type_argument_list()?;
+                    self.expect_greater()?;
+                    self.expect(&Token::LeftParen)?;
+                    let args = self.parse_argument_list()?;
+                    self.expect(&Token::RightParen)?;
+                    expr = Expr::Call {
+                        callee: Box::new(expr),
+                        args,
+                        type_args,
+                    };
+                }
                 Token::LeftParen => {
                     self.advance();
                     let args = self.parse_argument_list()?;
@@ -332,6 +351,7 @@ impl Parser {
                     expr = Expr::Call {
                         callee: Box::new(expr),
                         args,
+                        type_args: Vec::new(),
                     };
                 }
                 Token::Dot => {
@@ -365,6 +385,17 @@ impl Parser {
                 Token::Question => {
                     self.advance();
                     expr = Expr::Try(Box::new(expr));
+                }
+                Token::Match => {
+                    // Postfix match: `expr match { arms }`
+                    self.advance();
+                    self.expect(&Token::LeftBrace)?;
+                    let arms = self.parse_match_arms()?;
+                    self.expect(&Token::RightBrace)?;
+                    expr = Expr::Match {
+                        scrutinee: Box::new(expr),
+                        arms,
+                    };
                 }
                 _ => break,
             }

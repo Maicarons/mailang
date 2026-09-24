@@ -8,7 +8,8 @@ const path = require("path");
 const fs = require("fs");
 
 const root = path.resolve(__dirname, "..", "..");
-const cli = path.join(root, "target", "debug", "mailang.exe");
+const exeName = process.platform === "win32" ? "mailang.exe" : "mailang";
+const cli = path.join(root, "target", "debug", exeName);
 const pkgJs = path.join(root, "crates", "mailang-wasm", "pkg", "mailang_wasm.js");
 const wasmBin = path.join(root, "target", "wasm32-unknown-unknown", "release", "mailang_wasm.wasm");
 

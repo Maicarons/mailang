@@ -244,16 +244,16 @@ enum Value {
 
 ### GC（标准模式）
 
-在标准模式下，MaìLang 使用引用计数 + 循环检测 GC：
+内存管理基于 `Rc` 引用计数。引用计数本身无法回收循环引用，因此提供**循环打破**（cycle breaking）：
 
 ```rust
-// GC 配置
-struct GcConfig {
-    threshold: usize,      // 触发 GC 的分配次数
-    max_pause_ms: u64,     // 最大暂停时间
-    incremental: bool,     // 增量 GC
-}
+// Host API: break Rc cycles and return how many were broken
+let broken = interpreter.collect_cycles();
 ```
+
+- 不是 mark-sweep，也没有增量 GC。
+- 没有 `GcConfig { threshold, incremental }` 之类的自动 GC 配置。
+- 嵌入式 `alloc` 模式仅有引用计数，无循环收集。
 
 ## 性能优化
 
@@ -296,9 +296,6 @@ use mailang_vm::Vm;
 
 let mut vm = Vm::new(bytecode);
 
-// 启用调试日志
-vm.set_debug(true);
-
 // 执行
 match vm.run() {
     Ok(result) => println!("Result: {:?}", result),
@@ -306,17 +303,11 @@ match vm.run() {
 }
 ```
 
+> 注：VM 没有 `set_debug` / `memory_stats` API。调试请在宿主侧打印错误与 `Value`。
+
 ### 内存监控
 
-```rust
-let vm = Vm::new(bytecode);
-
-// 获取内存使用情况
-let stats = vm.memory_stats();
-println!("Stack: {} bytes", stats.stack_bytes);
-println!("Heap: {} bytes", stats.heap_bytes);
-println!("Objects: {}", stats.object_count);
-```
+VM 不提供 `memory_stats()`。嵌入式侧请用链接器 map / 平台 heap 统计估算占用。
 
 ## 最佳实践
 
@@ -327,8 +318,19 @@ println!("Objects: {}", stats.object_count);
 5. **错误处理**: 嵌入式环境下避免 panic
 6. **测试**: 在目标设备上充分测试
 
+## 真实硬件（GPIO / ADC / 延时）
+
+`SimulatedHal` 仅用于主机仿真。要把脚本接到真实 ESP32-C3 / Cortex-M4 的 GPIO、延时与 ADC，请阅读：
+
+- **[真实硬件部署](/guide/hardware)** — 构建 `mailang-ffi` 静态库、用 `mailang_register_host_fn` 绑定真实 HAL、部署 `.mailangbc`
+- **[ESP32 点灯端到端](/guide/esp32-blink)** — 可复制的 IDF 风格 C 宿主 + 预期串口输出
+- **[体积仪表盘](/guide/footprint)** — 用 `benchmark/measure_size.py` 看 host CLI / bytecode rlib 体积
+
 ## 下一步
 
+- [真实硬件部署](/guide/hardware) - ESP32-C3 / Cortex-M4 嵌入指南
+- [ESP32 点灯](/guide/esp32-blink) - 端到端点灯宿主
+- [体积仪表盘](/guide/footprint) - 产物体积与对比注意点
 - [API 参考](/reference/) - 完整 API 文档
 - [类型系统](/reference/types) - 类型详解
 - [内置函数](/reference/builtins) - 内置函数参考

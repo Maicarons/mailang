@@ -1,0 +1,39 @@
+// mqtt stub tests — no network
+
+import "mqtt"
+
+let passed = 0
+let failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+println("=== mqtt stub tests ===")
+
+let r = mqtt.publish("t/1", "hello")
+// Expect Ok("sim") — match the Ok payload when available
+match r {
+    Ok(v) => assert(v == "sim", "publish returns Ok(\"sim\")"),
+    Err(e) => assert(false, "publish should not Err: {e}"),
+}
+
+let bad = mqtt.publish(null, "x")
+match bad {
+    Ok(v) => assert(false, "null topic should not Ok"),
+    Err(e) => assert(true, "null topic returns Err"),
+}
+
+println("")
+println("通过: {passed}")
+println("失败: {failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+}

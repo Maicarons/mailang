@@ -6,9 +6,12 @@
 extern "C" {
 #endif
 
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct MailangInterpreter MailangInterpreter;
+
+typedef int32_t MailangStatus;
 
 typedef struct MailangResult {
     int32_t code;
@@ -34,6 +37,8 @@ typedef int (*MailangHostFn)(
 #define MAILANG_ERR_EVAL -2
 #define MAILANG_ERR_UTF8 -3
 #define MAILANG_ERR_HOST -4
+#define MAILANG_ERR_DECODE -5
+#define MAILANG_ERR_IO -6
 #define MAILANG_ERR_PANIC -99
 
 MailangInterpreter *mailang_create(void);
@@ -41,6 +46,15 @@ void mailang_destroy(MailangInterpreter *interp);
 
 int mailang_eval(MailangInterpreter *interp, const char *code, MailangResult *result);
 int mailang_eval_file(MailangInterpreter *interp, const char *path, MailangResult *result);
+
+/* Decode a .mailangbc blob and run it in a fresh interpreter.
+ * On success *out_result is the program output; on failure an error message.
+ * Free *out_result with mailang_free_string. */
+MailangStatus mailang_eval_bytecode(const uint8_t *data, size_t len, char **out_result);
+
+/* Read a .mailangbc file, decode and run it in a fresh interpreter.
+ * Same out_result contract as mailang_eval_bytecode. */
+MailangStatus mailang_load_bytecode_file(const char *path, char **out_result);
 
 int mailang_get_global_int(MailangInterpreter *interp, const char *name, int64_t *out);
 int mailang_set_global_int(MailangInterpreter *interp, const char *name, int64_t value);

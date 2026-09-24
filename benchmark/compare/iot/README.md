@@ -11,7 +11,7 @@
 
 | Runtime | Type | Binary Size | RAM Usage |
 |---------|------|-------------|-----------|
-| **MaìLang** (no_std) | Register VM | ~80 KB | ~16 KB |
+| **MaìLang** (no_std) | Stack VM + slot locals | *(measure locally)* | *(measure locally)* |
 | MicroPython | Stack VM | ~256 KB | ~64 KB |
 | eLua | Stack VM | ~128 KB | ~32 KB |
 | Arduino C | Native | ~8 KB | ~2 KB |
@@ -51,9 +51,9 @@ Estimated execution time on Cortex-M4 @ 168 MHz:
 
 ## Key Advantages of MaìLang for IoT
 
-1. **Register-based VM**: Better cache locality than stack-based VMs
+1. **Stack VM + slot locals**: Locals use frame slot indices (no hash lookup); hot-path opcodes are specialized
 2. **no_std support**: Runs without OS, minimal heap usage
-3. **Smaller binary**: ~80 KB vs 200+ KB for competitors
+3. **Smaller bytecode crate**: `mailang-bytecode` rlib sizes are reported by `benchmark/measure_size.py` (measure on your host; do not treat third-party flash figures as MaìLang numbers)
 4. **Lower RAM**: ~16 KB base vs 48-64 KB for competitors
 5. **UTF-8 identifiers**: Native support for international variable names
 
