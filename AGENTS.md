@@ -1,10 +1,10 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-MaìLang (麦语) is a programming language for IoT and cross-platform development, implemented in Rust. The language supports OOP (classes, traits), pattern matching, error handling (Result/Option), string interpolation, and UTF-8 identifiers. File extension: `.mai`.
+Ma矛Lang (楹﹁) is a programming language for IoT and cross-platform development, implemented in Rust. The language supports OOP (classes, traits), pattern matching, error handling (Result/Option), string interpolation, and UTF-8 identifiers. File extension: `.mai`.
 
 ## Build & Test Commands
 
@@ -48,20 +48,20 @@ cross build -p mailang-cli --target riscv32imc-unknown-none-elf
 The interpreter follows a classic pipeline, split across dedicated crates:
 
 ```
-Source (.mai) → Lexer → Parser → Compiler → VM
+Source (.mai) 鈫?Lexer 鈫?Parser 鈫?Compiler 鈫?VM
 ```
 
 ### Crate Dependency Flow
 
-- **mailang-lexer**: Unicode-aware tokenizer. Source → `Vec<Token>`. Exports `Token`, `Lexer`, `LexerError`.
+- **mailang-lexer**: Unicode-aware tokenizer. Source 鈫?`Vec<Token>`. Exports `Token`, `Lexer`, `LexerError`.
 - **mailang-ast**: Shared AST type definitions (`Program`, `Stmt`, `Expr`, `Pattern`, `Literal`, etc.). No logic, just data structures with serde support.
-- **mailang-parser**: Recursive descent + Pratt parsing. Tokens → `Program` (AST). Depends on mailang-ast.
+- **mailang-parser**: Recursive descent + Pratt parsing. Tokens 鈫?`Program` (AST). Depends on mailang-ast.
 - **mailang-analyzer**: Semantic analysis and type checking (stub/in-progress). Depends on mailang-ast.
-- **mailang-compiler**: Bytecode compiler. AST (`Program`) → `Bytecode`. Depends on mailang-ast, mailang-bytecode.
+- **mailang-compiler**: Bytecode compiler. AST (`Program`) 鈫?`Bytecode`. Depends on mailang-ast, mailang-bytecode.
 - **mailang-bytecode**: Bytecode IR definitions (`Opcode`, `Value`, `Instruction`, `Chunk`, `Bytecode`). Shared between compiler and VM.
 - **mailang-vm**: Stack-based bytecode virtual machine with slot locals. Executes `Bytecode`, returns `Value`.
 - **mailang-stdlib**: Built-in functions (`println`, `sqrt`, `len`, `parse_int`, etc.) operating on `mailang_bytecode::Value`.
-- **mailang-core**: Glue crate. Re-exports all above. Contains `MailangInterpreter` which orchestrates Parser → Compiler → VM pipeline. This is the main integration point.
+- **mailang-core**: Glue crate. Re-exports all above. Contains `MailangInterpreter` which orchestrates Parser 鈫?Compiler 鈫?VM pipeline. This is the main integration point.
 - **mailang-cli**: CLI binary. Uses `clap` for subcommands (`run`, `eval`) and provides an interactive REPL.
 - **mailang-ffi**: C ABI layer (`extern "C"` functions). Uses `cbindgen` to generate `mailang.h`. Wraps `mailang-core`.
 - **mailang-wasm**: WebAssembly bindings via `wasm-bindgen`. Wraps `mailang-core`.
@@ -91,7 +91,7 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-**Phase L (both VMs pass the full suite; docs/release prep)**. Runtime supports OOP (inherited constructors, `super()` ctor, `super.method()`, inherited methods), traits (`implements`, `trait extends`), pattern matching (literals/ranges/`Ok`/`Err`/`Some`/or/guards + array/tuple match destructure), `let`/`var` destructuring, default parameter values, postfix `expr match { }`, mutability enforcement (`let`/`const` reject assignment), `?`, TCO, collections/str methods, global `read_file`/`write_file`, `.mailangbc`, simulated HAL, C FFI, analyzer/LSP/fmt, module v2 with `mailang.toml` path deps (`mailang deps`), **filesystem/HTTP-static package registry** (`publish`/`install`/`search`/`yank`), **generic function monomorphization** (turbofish `id::<int>` → `id$int`; generic classes erase fields), **GC = Rc + `collect_cycles()` + `MarkSweepHeap`**, and **parser error recovery** (`recover_from_error` / `parse_program_recovering`; LSP reports multiple syntax errors). Fib(30) ~137 ms (~4.25× baseline). **102 integration tests on the stack VM (default) and 102/102 on the register VM** (`MAILANG_VM=register` / `--vm=register`) — feature parity.
+**Phase L (both VMs pass the full suite; docs/release prep)**. Runtime supports OOP (inherited constructors, `super()` ctor, `super.method()`, inherited methods), traits (`implements`, `trait extends`), pattern matching (literals/ranges/`Ok`/`Err`/`Some`/or/guards + array/tuple match destructure), `let`/`var` destructuring, default parameter values, postfix `expr match { }`, mutability enforcement (`let`/`const` reject assignment), `?`, TCO, collections/str methods, global `read_file`/`write_file`, `.mailangbc`, simulated HAL, C FFI, analyzer/LSP/fmt, module v2 with `mailang.toml` path deps (`mailang deps`), **filesystem/HTTP-static package registry** (`publish`/`install`/`search`/`yank`), **generic function monomorphization** (turbofish `id::<int>` 鈫?`id$int`; generic classes erase fields), **GC = Rc + `collect_cycles()` + `MarkSweepHeap`**, and **parser error recovery** (`recover_from_error` / `parse_program_recovering`; LSP reports multiple syntax errors). Fib(30) ~137 ms (~4.25脳 baseline). **102 integration tests on the stack VM (default) and 102/102 on the register VM** (`MAILANG_VM=register` / `--vm=register`) 鈥?feature parity.
 
 ### Remaining gaps (honest)
 

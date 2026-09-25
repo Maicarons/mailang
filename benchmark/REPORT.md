@@ -187,3 +187,14 @@ ESP32-C3 @ 160MHz 约比现代 PC 慢 50-100x。
 1. 实现尾递归优化 (TCO)
 2. 优化值传递（引用计数）
 3. 减少循环边界检查
+
+---
+
+## 双后端对比（Phase M 基线，release）
+
+| 后端 | bench_fib30 | 备注 |
+|------|-------------|------|
+| 栈式 VM | ~115–130 ms | 默认 |
+| 寄存器 VM | ~2000–2700 ms | 功能 102/102，性能待优化 |
+
+测量：mailang run bench_fib30.mai vs mailang run --vm=register bench_fib30.mai（Windows release）。
