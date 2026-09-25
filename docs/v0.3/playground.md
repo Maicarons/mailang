@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, onMounted } from 'vue'
 
 const code = ref(`class Animal {
@@ -34,22 +34,22 @@ const execTime = ref('')
 let interpreter = null
 
 const examples = {
-  'Hello World': `println("你好，MaìLang！🌍")`,
-  '变量与类型': `let x = 42
+  'Hello World': `println("浣犲ソ锛孧a矛Lang锛侌煂?)`,
+  '鍙橀噺涓庣被鍨?: `let x = 42
 let y = 3.14
-let name = "MaìLang"
+let name = "Ma矛Lang"
 println("x = {x}")
 println("y = {y}")
 println("name = {name}")`,
-  '函数': `fn add(a, b) {
+  '鍑芥暟': `fn add(a, b) {
     return a + b
 }
 fn greet(name: str) {
     return "Hello, {name}!"
 }
 println(add(1, 2))
-println(greet("MaìLang"))`,
-  '面向对象': `class Animal {
+println(greet("Ma矛Lang"))`,
+  '闈㈠悜瀵硅薄': `class Animal {
     let name: str
     fn init(name: str) {
         this.name = name
@@ -65,7 +65,7 @@ class Dog extends Animal {
 }
 let dog = Dog("Rex")
 println(dog.speak())`,
-  '闭包': `fn make_counter() {
+  '闂寘': `fn make_counter() {
     var count = 0
     return fn() {
         count = count + 1
@@ -76,7 +76,7 @@ let counter = make_counter()
 println(counter())
 println(counter())
 println(counter())`,
-  '斐波那契': `fn fib(n) {
+  '鏂愭尝閭ｅ': `fn fib(n) {
     if n <= 1 {
         return n
     }
@@ -95,7 +95,7 @@ function loadExample(name) {
 
 async function runCode() {
   if (!interpreter) {
-    output.value = '引擎加载中，请稍候...'
+    output.value = '寮曟搸鍔犺浇涓紝璇风◢鍊?..'
     return
   }
   running.value = true
@@ -107,32 +107,32 @@ async function runCode() {
     const result = JSON.parse(interpreter.eval_json(code.value))
     const elapsed = (performance.now() - start).toFixed(1)
     if (result.ok) {
-      output.value = result.output || '(无输出)'
+      output.value = result.output || '(鏃犺緭鍑?'
       execTime.value = `${elapsed}ms`
     } else {
       output.value = result.error
     }
   } catch (e) {
-    output.value = 'WASM 错误: ' + e.message
+    output.value = 'WASM 閿欒: ' + e.message
   }
   running.value = false
 }
 
 onMounted(async () => {
   try {
-    const mod = await import('./wasm/mailang_wasm.js')
+    const mod = await import(/* @vite-ignore */ (import.meta.env.BASE_URL || '/') + 'wasm/mailang_wasm.js')
     await mod.default()
     interpreter = new mod.WasmInterpreter()
     engineReady.value = true
   } catch (e) {
-    output.value = 'WASM 加载失败: ' + e.message
+    output.value = 'WASM 鍔犺浇澶辫触: ' + e.message
   }
 })
 </script>
 
 # Playground
 
-在线运行 MaìLang 代码，无需安装任何工具。
+鍦ㄧ嚎杩愯 Ma矛Lang 浠ｇ爜锛屾棤闇€瀹夎浠讳綍宸ュ叿銆?
 
 <div style="margin: 24px 0;">
   <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -147,7 +147,7 @@ onMounted(async () => {
       <span v-if="execTime" style="font-size: 0.8em; color: var(--vp-c-text-3);">{{ execTime }}</span>
       <button @click="runCode" :disabled="running || !engineReady"
               style="padding: 6px 20px; background: #238636; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-        {{ running ? '运行中...' : '▶ 运行' }}
+        {{ running ? '杩愯涓?..' : '鈻?杩愯' }}
       </button>
     </div>
   </div>
@@ -158,11 +158,11 @@ onMounted(async () => {
 
   <div v-if="output || running"
        style="margin-top: 12px; padding: 16px; border: 1px solid var(--vp-c-divider); border-radius: 8px; background: var(--vp-c-bg-alt); font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size: 13px; white-space: pre-wrap; min-height: 2em;">
-    <span v-if="running" style="color: var(--vp-c-text-3);">运行中...</span>
-    <span v-else :style="{ color: output.includes('Error') || output.includes('错误') ? '#f85149' : 'var(--vp-c-text-1)' }">{{ output }}</span>
+    <span v-if="running" style="color: var(--vp-c-text-3);">杩愯涓?..</span>
+    <span v-else :style="{ color: output.includes('Error') || output.includes('閿欒') ? '#f85149' : 'var(--vp-c-text-1)' }">{{ output }}</span>
   </div>
 
   <div style="margin-top: 8px; font-size: 0.8em; color: var(--vp-c-text-3);">
-    提示：按 Ctrl+Enter 可快速运行 · 引擎状态：{{ engineReady ? '就绪 ✓' : '加载中...' }}
+    鎻愮ず锛氭寜 Ctrl+Enter 鍙揩閫熻繍琛?路 寮曟搸鐘舵€侊細{{ engineReady ? '灏辩华 鉁? : '鍔犺浇涓?..' }}
   </div>
 </div>
