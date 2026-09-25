@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitepress'
-import versions from '../versions.json'
+﻿import { defineConfig } from 'vitepress'
+const versions = { latest: '0.3', versions: [{ label: '0.3', path: '/v0.3/', latest: true }] }
 
 const latest = versions.latest
 const versionItems = versions.versions.map((v: { label: string; path: string; latest?: boolean }) => ({
@@ -20,36 +20,36 @@ function nav(t: { guide: string; reference: string; playground: string; github: 
 function sidebarZh(prefix: string) {
   return {
     [prefix + '/guide/']: [
-      { text: '入门', items: [
-        { text: '介绍', link: prefix + '/guide/' },
-        { text: '快速开始', link: prefix + '/guide/getting-started' },
+      { text: '鍏ラ棬', items: [
+        { text: '浠嬬粛', link: prefix + '/guide/' },
+        { text: '蹇€熷紑濮?, link: prefix + '/guide/getting-started' },
       ]},
-      { text: '语言特性', items: [
-        { text: '语法指南', link: prefix + '/guide/syntax' },
-        { text: '面向对象', link: prefix + '/guide/oop' },
+      { text: '璇█鐗规€?, items: [
+        { text: '璇硶鎸囧崡', link: prefix + '/guide/syntax' },
+        { text: '闈㈠悜瀵硅薄', link: prefix + '/guide/oop' },
       ]},
-      { text: '生态系统', items: [
-        { text: '标准库', link: prefix + '/guide/stdlib' },
-        { text: '包注册表', link: prefix + '/guide/registry' },
-        { text: 'FFI 接入', link: prefix + '/guide/ffi' },
-        { text: 'WASM 集成', link: prefix + '/guide/wasm' },
-        { text: 'IoT 部署', link: prefix + '/guide/iot' },
-        { text: '真实硬件', link: prefix + '/guide/hardware' },
-        { text: 'ESP32 点灯', link: prefix + '/guide/esp32-blink' },
-        { text: '体积仪表盘', link: prefix + '/guide/footprint' },
+      { text: '鐢熸€佺郴缁?, items: [
+        { text: '鏍囧噯搴?, link: prefix + '/guide/stdlib' },
+        { text: '鍖呮敞鍐岃〃', link: prefix + '/guide/registry' },
+        { text: 'FFI 鎺ュ叆', link: prefix + '/guide/ffi' },
+        { text: 'WASM 闆嗘垚', link: prefix + '/guide/wasm' },
+        { text: 'IoT 閮ㄧ讲', link: prefix + '/guide/iot' },
+        { text: '鐪熷疄纭欢', link: prefix + '/guide/hardware' },
+        { text: 'ESP32 鐐圭伅', link: prefix + '/guide/esp32-blink' },
+        { text: '浣撶Н浠〃鐩?, link: prefix + '/guide/footprint' },
       ]},
     ],
     [prefix + '/reference/']: [
-      { text: '参考手册', items: [
-        { text: '概述', link: prefix + '/reference/' },
-        { text: '类型系统', link: prefix + '/reference/types' },
-        { text: '运算符', link: prefix + '/reference/operators' },
-        { text: '内置函数', link: prefix + '/reference/builtins' },
-        { text: '错误码', link: prefix + '/reference/errors' },
+      { text: '鍙傝€冩墜鍐?, items: [
+        { text: '姒傝堪', link: prefix + '/reference/' },
+        { text: '绫诲瀷绯荤粺', link: prefix + '/reference/types' },
+        { text: '杩愮畻绗?, link: prefix + '/reference/operators' },
+        { text: '鍐呯疆鍑芥暟', link: prefix + '/reference/builtins' },
+        { text: '閿欒鐮?, link: prefix + '/reference/errors' },
       ]},
-      { text: '编译原理', items: [
-        { text: '编译器架构', link: prefix + '/reference/compiler' },
-        { text: '解析器详解', link: prefix + '/reference/parser' },
+      { text: '缂栬瘧鍘熺悊', items: [
+        { text: '缂栬瘧鍣ㄦ灦鏋?, link: prefix + '/reference/compiler' },
+        { text: '瑙ｆ瀽鍣ㄨ瑙?, link: prefix + '/reference/parser' },
       ]},
     ],
   }
@@ -107,10 +107,10 @@ export default defineConfig({
   },
   locales: {
     root: {
-      label: '简体中文',
+      label: '绠€浣撲腑鏂?,
       lang: 'zh-CN',
       themeConfig: {
-        nav: nav({ guide: '指南', reference: '参考', playground: 'Playground', github: 'GitHub', version: 'v' + latest }),
+        nav: nav({ guide: '鎸囧崡', reference: '鍙傝€?, playground: 'Playground', github: 'GitHub', version: 'v' + latest }),
         sidebar: { ...sidebarZh(vPrefix), ...sidebarEn(vPrefix) },
       },
     },
