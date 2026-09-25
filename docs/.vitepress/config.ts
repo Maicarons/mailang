@@ -1,6 +1,9 @@
-﻿import { defineConfig } from 'vitepress'
-const versions = { latest: '0.3', versions: [{ label: '0.3', path: '/v0.3/', latest: true }] }
+import { defineConfig } from 'vitepress'
 
+const versions = {
+  latest: '0.3',
+  versions: [{ label: '0.3', path: '/v0.3/', latest: true }],
+}
 const latest = versions.latest
 const versionItems = versions.versions.map((v: { label: string; path: string; latest?: boolean }) => ({
   text: v.latest ? v.label + ' (latest)' : v.label,
@@ -20,36 +23,36 @@ function nav(t: { guide: string; reference: string; playground: string; github: 
 function sidebarZh(prefix: string) {
   return {
     [prefix + '/guide/']: [
-      { text: '鍏ラ棬', items: [
-        { text: '浠嬬粛', link: prefix + '/guide/' },
-        { text: '蹇€熷紑濮?, link: prefix + '/guide/getting-started' },
+      { text: '\u5165\u95e8', items: [
+        { text: '\u4ecb\u7ecd', link: prefix + '/guide/' },
+        { text: '\u5feb\u901f\u5f00\u59cb', link: prefix + '/guide/getting-started' },
       ]},
-      { text: '璇█鐗规€?, items: [
-        { text: '璇硶鎸囧崡', link: prefix + '/guide/syntax' },
-        { text: '闈㈠悜瀵硅薄', link: prefix + '/guide/oop' },
+      { text: '\u8bed\u8a00\u7279\u6027', items: [
+        { text: '\u8bed\u6cd5\u6307\u5357', link: prefix + '/guide/syntax' },
+        { text: '\u9762\u5411\u5bf9\u8c61', link: prefix + '/guide/oop' },
       ]},
-      { text: '鐢熸€佺郴缁?, items: [
-        { text: '鏍囧噯搴?, link: prefix + '/guide/stdlib' },
-        { text: '鍖呮敞鍐岃〃', link: prefix + '/guide/registry' },
-        { text: 'FFI 鎺ュ叆', link: prefix + '/guide/ffi' },
-        { text: 'WASM 闆嗘垚', link: prefix + '/guide/wasm' },
-        { text: 'IoT 閮ㄧ讲', link: prefix + '/guide/iot' },
-        { text: '鐪熷疄纭欢', link: prefix + '/guide/hardware' },
-        { text: 'ESP32 鐐圭伅', link: prefix + '/guide/esp32-blink' },
-        { text: '浣撶Н浠〃鐩?, link: prefix + '/guide/footprint' },
+      { text: '\u751f\u6001\u7cfb\u7edf', items: [
+        { text: '\u6807\u51c6\u5e93', link: prefix + '/guide/stdlib' },
+        { text: '\u5305\u6ce8\u518c\u8868', link: prefix + '/guide/registry' },
+        { text: 'FFI \u63a5\u5165', link: prefix + '/guide/ffi' },
+        { text: 'WASM \u96c6\u6210', link: prefix + '/guide/wasm' },
+        { text: 'IoT \u90e8\u7f72', link: prefix + '/guide/iot' },
+        { text: '\u771f\u5b9e\u786c\u4ef6', link: prefix + '/guide/hardware' },
+        { text: 'ESP32 \u70b9\u706f', link: prefix + '/guide/esp32-blink' },
+        { text: '\u4f53\u79ef\u4eea\u8868\u76d8', link: prefix + '/guide/footprint' },
       ]},
     ],
     [prefix + '/reference/']: [
-      { text: '鍙傝€冩墜鍐?, items: [
-        { text: '姒傝堪', link: prefix + '/reference/' },
-        { text: '绫诲瀷绯荤粺', link: prefix + '/reference/types' },
-        { text: '杩愮畻绗?, link: prefix + '/reference/operators' },
-        { text: '鍐呯疆鍑芥暟', link: prefix + '/reference/builtins' },
-        { text: '閿欒鐮?, link: prefix + '/reference/errors' },
+      { text: '\u53c2\u8003\u624b\u518c', items: [
+        { text: '\u6982\u8ff0', link: prefix + '/reference/' },
+        { text: '\u7c7b\u578b\u7cfb\u7edf', link: prefix + '/reference/types' },
+        { text: '\u8fd0\u7b97\u7b26', link: prefix + '/reference/operators' },
+        { text: '\u5185\u7f6e\u51fd\u6570', link: prefix + '/reference/builtins' },
+        { text: '\u9519\u8bef\u7801', link: prefix + '/reference/errors' },
       ]},
-      { text: '缂栬瘧鍘熺悊', items: [
-        { text: '缂栬瘧鍣ㄦ灦鏋?, link: prefix + '/reference/compiler' },
-        { text: '瑙ｆ瀽鍣ㄨ瑙?, link: prefix + '/reference/parser' },
+      { text: '\u7f16\u8bd1\u539f\u7406', items: [
+        { text: '\u7f16\u8bd1\u5668\u67b6\u6784', link: prefix + '/reference/compiler' },
+        { text: '\u89e3\u6790\u5668\u8be6\u89e3', link: prefix + '/reference/parser' },
       ]},
     ],
   }
@@ -100,17 +103,17 @@ export default defineConfig({
   description: 'MaLang - A modern programming language for IoT and cross-platform development',
   base: '/mailang/',
   ignoreDeadLinks: true,
-  srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
+  srcExclude: ['**/MODULE_SPEC.md', '**/compose/**'],
   vueTemplate: false,
   markdown: {
     config() {},
   },
   locales: {
     root: {
-      label: '绠€浣撲腑鏂?,
+      label: '\u7b80\u4f53\u4e2d\u6587',
       lang: 'zh-CN',
       themeConfig: {
-        nav: nav({ guide: '鎸囧崡', reference: '鍙傝€?, playground: 'Playground', github: 'GitHub', version: 'v' + latest }),
+        nav: nav({ guide: '\u6307\u5357', reference: '\u53c2\u8003', playground: 'Playground', github: 'GitHub', version: 'v' + latest }),
         sidebar: { ...sidebarZh(vPrefix), ...sidebarEn(vPrefix) },
       },
     },
