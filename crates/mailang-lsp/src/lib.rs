@@ -1,4 +1,4 @@
-use dashmap::DashMap;
+﻿use dashmap::DashMap;
 use mailang_analyzer::Analyzer;
 use mailang_parser::Parser;
 use std::collections::HashMap;
@@ -77,31 +77,45 @@ fn collect_diagnostics(source: &str) -> Vec<Diagnostic> {
                 .into_iter()
                 .filter(|e| matches!(e, mailang_analyzer::AnalyzerError::UnusedVariable(_)))
                 .collect();
-            diags.extend(mailang_analyzer::diagnose(source, &unused).into_iter().map(|d| {
-                let sev = match d.severity {
-                    mailang_analyzer::Severity::Error => DiagnosticSeverity::ERROR,
-                    mailang_analyzer::Severity::Warning => DiagnosticSeverity::WARNING,
-                    mailang_analyzer::Severity::Information => DiagnosticSeverity::INFORMATION,
-                };
-                Diagnostic {
-                    range: Range::new(Position::new(d.line, d.col), Position::new(d.line, d.col + 1)),
-                    severity: Some(sev),
-                    message: d.message,
-                    source: Some("mailang".into()),
-                    ..Default::default()
-                }
-            }));
+            diags.extend(
+                mailang_analyzer::diagnose(source, &unused)
+                    .into_iter()
+                    .map(|d| {
+                        let sev = match d.severity {
+                            mailang_analyzer::Severity::Error => DiagnosticSeverity::ERROR,
+                            mailang_analyzer::Severity::Warning => DiagnosticSeverity::WARNING,
+                            mailang_analyzer::Severity::Information => {
+                                DiagnosticSeverity::INFORMATION
+                            }
+                        };
+                        Diagnostic {
+                            range: Range::new(
+                                Position::new(d.line, d.col),
+                                Position::new(d.line, d.col + 1),
+                            ),
+                            severity: Some(sev),
+                            message: d.message,
+                            source: Some("mailang".into()),
+                            ..Default::default()
+                        }
+                    }),
+            );
         }
         Err(errs) => {
-            diags.extend(mailang_analyzer::diagnose(source, &errs).into_iter().map(|d| {
-                Diagnostic {
-                    range: Range::new(Position::new(d.line, d.col), Position::new(d.line, d.col + 1)),
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    message: d.message,
-                    source: Some("mailang".into()),
-                    ..Default::default()
-                }
-            }));
+            diags.extend(
+                mailang_analyzer::diagnose(source, &errs)
+                    .into_iter()
+                    .map(|d| Diagnostic {
+                        range: Range::new(
+                            Position::new(d.line, d.col),
+                            Position::new(d.line, d.col + 1),
+                        ),
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        message: d.message,
+                        source: Some("mailang".into()),
+                        ..Default::default()
+                    }),
+            );
         }
     }
     diags
@@ -165,7 +179,7 @@ fn builtin_completions() -> Vec<CompletionItem> {
             CompletionItem {
                 label: n.to_string(),
                 kind,
-                detail: Some("MaìLang".into()),
+                detail: Some("Ma矛Lang".into()),
                 ..Default::default()
             }
         })
@@ -514,7 +528,7 @@ fn declaration_snippet(source: &str, name: &str) -> Option<(String, String, Iden
         if seen_open && brace_depth <= 0 {
             break;
         }
-        if !seen_open && snippet_lines.len() >= 1 {
+        if !seen_open && !snippet_lines.is_empty() {
             // single-line declaration (let/var/const or fn without body on same line)
             let trimmed = l.trim_end();
             if !trimmed.ends_with('{')
@@ -622,7 +636,7 @@ impl LanguageServer for Backend {
 
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::INFO, "MaìLang LSP initialized")
+            .log_message(MessageType::INFO, "Ma矛Lang LSP initialized")
             .await;
     }
 

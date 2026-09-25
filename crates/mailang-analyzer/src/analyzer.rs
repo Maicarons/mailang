@@ -1,8 +1,8 @@
-use crate::error::AnalyzerError;
+﻿use crate::error::AnalyzerError;
 use mailang_ast::*;
 use std::collections::HashMap;
 
-/// Loose compatibility: Any/Unknown match anything; Int ⊂ Float.
+/// Loose compatibility: Any/Unknown match anything; Int 鈯?Float.
 /// Type parameters are parametric (match anything until substituted).
 fn types_compatible(expected: &Type, found: &Type) -> bool {
     match (expected, found) {
@@ -153,6 +153,7 @@ fn contains_return(stmts: &[Stmt]) -> bool {
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)] // richer type model used as the analyzer grows
+#[allow(clippy::enum_variant_names)]
 pub enum Type {
     Int,
     Float,
@@ -1664,7 +1665,7 @@ mod tests {
 
     #[test]
     fn return_int_into_float_ok() {
-        // Int ⊂ Float is compatible.
+        // Int 鈯?Float is compatible.
         let program = Program {
             statements: vec![fn_def(
                 "f",

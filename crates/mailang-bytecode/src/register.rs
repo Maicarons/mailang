@@ -256,6 +256,7 @@ impl<'a> StackToRegister<'a> {
         }
     }
 
+    #[allow(unused_assignments)]
     pub fn translate(mut self) -> RegChunk {
         let start_sp = self.start_sp;
         self.heights = compute_heights(self.src_code, start_sp);
@@ -774,10 +775,9 @@ fn stack_out(op: Opcode, h: u16, operand: Option<u32>) -> u16 {
         | Opcode::CreateInstance
         | Opcode::GetMethod
         | Opcode::MatchPattern => h.saturating_add(1),
-        Opcode::Pop
-        | Opcode::StoreGlobal
-        | Opcode::StoreUpvalue
-        | Opcode::Throw => h.saturating_sub(1),
+        Opcode::Pop | Opcode::StoreGlobal | Opcode::StoreUpvalue | Opcode::Throw => {
+            h.saturating_sub(1)
+        }
         Opcode::StoreLocal => {
             let idx = operand.unwrap_or(0) as u16;
             let after = h.saturating_sub(1);

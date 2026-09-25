@@ -1,4 +1,4 @@
-//! Minimal hardware abstraction for IoT hosts.
+﻿//! Minimal hardware abstraction for IoT hosts.
 //!
 //! Host firmware implements these traits and registers matching FFI callbacks.
 //! The simulated implementation below is used for desktop demos and tests.
@@ -197,7 +197,7 @@ impl I2c for SimulatedHal {
 
 impl Spi for SimulatedHal {
     fn transfer(&mut self, _addr: I2cAddr, tx: &[u8], rx_len: usize) -> Result<Vec<u8>, String> {
-        // MOSI→MISO loopback, padded/truncated to `rx_len`.
+        // MOSI鈫扢ISO loopback, padded/truncated to `rx_len`.
         let mut rx = tx.to_vec();
         rx.resize(rx_len, 0);
         Ok(rx)
@@ -220,7 +220,7 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
         .strip_prefix("0x")
         .or_else(|| s.strip_prefix("0X"))
         .unwrap_or(s);
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return Err("hex data must have even length".into());
     }
     (0..s.len())
@@ -236,7 +236,7 @@ fn to_hex(data: &[u8]) -> String {
     data.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// `gpio_write(pin, high)` — pin: int, high: bool
+/// `gpio_write(pin, high)` 鈥?pin: int, high: bool
 pub fn builtin_gpio_write(args: &[Value]) -> Result<Value, String> {
     let pin = pin_arg(args, 0, "gpio_write(pin, high)")?;
     let high = match args.get(1) {
@@ -252,14 +252,14 @@ pub fn builtin_gpio_write(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// `gpio_read(pin)` → bool
+/// `gpio_read(pin)` 鈫?bool
 pub fn builtin_gpio_read(args: &[Value]) -> Result<Value, String> {
     let pin = pin_arg(args, 0, "gpio_read(pin)")?;
     let v = HAL.with(|h| h.borrow().read(pin))?;
     Ok(Value::Bool(v))
 }
 
-/// `delay_ms(ms)` — simulated; advances the HAL clock only.
+/// `delay_ms(ms)` 鈥?simulated; advances the HAL clock only.
 pub fn builtin_delay_ms(args: &[Value]) -> Result<Value, String> {
     let ms = match args.first() {
         Some(Value::Int(n)) if *n >= 0 => *n as u32,
@@ -269,7 +269,7 @@ pub fn builtin_delay_ms(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// `adc_read(channel)` → int raw
+/// `adc_read(channel)` 鈫?int raw
 pub fn builtin_adc_read(args: &[Value]) -> Result<Value, String> {
     let ch = match args.first() {
         Some(Value::Int(n)) if *n >= 0 && *n <= 255 => *n as u8,
@@ -279,7 +279,7 @@ pub fn builtin_adc_read(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Int(v as i64))
 }
 
-/// `pwm_write(pin, duty)` — duty is 16-bit (0..=65535).
+/// `pwm_write(pin, duty)` 鈥?duty is 16-bit (0..=65535).
 pub fn builtin_pwm_write(args: &[Value]) -> Result<Value, String> {
     let pin = pin_arg(args, 0, "pwm_write(pin, duty)")?;
     let duty = match args.get(1) {
@@ -301,7 +301,7 @@ pub fn builtin_pwm_freq(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// `uart_write(port, s)` — writes UTF-8 bytes of `s` (looped back in sim).
+/// `uart_write(port, s)` 鈥?writes UTF-8 bytes of `s` (looped back in sim).
 pub fn builtin_uart_write(args: &[Value]) -> Result<Value, String> {
     let port = match args.first() {
         Some(Value::Int(n)) if *n >= 0 && *n <= 255 => *n as u8,
@@ -315,7 +315,7 @@ pub fn builtin_uart_write(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// `uart_read(port, n)` → string of up to `n` bytes (UTF-8 lossy).
+/// `uart_read(port, n)` 鈫?string of up to `n` bytes (UTF-8 lossy).
 pub fn builtin_uart_read(args: &[Value]) -> Result<Value, String> {
     let port = match args.first() {
         Some(Value::Int(n)) if *n >= 0 && *n <= 255 => *n as u8,
@@ -331,7 +331,7 @@ pub fn builtin_uart_read(args: &[Value]) -> Result<Value, String> {
     ))
 }
 
-/// `i2c_xfer(addr, hexdata, rlen)` → hex string of `rlen` response bytes.
+/// `i2c_xfer(addr, hexdata, rlen)` 鈫?hex string of `rlen` response bytes.
 pub fn builtin_i2c_xfer(args: &[Value]) -> Result<Value, String> {
     let addr = match args.first() {
         Some(Value::Int(n)) if *n >= 0 && *n <= 255 => *n as u8,
@@ -349,7 +349,7 @@ pub fn builtin_i2c_xfer(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Str(to_hex(&rx).into()))
 }
 
-/// `spi_xfer(addr, hexdata, rxlen)` → hex string of `rxlen` response bytes.
+/// `spi_xfer(addr, hexdata, rxlen)` 鈫?hex string of `rxlen` response bytes.
 pub fn builtin_spi_xfer(args: &[Value]) -> Result<Value, String> {
     let addr = match args.first() {
         Some(Value::Int(n)) if *n >= 0 && *n <= 255 => *n as u8,
@@ -449,7 +449,7 @@ mod tests {
             Value::Int(3),
         ])
         .unwrap();
-        // Pattern response: addr, addr+1, addr+2 → 50 51 52
+        // Pattern response: addr, addr+1, addr+2 鈫?50 51 52
         assert_eq!(rx, Value::Str("505152".into()));
         assert_eq!(sim_i2c_last_write(0x50), Some(vec![0xde, 0xad, 0xbe, 0xef]));
     }

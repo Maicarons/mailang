@@ -1,11 +1,12 @@
+﻿#![allow(clippy::manual_strip, clippy::useless_format)]
 //! REPL helpers: simple multi-line continuation when a line ends with `{` or `\`.
 
 /// True when the REPL should keep reading another line.
 ///
 /// Continuation rules (intentionally small):
-/// - line ends with `{` → block open
-/// - line ends with `\` → soft join (backslash is stripped)
-/// - unbalanced `{` / `}` still open → keep reading
+/// - line ends with `{` 鈫?block open
+/// - line ends with `\` 鈫?soft join (backslash is stripped)
+/// - unbalanced `{` / `}` still open 鈫?keep reading
 pub fn needs_continuation(buf: &str) -> bool {
     let trimmed = buf.trim_end();
     if trimmed.ends_with('\\') {
@@ -32,7 +33,7 @@ pub fn strip_soft_join(line: &str) -> String {
     }
 }
 
-/// Net open-brace count (naive; ignores braces in strings — fine for REPL).
+/// Net open-brace count (naive; ignores braces in strings 鈥?fine for REPL).
 pub fn brace_depth(s: &str) -> i32 {
     let mut depth = 0i32;
     for c in s.chars() {

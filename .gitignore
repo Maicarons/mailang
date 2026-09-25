@@ -25,3 +25,6 @@ bindings/c/mailang_ffi.dll
 bindings/c/demo.exe
 bindings/python/mailang_ffi.dll
 crates/mailang-wasm/pkg/
+
+# Self-media articles
+article/

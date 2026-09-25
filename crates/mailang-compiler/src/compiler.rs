@@ -1,4 +1,4 @@
-use crate::error::CompilerError;
+﻿use crate::error::CompilerError;
 use mailang_ast::*;
 use mailang_bytecode::*;
 use std::collections::HashMap;
@@ -126,7 +126,7 @@ impl Compiler {
     ///
     /// Each module is compiled as top-level statements (its `fn`/`let`/`const`
     /// become globals). A namespace map `let <mod> = { "export": export, ... }`
-    /// is emitted from the module's export table — the importer's AST is not
+    /// is emitted from the module's export table 鈥?the importer's AST is not
     /// rewritten with the module body.
     pub fn compile_linked(
         modules: &[(String, Program, Vec<String>)],
@@ -2170,9 +2170,11 @@ impl Compiler {
             if let Some(pinfo) = self.class_info.get(parent) {
                 let parent_methods = pinfo.methods.clone();
                 for (m_name, (chunk, arity)) in parent_methods {
-                    if !method_info.contains_key(&m_name) {
-                        methods.push((m_name.clone(), chunk));
-                        method_info.insert(m_name, (chunk, arity));
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        method_info.entry(m_name.clone())
+                    {
+                        e.insert((chunk, arity));
+                        methods.push((m_name, chunk));
                     }
                 }
             }
@@ -2295,25 +2297,7 @@ impl Compiler {
                 })));
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        let extra = if params.first().map(|p| p.name == "self").unwrap_or(false) {
-            0
-        } else {
-            0
-        };
+        let extra = 0;
         // `this` is always local 0; a leading `self` param is an alias, not an arg.
         let user_params = if params.first().map(|p| p.name == "self").unwrap_or(false) {
             params.len() - 1

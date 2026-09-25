@@ -86,9 +86,10 @@ impl RegisterVm {
         let mut chunks = Vec::with_capacity(bytecode.chunks.len());
         for (i, ch) in bytecode.chunks.iter().enumerate() {
             let start = chunk_start_sp(&bytecode, i);
-            let reg = mailang_bytecode::StackToRegister::new(&ch.name, &ch.instructions, &ch.constants)
-                .with_start_sp(start)
-                .translate();
+            let reg =
+                mailang_bytecode::StackToRegister::new(&ch.name, &ch.instructions, &ch.constants)
+                    .with_start_sp(start)
+                    .translate();
             chunks.push(reg);
         }
         let mut globals = vec![Value::Null; bytecode.global_names.len()];
@@ -652,14 +653,7 @@ impl RegisterVm {
                     .find(|(n, _)| n == "init")
                     .map(|(_, ci)| *ci);
                 if let Some(chunk) = init_chunk {
-                    self.enter_method(
-                        chunk,
-                        instance,
-                        args_base,
-                        args,
-                        argc,
-                        ret_dst,
-                    )?;
+                    self.enter_method(chunk, instance, args_base, args, argc, ret_dst)?;
                     Ok(None)
                 } else {
                     let ret_base = self.frames.last().map(|f| f.base).unwrap_or(0);
@@ -829,7 +823,9 @@ impl RegisterVm {
                 if let Some(cls) = self.class_table.get(*class_index).cloned() {
                     if let Some((_, chunk)) = cls.methods.iter().find(|(n, _)| n == method) {
                         let chunk = *chunk;
-                        return self.enter_method(chunk, obj, base, args, argc, dst).map(|_| None);
+                        return self
+                            .enter_method(chunk, obj, base, args, argc, dst)
+                            .map(|_| None);
                     }
                 }
                 Err(VmError::UndefinedFunction(method.to_string()))

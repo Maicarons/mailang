@@ -1,3 +1,9 @@
+#![allow(
+    clippy::print_literal,
+    clippy::manual_strip,
+    clippy::useless_format,
+    clippy::uninlined_format_args
+)]
 use clap::{Parser, Subcommand, ValueEnum};
 use mailang_core::{MailangInterpreter, VmBackend};
 use std::io::{self, BufRead, Write};
@@ -8,7 +14,7 @@ mod repl;
 #[derive(Parser)]
 #[command(
     name = "mailang",
-    about = "MaìLang interpreter",
+    about = "Ma矛Lang interpreter",
     version = env!("CARGO_PKG_VERSION")
 )]
 struct Cli {
@@ -21,7 +27,7 @@ struct Cli {
 enum VmCli {
     /// Classic stack-based bytecode VM (default)
     Stack,
-    /// Register (three-address) VM — experimental, keep stack as default
+    /// Register (three-address) VM 鈥?experimental, keep stack as default
     Register,
 }
 
@@ -558,7 +564,7 @@ fn main() {
     }
 }
 
-/// `mailang deps --lock` — print/verify lock status. Exit 1 when unhealthy.
+/// `mailang deps --lock` 鈥?print/verify lock status. Exit 1 when unhealthy.
 fn cmd_deps_lock(root: &Path) -> i32 {
     let resolved = mailang_module::resolve_dependencies_raw(root);
     let report = mailang_module::verify_lock(root, &resolved);
@@ -606,7 +612,7 @@ fn cmd_deps_lock(root: &Path) -> i32 {
 }
 
 fn run_repl(interp: &mut MailangInterpreter) {
-    println!("MaìLang REPL v{}", env!("CARGO_PKG_VERSION"));
+    println!("Ma矛Lang REPL v{}", env!("CARGO_PKG_VERSION"));
     println!("Type 'exit' or 'quit' to exit. Multi-line: end a line with `{{` or `\\`.");
     let stdin = io::stdin();
     let mut stdout = io::stdout();

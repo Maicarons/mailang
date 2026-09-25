@@ -101,13 +101,6 @@ export default defineConfig({
   base: '/mailang/',
   ignoreDeadLinks: true,
   srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
-  srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
-  srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
-  srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
-  srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
-  srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
-  srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
-  srcExclude: ["**/MODULE_SPEC.md", "**/compose/**"],
   vueTemplate: false,
   markdown: {
     config() {},

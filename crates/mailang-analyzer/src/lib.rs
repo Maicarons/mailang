@@ -1,3 +1,4 @@
+﻿#![allow(clippy::collapsible_match)]
 mod analyzer;
 mod error;
 mod span;

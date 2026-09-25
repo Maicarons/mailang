@@ -264,11 +264,17 @@ mod tests {
         let mut p = Parser::new("fn broken( {\nreturn 1\n}\nlet ok = 2\n").expect("lex");
         let (prog, errs) = p.parse_program_recovering();
         assert!(!errs.is_empty());
-        let has_ok = prog.statements.iter().any(|s| matches!(
-            s,
-            Stmt::Let { name, .. } if name == "ok"
-        ));
-        assert!(has_ok, "statement after bad fn should parse: {:?}", prog.statements);
+        let has_ok = prog.statements.iter().any(|s| {
+            matches!(
+                s,
+                Stmt::Let { name, .. } if name == "ok"
+            )
+        });
+        assert!(
+            has_ok,
+            "statement after bad fn should parse: {:?}",
+            prog.statements
+        );
     }
 
     #[test]
