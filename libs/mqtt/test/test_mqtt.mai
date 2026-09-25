@@ -1,9 +1,13 @@
-// mqtt stub tests — no network
+// mqtt driver tests (sim transport) — no network.
+// Run from repo root:
+//   cargo run -p mailang-cli --release -- run libs/mqtt/test/test_mqtt.mai
+//
+// Match on Result is done inside functions (global `let x = match` is unreliable).
 
 import "mqtt"
 
-let passed = 0
-let failed = 0
+var passed = 0
+var failed = 0
 
 fn assert(condition, msg) {
     if condition {
@@ -15,20 +19,67 @@ fn assert(condition, msg) {
     }
 }
 
-println("=== mqtt stub tests ===")
-
-let r = mqtt.publish("t/1", "hello")
-// Expect Ok("sim") — match the Ok payload when available
-match r {
-    Ok(v) => assert(v == "sim", "publish returns Ok(\"sim\")"),
-    Err(e) => assert(false, "publish should not Err: {e}"),
+fn is_ok_sim(r) {
+    return match r {
+        Ok(v) => v == "sim"
+        Err(e) => false
+    }
 }
 
+fn is_err_nonempty(r) {
+    return match r {
+        Ok(v) => false
+        Err(e) => len(e) > 0
+    }
+}
+
+println("=== mqtt driver tests ===")
+
+mqtt.reset()
+mqtt.set_mode("sim")
+assert(mqtt.mode() == "sim", "default/set_mode(\"sim\")")
+assert(mqtt.is_connected() == false, "starts disconnected")
+
+// publish before connect → Err
+let early = mqtt.publish("t/1", "hello")
+assert(is_err_nonempty(early), "publish before connect returns Err")
+
+// connect
+let c = mqtt.connect("broker.local", 1883, "mailang-test")
+assert(is_ok_sim(c), "connect returns Ok(\"sim\") in sim")
+assert(mqtt.is_connected() == true, "is_connected() after connect")
+assert(mqtt.broker() == "broker.local", "broker() recorded")
+assert(mqtt.client_id() == "mailang-test", "client_id() recorded")
+
+// publish
+let r = mqtt.publish("devices/1/temp", "25.0")
+assert(is_ok_sim(r), "publish returns Ok(\"sim\")")
+assert(mqtt.outbox_len() == 1, "outbox_len() == 1 after one publish")
+let box = mqtt.outbox()
+assert(box[0]["topic"] == "devices/1/temp", "outbox topic")
+assert(box[0]["payload"] == "25.0", "outbox payload")
+
+// null args → Err
 let bad = mqtt.publish(null, "x")
-match bad {
-    Ok(v) => assert(false, "null topic should not Ok"),
-    Err(e) => assert(true, "null topic returns Err"),
-}
+assert(is_err_nonempty(bad), "null topic returns Err")
+let bad2 = mqtt.publish("t", null)
+assert(is_err_nonempty(bad2), "null payload returns Err")
+
+// subscribe
+let s = mqtt.subscribe("devices/1/#")
+assert(is_ok_sim(s), "subscribe returns Ok(\"sim\")")
+assert(len(mqtt.subscriptions()) == 1, "subscriptions() length")
+
+// disconnect
+let d = mqtt.disconnect()
+assert(is_ok_sim(d), "disconnect returns Ok(\"sim\")")
+assert(mqtt.is_connected() == false, "is_connected() false after disconnect")
+let after = mqtt.publish("t/1", "x")
+assert(is_err_nonempty(after), "publish after disconnect returns Err")
+
+// clear_outbox
+mqtt.clear_outbox()
+assert(mqtt.outbox_len() == 0, "clear_outbox() empties outbox")
 
 println("")
 println("通过: {passed}")
@@ -36,4 +87,6 @@ println("失败: {failed}")
 
 if failed > 0 {
     println("ERROR: 有测试失败!")
+    process_exit(1)
 }
+process_exit(0)

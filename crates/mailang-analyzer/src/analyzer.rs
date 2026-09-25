@@ -368,8 +368,18 @@ impl Analyzer {
             "gpio_read",
             "delay_ms",
             "adc_read",
+            "pwm_write",
+            "pwm_freq",
+            "uart_write",
+            "uart_read",
+            "i2c_xfer",
+            "spi_xfer",
             "read_file",
             "write_file",
+            "env",
+            "process_exit",
+            "json_parse",
+            "json_stringify",
         ];
         for name in BUILTINS {
             self.register_builtin(name);

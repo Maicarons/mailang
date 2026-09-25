@@ -2,43 +2,24 @@
 layout: home
 
 hero:
-  name: MaìLang
-  text: 麦语
-  tagline: 为 IoT 和跨平台开发设计的现代编程语言
+  name: MaLang
+  text: Documentation
+  tagline: Versioned docs for the MaLang language
   actions:
     - theme: brand
-      text: 快速开始
-      link: /guide/getting-started
+      text: Latest (0.3)
+      link: /v0.3/guide/
     - theme: alt
-      text: Playground
-      link: /playground
+      text: English
+      link: /v0.3/en/guide/
     - theme: alt
       text: GitHub
       link: https://github.com/Maicarons/mailang
 
 features:
-  - icon: 🏗️
-    title: 面向对象编程
-    details: 类、继承、构造函数、super() 调用，完整的 OOP 支持
-  - icon: 🔗
-    title: 闭包
-    details: upvalue 捕获，一等公民函数，共享可变性
-  - icon: 🎯
-    title: 模式匹配
-    details: 字面量、通配符、or-pattern、守卫表达式
-  - icon: 🌍
-    title: UTF-8 原生
-    details: 标识符支持任何 Unicode 文字，中文变量名直接可用
-  - icon: ⚡
-    title: 栈式字节码 VM
-    details: slot 局部变量的高性能执行，50+ 指令
-  - icon: 🔌
-    title: 12 种语言 FFI
-    details: C、Python、JavaScript、Java、Go、Lua 等
-  - icon: 🌐
-    title: WebAssembly
-    details: 浏览器和边缘环境运行，在线 Playground
-  - icon: 🔧
-    title: IoT 就绪
-    details: 三级特性门控，支持 64KB+ 嵌入式设备
----
+  - title: Versioned
+    details: Each release keeps its own docs under /v0.x/. Use the version switcher in the nav.
+  - title: Bilingual
+    details: Chinese (default) and English under /v0.3/en/.
+  - title: Open source
+    details: Apache-2.0. Contributions welcome.

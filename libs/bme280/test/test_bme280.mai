@@ -1,9 +1,13 @@
-// bme280 stub tests — expect fixed sim values
+// bme280 driver tests (sim + sim-i2c protocol) — no real hardware.
+// Run from repo root:
+//   cargo run -p mailang-cli --release -- run libs/bme280/test/test_bme280.mai
+//
+// Match on Result is done inside functions (global `let x = match` is unreliable).
 
 import "bme280"
 
-let passed = 0
-let failed = 0
+var passed = 0
+var failed = 0
 
 fn assert(condition, msg) {
     if condition {
@@ -15,16 +19,85 @@ fn assert(condition, msg) {
     }
 }
 
-println("=== bme280 stub tests ===")
+fn is_ok_true(r) {
+    return match r {
+        Ok(v) => v == true
+        Err(e) => false
+    }
+}
+
+fn is_err_nonempty(r) {
+    return match r {
+        Ok(v) => false
+        Err(e) => len(e) > 0
+    }
+}
+
+println("=== bme280 driver tests ===")
+
+// --- default sim mode ---
+bme280.set_mode("sim")
+assert(bme280.mode() == "sim", "default/set_mode(\"sim\")")
+
+let r0 = bme280.begin(null)
+assert(is_ok_true(r0), "begin() sim returns Ok(true)")
+assert(bme280.begun() == true, "begun() after begin")
+assert(bme280.chip_id() == 96, "chip_id() == 0x60 in sim")
 
 let t = bme280.read_temp()
-assert(t == 25.0, "read_temp() == 25.0 (sim)")
+assert(t == 25.0, "read_temp() == 25.0 (sim default)")
+assert(t > 0.0 && t < 85.0, "temp in plausible C range")
 
 let h = bme280.read_humidity()
-assert(h == 40.0, "read_humidity() == 40.0 (sim)")
+assert(h == 40.0, "read_humidity() == 40.0 (sim default)")
+assert(h >= 0.0 && h <= 100.0, "humidity in 0..100")
 
-assert(t > 0 && t < 85, "temp in plausible °C range")
-assert(h >= 0 && h <= 100, "humidity in 0..100")
+let p = bme280.read_pressure()
+assert(p == 101325.0, "read_pressure() == 101325.0 (sim default)")
+assert(p > 30000.0 && p < 120000.0, "pressure in plausible Pa range")
+
+let all = bme280.read_all()
+assert(all["temp"] == 25.0, "read_all()[\"temp\"]")
+assert(all["humidity"] == 40.0, "read_all()[\"humidity\"]")
+assert(all["pressure"] == 101325.0, "read_all()[\"pressure\"]")
+
+// set_sim_values
+bme280.set_sim_values(21.5, 55.0, 100000.0)
+assert(bme280.read_temp() == 21.5, "set_sim_values temp")
+assert(bme280.read_humidity() == 55.0, "set_sim_values humidity")
+assert(bme280.read_pressure() == 100000.0, "set_sim_values pressure")
+bme280.set_sim_values(25.0, 40.0, 101325.0)
+
+// --- sim-i2c protocol path (pure-Mai virtual BME280) ---
+bme280.set_mode("i2c")
+bme280.use_sim_bus(true)
+assert(bme280.chip_id() == 96, "sim-i2c chip_id() == 0x60")
+let r1 = bme280.begin(118)
+assert(is_ok_true(r1), "sim-i2c begin() Ok")
+
+let t2 = bme280.read_temp()
+assert(t2 == 25.0, "sim-i2c read_temp() == 25.0 (simplified compensation)")
+let h2 = bme280.read_humidity()
+assert(h2 == 40.0, "sim-i2c read_humidity() == 40.0")
+let p2 = bme280.read_pressure()
+assert(p2 == 101325.0, "sim-i2c read_pressure() == 101325.0")
+
+bme280.set_sim_values(18.25, 33.0, 99000.0)
+assert(bme280.read_temp() == 18.25, "sim-i2c set_sim_values temp round-trip")
+assert(bme280.read_humidity() == 33.0, "sim-i2c set_sim_values humidity round-trip")
+assert(bme280.read_pressure() == 99000.0, "sim-i2c set_sim_values pressure round-trip")
+
+// Host-bus path (i2c_xfer): SimulatedHal echo is NOT a BME280 → begin must Err.
+// This documents the honest hardware boundary.
+bme280.use_sim_bus(false)
+bme280.set_addr(118)
+let r_host = bme280.begin(118)
+assert(is_err_nonempty(r_host), "host i2c_xfer against SimulatedHal: begin() Err (echo ≠ BME280)")
+
+// restore
+bme280.set_mode("sim")
+bme280.use_sim_bus(true)
+bme280.set_sim_values(25.0, 40.0, 101325.0)
 
 println("")
 println("通过: {passed}")
@@ -32,4 +105,6 @@ println("失败: {failed}")
 
 if failed > 0 {
     println("ERROR: 有测试失败!")
+    process_exit(1)
 }
+process_exit(0)

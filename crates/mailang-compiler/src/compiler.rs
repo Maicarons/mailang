@@ -2276,6 +2276,39 @@ impl Compiler {
 
         self.current = self.function_compilers.pop().unwrap();
 
+        // Record arity so register lowering sizes expression temps above this+params.
+        {
+            let user_params = if params.first().map(|p| p.name == "self").unwrap_or(false) {
+                params.len() - 1
+            } else {
+                params.len()
+            };
+            let arity = user_params + 1;
+            let required = params.iter().filter(|p| p.default.is_none()).count() + 1;
+            self.bytecode.chunks[chunk_index]
+                .constants
+                .push(Value::Function(Rc::new(FunctionObj {
+                    name: format!("{}.{}", class_name, method_name).into(),
+                    arity,
+                    required,
+                    chunk_index,
+                })));
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         let extra = if params.first().map(|p| p.name == "self").unwrap_or(false) {
             0
         } else {

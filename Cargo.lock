@@ -465,7 +465,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-analyzer"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-ast",
  "mailang-parser",
@@ -474,21 +474,21 @@ dependencies = [
 
 [[package]]
 name = "mailang-ast"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "mailang-bytecode"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "mailang-cli"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "clap",
  "mailang-core",
@@ -499,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-compiler"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-ast",
  "mailang-bytecode",
@@ -509,7 +509,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-core"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-analyzer",
  "mailang-ast",
@@ -524,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-ffi"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "libc",
  "mailang-bytecode",
@@ -534,7 +534,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-gc"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-bytecode",
  "serde",
@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-lexer"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-ast",
  "thiserror",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-lsp"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "dashmap 6.2.1",
  "mailang-analyzer",
@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-macros"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-module"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-ast",
  "mailang-bytecode",
@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-parser"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-ast",
  "mailang-lexer",
@@ -596,7 +596,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-stdlib"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "lazy_static",
  "mailang-bytecode",
@@ -604,7 +604,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-vm"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-bytecode",
  "mailang-gc",
@@ -614,7 +614,7 @@ dependencies = [
 
 [[package]]
 name = "mailang-wasm"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "mailang-core",
  "mailang-stdlib",

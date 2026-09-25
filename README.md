@@ -3,25 +3,28 @@
 [![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.2.6-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.2.6)
+[![Version](https://img.shields.io/badge/version-0.3.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.3.0)
 
 A modern programming language designed for IoT and cross-platform development, written in Rust.
 
 **Repository**: [github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
 **Documentation**: [Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
-**Releases**: [v0.2.6](https://github.com/Maicarons/mailang/releases/tag/v0.2.6)
+**Releases**: [v0.3.0](https://github.com/Maicarons/mailang/releases/tag/v0.3.0)
 
 ## Features
 
-- **Object-Oriented Programming** - Classes, inheritance, constructors, `super()`, traits
-- **Closures & Pattern Matching** - First-class functions; literals, ranges, `Ok`/`Err`/`Some`, `?` operator
+- **Object-Oriented Programming** - Classes, inheritance, constructors, `super()` / `super.method()`, traits (`implements`, `trait extends`)
+- **Closures & Pattern Matching** - First-class functions; literals, ranges, `Ok`/`Err`/`Some`, or-patterns, guards, array/tuple destructure, postfix `expr match { }`, `?` operator
 - **Collections** - Array/Map/str methods (`push`, `keys`, `split`, …)
+- **Generics** - Generic function monomorphization via turbofish (`id::<int>` → `id$int`); `Result<T,E>` / `Option<T>` annotations
 - **UTF-8 Native** - Full Unicode support for identifiers and strings
-- **Stack-based Bytecode VM** - Slot locals, TCO, CallDirect, ~4× faster recursive fib vs 0.1
+- **Stack-based Bytecode VM** - Slot locals, TCO, CallDirect, ~4× faster recursive fib vs 0.1; optional register VM with feature parity
+- **GC** - Rc + `collect_cycles()` + mark-sweep heap (`gc_stats()`)
 - **Embeddable** - C FFI host functions, no_std bytecode crate, `.mailangbc` artifacts
 - **WebAssembly** - Run in browsers and Node
 - **IoT Ready** - Simulated HAL builtins, embedded size CI
-- **Tooling** - Analyzer, LSP, `mailang fmt`, module system v2
+- **Packages** - Filesystem / static-HTTP registry: `mailang publish/install/search/yank/registry`
+- **Tooling** - Analyzer, LSP (multi-error diagnostics), `mailang fmt`, module system v2
 
 ## Quick Start
 
@@ -146,13 +149,20 @@ cargo build --features "std,gc,io"
 cargo build --no-default-features --target thumbv7em-none-eabihf
 ```
 
+## Testing
+
+Integration suite: **102/102** on both the stack VM (default) and the register VM (`MAILANG_VM=register` / `--vm=register`).
+
 ## Current limitations
 
-- **No package registry yet** — modules are loaded from local paths only; remote package install/resolve is not implemented.
-- **Generics are annotation-only** — `Result<T, E>` / `Option<T>` style annotations are accepted for readability; there is no true generic monomorphization or generic type checking.
+- **Package registry is local/HTTP-static** — `mailang publish/install/search/yank` against a filesystem registry (or static HTTP mirror); no public hosted registry service.
+- **Generic functions monomorphize; generic classes erase fields** — turbofish `id::<int>(x)` specializes (`id$int`); `Result<T,E>` / `Option<T>` annotations work. Generic classes use one erased layout (fields stay dynamic).
 - **`async` is not supported** — no async/await runtime or syntax.
-- **GC is Rc + cycle-break only** — reference counting with manual `collect_cycles()`; no mark-sweep or incremental collector.
-- **IoT HAL is simulated by default** — `gpio_*` / `adc_read` / `delay_ms` use a host simulation unless a real HAL is registered via FFI.
+- **GC is Rc + mark-sweep** — reference counting, `collect_cycles()` edge-cut, and a `MarkSweepHeap` wired into the stack VM (see `gc_stats()`). Incremental/concurrent GC not implemented.
+- **IoT HAL is simulated by default** — `gpio_*` / `adc_read` / `delay_ms` use a host simulation unless a real HAL is registered via FFI. No real-hardware validation claimed.
+- **Register VM is opt-in** — stack VM remains the default; `MAILANG_VM=register` / `--vm=register` passes the same 102 integration tests (feature parity).
+- **`mailang-macros` is a passthrough stub** — no real procedural macros yet.
+- **crates.io publish requires `CARGO_REGISTRY_TOKEN`** — CI skips crates.io when the secret is unset (local/HTTP registry works offline).
 
 ## License
 

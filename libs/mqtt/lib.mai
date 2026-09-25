@@ -1,16 +1,137 @@
-// mqtt — MQTT publish STUB
-// Version: 0.1.0
+// mqtt — MQTT client pack (host transport contract + pure-Mai sim)
+// Version: 0.2.0
 //
-// Honest note: no sockets, no MQTT handshake, no broker ACK.
-// The host must supply transport (e.g. mqtt_publish via
-// mailang_register_host_fn) for real delivery.
+// Host-function contract (real network):
+//   mqtt_connect(broker:str, port:int, client_id:str) -> Ok(any) | Err(str)
+//   mqtt_publish(topic:str, payload:str)             -> Ok(any) | Err(str)
+//   mqtt_subscribe(topic:str)                        -> Ok(any) | Err(str)
+//   mqtt_disconnect()                                -> Ok(any) | Err(str)
+//   mqtt_is_connected()                              -> bool
+//
+// Register via mailang_register_host_fn (C FFI) or Vm::register_host_fn (Rust).
+// Host registration OVERRIDES the stub implementations below at call time.
+//
+// Default mode is pure-Mai simulation: no sockets, no broker, no MQTT handshake.
+// Publishes are recorded in an in-memory outbox so tests can assert on them.
+//
+// Honest limit: Ok("sim") is NOT a broker ACK. Real delivery requires host
+// transport registration (platform MQTT client / lwIP / esp-mqtt / …).
 
-// Stub publish: pretends success. Does not perform network I/O.
-fn publish(topic, payload) {
-    // Real host binding would call a registered transport here.
-    // For now we only validate arguments lightly and return Ok("sim").
+var _mqtt_state = {
+    "mode": "sim",
+    "connected": false,
+    "broker": "",
+    "port": 1883,
+    "client_id": "",
+    "outbox": [],
+    "subs": []
+}
+
+// ---------- transport hooks (host-overridable by name) ----------
+
+fn mqtt_connect(broker, port, client_id) {
+    if broker == null || client_id == null {
+        return Err("mqtt.connect: broker and client_id required")
+    }
+    _mqtt_state["broker"] = broker
+    _mqtt_state["port"] = port
+    _mqtt_state["client_id"] = client_id
+    _mqtt_state["connected"] = true
+    return Ok("sim")
+}
+
+fn mqtt_publish(topic, payload) {
     if topic == null || payload == null {
         return Err("mqtt.publish: topic and payload required")
     }
+    if !_mqtt_state["connected"] {
+        return Err("mqtt.publish: not connected")
+    }
+    let entry = {"topic": topic, "payload": payload}
+    _mqtt_state["outbox"].push(entry)
     return Ok("sim")
+}
+
+fn mqtt_subscribe(topic) {
+    if topic == null {
+        return Err("mqtt.subscribe: topic required")
+    }
+    if !_mqtt_state["connected"] {
+        return Err("mqtt.subscribe: not connected")
+    }
+    _mqtt_state["subs"].push(topic)
+    return Ok("sim")
+}
+
+fn mqtt_disconnect() {
+    _mqtt_state["connected"] = false
+    return Ok("sim")
+}
+
+fn mqtt_is_connected() {
+    return _mqtt_state["connected"]
+}
+
+// ---------- public API (calls hooks by name so host can override) ----------
+
+fn set_mode(m) {
+    _mqtt_state["mode"] = m
+}
+
+fn mode() {
+    return _mqtt_state["mode"]
+}
+
+fn connect(broker, port, client_id) {
+    return mqtt_connect(broker, port, client_id)
+}
+
+fn publish(topic, payload) {
+    return mqtt_publish(topic, payload)
+}
+
+fn subscribe(topic) {
+    return mqtt_subscribe(topic)
+}
+
+fn disconnect() {
+    return mqtt_disconnect()
+}
+
+fn is_connected() {
+    return mqtt_is_connected()
+}
+
+fn broker() {
+    return _mqtt_state["broker"]
+}
+
+fn client_id() {
+    return _mqtt_state["client_id"]
+}
+
+// Sim inspection: list of {"topic","payload"} in publish order.
+fn outbox() {
+    return _mqtt_state["outbox"]
+}
+
+fn outbox_len() {
+    return len(_mqtt_state["outbox"])
+}
+
+fn clear_outbox() {
+    _mqtt_state["outbox"] = []
+}
+
+fn subscriptions() {
+    return _mqtt_state["subs"]
+}
+
+fn reset() {
+    _mqtt_state["connected"] = false
+    _mqtt_state["broker"] = ""
+    _mqtt_state["port"] = 1883
+    _mqtt_state["client_id"] = ""
+    _mqtt_state["outbox"] = []
+    _mqtt_state["subs"] = []
 }

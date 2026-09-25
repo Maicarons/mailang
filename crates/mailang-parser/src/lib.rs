@@ -239,6 +239,39 @@ mod tests {
     }
 
     #[test]
+    fn recover_from_error_collects_multiple() {
+        let mut p = Parser::new("let a = 1\nlet b =\nlet c = 3\nfn (\nlet d = 4\n").expect("lex");
+        let (prog, errs) = p.parse_program_recovering();
+        assert!(errs.len() >= 2, "expected multiple errors, got {:?}", errs);
+        // Successfully parsed statements still land in the AST.
+        let names: Vec<String> = prog
+            .statements
+            .iter()
+            .filter_map(|s| match s {
+                Stmt::Let { name, .. } if !name.is_empty() => Some(name.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            names.contains(&"a".to_string()) && names.contains(&"c".to_string()),
+            "partial AST should keep good statements: {:?}",
+            names
+        );
+    }
+
+    #[test]
+    fn recover_from_error_skips_bad_function() {
+        let mut p = Parser::new("fn broken( {\nreturn 1\n}\nlet ok = 2\n").expect("lex");
+        let (prog, errs) = p.parse_program_recovering();
+        assert!(!errs.is_empty());
+        let has_ok = prog.statements.iter().any(|s| matches!(
+            s,
+            Stmt::Let { name, .. } if name == "ok"
+        ));
+        assert!(has_ok, "statement after bad fn should parse: {:?}", prog.statements);
+    }
+
+    #[test]
     fn nested_generic_type_splits_shift() {
         // `Box<Box<int>>` must not be eaten as a `>>` shift token.
         let prog = parse("let x: Box<Box<int>>\n");

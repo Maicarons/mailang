@@ -62,10 +62,12 @@ fn collect_diagnostics(source: &str) -> Vec<Diagnostic> {
         Ok(p) => p,
         Err(e) => return vec![diag_at(&e.to_string(), DiagnosticSeverity::ERROR)],
     };
-    let program = match parser.parse_program() {
-        Ok(p) => p,
-        Err(e) => return vec![diag_at(&e.to_string(), DiagnosticSeverity::ERROR)],
-    };
+    // Token-sync recovery: report every syntax error, then analyze the partial AST.
+    let (program, parse_errors) = parser.parse_program_recovering();
+    let mut diags: Vec<Diagnostic> = parse_errors
+        .iter()
+        .map(|e| diag_at(&e.to_string(), DiagnosticSeverity::ERROR))
+        .collect();
 
     let mut analyzer = Analyzer::new();
     match analyzer.analyze(&program) {
@@ -75,41 +77,34 @@ fn collect_diagnostics(source: &str) -> Vec<Diagnostic> {
                 .into_iter()
                 .filter(|e| matches!(e, mailang_analyzer::AnalyzerError::UnusedVariable(_)))
                 .collect();
-            mailang_analyzer::diagnose(source, &unused)
-                .into_iter()
-                .map(|d| {
-                    let sev = match d.severity {
-                        mailang_analyzer::Severity::Error => DiagnosticSeverity::ERROR,
-                        mailang_analyzer::Severity::Warning => DiagnosticSeverity::WARNING,
-                        mailang_analyzer::Severity::Information => DiagnosticSeverity::INFORMATION,
-                    };
-                    Diagnostic {
-                        range: Range::new(
-                            Position::new(d.line, d.col),
-                            Position::new(d.line, d.col + 1),
-                        ),
-                        severity: Some(sev),
-                        message: d.message,
-                        source: Some("mailang".into()),
-                        ..Default::default()
-                    }
-                })
-                .collect()
+            diags.extend(mailang_analyzer::diagnose(source, &unused).into_iter().map(|d| {
+                let sev = match d.severity {
+                    mailang_analyzer::Severity::Error => DiagnosticSeverity::ERROR,
+                    mailang_analyzer::Severity::Warning => DiagnosticSeverity::WARNING,
+                    mailang_analyzer::Severity::Information => DiagnosticSeverity::INFORMATION,
+                };
+                Diagnostic {
+                    range: Range::new(Position::new(d.line, d.col), Position::new(d.line, d.col + 1)),
+                    severity: Some(sev),
+                    message: d.message,
+                    source: Some("mailang".into()),
+                    ..Default::default()
+                }
+            }));
         }
-        Err(errs) => mailang_analyzer::diagnose(source, &errs)
-            .into_iter()
-            .map(|d| Diagnostic {
-                range: Range::new(
-                    Position::new(d.line, d.col),
-                    Position::new(d.line, d.col + 1),
-                ),
-                severity: Some(DiagnosticSeverity::ERROR),
-                message: d.message,
-                source: Some("mailang".into()),
-                ..Default::default()
-            })
-            .collect(),
+        Err(errs) => {
+            diags.extend(mailang_analyzer::diagnose(source, &errs).into_iter().map(|d| {
+                Diagnostic {
+                    range: Range::new(Position::new(d.line, d.col), Position::new(d.line, d.col + 1)),
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    message: d.message,
+                    source: Some("mailang".into()),
+                    ..Default::default()
+                }
+            }));
+        }
     }
+    diags
 }
 
 fn builtin_completions() -> Vec<CompletionItem> {

@@ -6,11 +6,11 @@ license.workspace = true
 description = "Semantic analyzer for MaìLang"
 
 [dependencies]
-mailang-ast = { path = "../mailang-ast", version = "0.2.6" }
+mailang-ast = { path = "../mailang-ast", version = "0.3.0" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-mailang-parser = { path = "../mailang-parser", version = "0.2.6" }
+mailang-parser = { path = "../mailang-parser", version = "0.3.0" }
 
 [features]
 default = []

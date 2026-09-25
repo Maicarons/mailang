@@ -65,9 +65,9 @@ Source (.mai) → Lexer → Parser → Compiler → VM
 - **mailang-cli**: CLI binary. Uses `clap` for subcommands (`run`, `eval`) and provides an interactive REPL.
 - **mailang-ffi**: C ABI layer (`extern "C"` functions). Uses `cbindgen` to generate `mailang.h`. Wraps `mailang-core`.
 - **mailang-wasm**: WebAssembly bindings via `wasm-bindgen`. Wraps `mailang-core`.
-- **mailang-lsp**: Language Server Protocol server (skeleton). Uses `tower-lsp`.
-- **mailang-gc**: Garbage collector (stub).
-- **mailang-macros**: Procedural macros (stub).
+- **mailang-lsp**: Language Server Protocol server (diagnostics/completions; multi-error syntax diagnostics via parser recovery). Uses `tower-lsp`.
+- **mailang-gc**: Garbage collector (`collect_cycles()` edge-cut + `MarkSweepHeap` wired into the stack VM).
+- **mailang-macros**: Procedural macros (passthrough stub).
 
 ### Key Design Decisions
 
@@ -91,12 +91,14 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-**Phase H (v0.2.6 docs baseline + language completeness)**. Runtime supports OOP (inherited constructors, `super()` ctor, `super.method()`, inherited methods), traits (`implements`, `trait extends`), pattern matching (literals/ranges/`Ok`/`Err`/`Some`/or/guards + **array/tuple match destructure**), **`let`/`var` destructuring**, **default parameter values**, **postfix `expr match { }`**, **mutability enforcement** (`let`/`const` reject assignment), `?`, TCO, collections/str methods (`push`/`pop`/`insert`/`contains`/`join`/`reverse`/`clear`; map `keys`/`values`/`has`/`remove`/`clear`; str `trim`/`split`/`replace`/`starts_with`/`ends_with`/`contains`/`to_upper`/`to_lower`/`repeat`), global `read_file`/`write_file`, `.mailangbc`, simulated HAL, C FFI, analyzer/LSP/fmt, module v2 with **`mailang.toml` path dependencies** (`mailang deps`), and Rc cycle collection via `collect_cycles()`. Fib(30) ~137 ms (~4.25× baseline). **95+ integration tests**.
+**Phase L (both VMs pass the full suite; docs/release prep)**. Runtime supports OOP (inherited constructors, `super()` ctor, `super.method()`, inherited methods), traits (`implements`, `trait extends`), pattern matching (literals/ranges/`Ok`/`Err`/`Some`/or/guards + array/tuple match destructure), `let`/`var` destructuring, default parameter values, postfix `expr match { }`, mutability enforcement (`let`/`const` reject assignment), `?`, TCO, collections/str methods, global `read_file`/`write_file`, `.mailangbc`, simulated HAL, C FFI, analyzer/LSP/fmt, module v2 with `mailang.toml` path deps (`mailang deps`), **filesystem/HTTP-static package registry** (`publish`/`install`/`search`/`yank`), **generic function monomorphization** (turbofish `id::<int>` → `id$int`; generic classes erase fields), **GC = Rc + `collect_cycles()` + `MarkSweepHeap`**, and **parser error recovery** (`recover_from_error` / `parse_program_recovering`; LSP reports multiple syntax errors). Fib(30) ~137 ms (~4.25× baseline). **102 integration tests on the stack VM (default) and 102/102 on the register VM** (`MAILANG_VM=register` / `--vm=register`) — feature parity.
 
 ### Remaining gaps (honest)
 
-- No package registry (local modules only); generics are annotation-only (no monomorphization); `async` not supported.
-- GC is Rc + manual cycle-break only (no mark-sweep / incremental).
-- IoT HAL is simulated by default until a real HAL is registered via FFI.
-- Parser has no `recover_from_error` token-sync recovery (fails on first parse error).
+- No public hosted package registry (local/`http(s)` static mirror only).
+- Generic classes are field-erased (no per-type layout monomorphization).
+- `async` not supported.
+- IoT HAL is simulated by default until a real HAL is registered via FFI (no real-hardware validation claimed).
+- Register VM (`MAILANG_VM=register` / `--vm=register`) is opt-in and feature-parity with the stack VM, but the stack VM remains the default and primary backend.
+- `mailang-macros` is still a passthrough stub.
 - VM has no `set_debug` / `memory_stats` APIs.

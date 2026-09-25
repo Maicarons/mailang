@@ -1,16 +1,320 @@
-// bme280 — BME280 temperature/humidity driver STUB
-// Version: 0.1.0
+// bme280 — BME280 temperature/humidity/pressure driver
+// Version: 0.2.0
 //
-// Honest note: no I2C/SPI here. Values are simulation constants.
-// A real deployment must register host transport (register read/write)
-// via mailang_register_host_fn and wire lib.mai to those callbacks.
+// Host-function contract (real hardware):
+//   Option A — cooked sensor hooks (simplest):
+//     bme280_temp_c()       -> float   (°C)
+//     bme280_humidity_pct() -> float   (%RH)
+//     bme280_pressure_pa()  -> float   (Pa)
+//   Option B — raw I2C (matches SimulatedHal shape):
+//     i2c_xfer(addr:int, w_hex:str, rlen:int) -> str  (hex response)
+//
+// Register via mailang_register_host_fn (C FFI) or Vm::register_host_fn (Rust).
+// Host registration OVERRIDES the stub hooks below at call time.
+//
+// Default mode is pure-Mai simulation: no host registration, no I/O.
+// Honest limit: real sensor accuracy requires real I2C (or calibrated hooks).
+// SimulatedHal's i2c_xfer is an echo device, NOT a BME280.
 
-// Simulated temperature in °C (fixed stub value)
-fn read_temp() {
-    return 25.0
+var _bme280_state = {
+    "mode": "sim",
+    "addr": 118,
+    "begun": false,
+    "sim_temp": 25.0,
+    "sim_hum": 40.0,
+    "sim_press": 101325.0,
+    "use_sim_bus": true,
+    "regs": []
 }
 
-// Simulated relative humidity in % (fixed stub value)
+fn _bme280_init_regs() {
+    let regs = []
+    var i = 0
+    while i < 256 {
+        regs.push(0)
+        i = i + 1
+    }
+    // Chip ID (datasheet): 0xD0 = 0x60
+    regs[208] = 96
+    // Simplified raw layout used by this driver (not full Bosch calibration):
+    //   0xFA..0xFC  temp 20-bit BE-ish  -> raw_t / 5120.0 = °C
+    //   0xF7..0xF9  press 20-bit        -> raw_p * 1.0 = Pa (simplified)
+    //   0xFD..0xFE  humidity 16-bit     -> raw_h / 1024.0 = %RH
+    // Defaults produce 25.0 °C, 101325 Pa, 40.0 %RH.
+    _bme280_set_raw_temp(regs, 128000)
+    _bme280_set_raw_press(regs, 101325)
+    _bme280_set_raw_hum(regs, 40960)
+    _bme280_state["regs"] = regs
+}
+
+fn _bme280_set_raw_temp(regs, raw) {
+    let r = floor(raw)
+    regs[250] = r / 4096
+    regs[251] = r % 4096 / 16
+    regs[252] = r % 16 * 16
+}
+
+fn _bme280_set_raw_press(regs, raw) {
+    let r = floor(raw)
+    regs[247] = r / 4096
+    regs[248] = r % 4096 / 16
+    regs[249] = r % 16 * 16
+}
+
+fn _bme280_set_raw_hum(regs, raw) {
+    let r = floor(raw)
+    regs[253] = r / 256
+    regs[254] = r % 256
+}
+
+fn _bme280_nibble(n) {
+    if n == 0 { return "0" }
+    if n == 1 { return "1" }
+    if n == 2 { return "2" }
+    if n == 3 { return "3" }
+    if n == 4 { return "4" }
+    if n == 5 { return "5" }
+    if n == 6 { return "6" }
+    if n == 7 { return "7" }
+    if n == 8 { return "8" }
+    if n == 9 { return "9" }
+    if n == 10 { return "a" }
+    if n == 11 { return "b" }
+    if n == 12 { return "c" }
+    if n == 13 { return "d" }
+    if n == 14 { return "e" }
+    return "f"
+}
+
+fn _bme280_to_hex(b) {
+    let n = floor(b) % 256
+    return _bme280_nibble(n / 16) + _bme280_nibble(n % 16)
+}
+
+fn _bme280_hex_val(ch) {
+    if ch == "0" { return 0 }
+    if ch == "1" { return 1 }
+    if ch == "2" { return 2 }
+    if ch == "3" { return 3 }
+    if ch == "4" { return 4 }
+    if ch == "5" { return 5 }
+    if ch == "6" { return 6 }
+    if ch == "7" { return 7 }
+    if ch == "8" { return 8 }
+    if ch == "9" { return 9 }
+    if ch == "a" || ch == "A" { return 10 }
+    if ch == "b" || ch == "B" { return 11 }
+    if ch == "c" || ch == "C" { return 12 }
+    if ch == "d" || ch == "D" { return 13 }
+    if ch == "e" || ch == "E" { return 14 }
+    if ch == "f" || ch == "F" { return 15 }
+    return 0
+}
+
+fn _bme280_from_hex2(s) {
+    return _bme280_hex_val(s[0]) * 16 + _bme280_hex_val(s[1])
+}
+
+fn _bme280_hex_bytes(s) {
+    let out = []
+    var i = 0
+    while i + 1 < len(s) {
+        out.push(_bme280_from_hex2(s[i] + s[i + 1]))
+        i = i + 2
+    }
+    return out
+}
+
+fn _bme280_bytes_hex(bytes) {
+    let out = ""
+    var i = 0
+    while i < len(bytes) {
+        out = out + _bme280_to_hex(bytes[i])
+        i = i + 1
+    }
+    return out
+}
+
+// Pure-Mai virtual BME280 register device (sim bus).
+fn _bme280_sim_bus_xfer(w_hex, rlen) {
+    let w = _bme280_hex_bytes(w_hex)
+    let regs = _bme280_state["regs"]
+    var reg = 0
+    if len(w) > 0 {
+        reg = w[0]
+    }
+    let resp = []
+    var i = 0
+    while i < rlen {
+        let a = reg + i
+        if a >= 0 && a < 256 {
+            resp.push(regs[a])
+        } else {
+            resp.push(0)
+        }
+        i = i + 1
+    }
+    return _bme280_bytes_hex(resp)
+}
+
+// Host-overridable transport hook. Default wraps SimulatedHal/host i2c_xfer.
+// Real hardware: register `i2c_xfer` (this name) via mailang_register_host_fn.
+fn bme280_i2c_xfer(addr, w_hex, rlen) {
+    return i2c_xfer(addr, w_hex, rlen)
+}
+
+fn _bme280_bus_xfer(w_hex, rlen) {
+    if _bme280_state["use_sim_bus"] {
+        return _bme280_sim_bus_xfer(w_hex, rlen)
+    }
+    return bme280_i2c_xfer(_bme280_state["addr"], w_hex, rlen)
+}
+
+// Cooked hooks — default stubs return sim values.
+// Host registration of these names overrides the stubs at runtime.
+fn bme280_temp_c() {
+    return _bme280_state["sim_temp"]
+}
+
+fn bme280_humidity_pct() {
+    return _bme280_state["sim_hum"]
+}
+
+fn bme280_pressure_pa() {
+    return _bme280_state["sim_press"]
+}
+
+// --- simplified compensation (NOT full Bosch datasheet formula) ---
+// temp:  raw / 5120.0        (datasheet final scale; t_fine folded into raw)
+// press: raw * 1.0           (raw stored as Pa in this simplified layout)
+// hum:   raw / 1024.0        (16-bit left-aligned style)
+// For datasheet accuracy on real silicon, prefer cooked hooks with
+// host-side calibration, or extend this file with dig_T/P/H coefficients.
+
+fn _bme280_read_raw_temp() {
+    let h = _bme280_bus_xfer("fa", 3)
+    let b = _bme280_hex_bytes(h)
+    return b[0] * 4096 + b[1] * 16 + b[2] / 16
+}
+
+fn _bme280_read_raw_press() {
+    let h = _bme280_bus_xfer("f7", 3)
+    let b = _bme280_hex_bytes(h)
+    return b[0] * 4096 + b[1] * 16 + b[2] / 16
+}
+
+fn _bme280_read_raw_hum() {
+    let h = _bme280_bus_xfer("fd", 2)
+    let b = _bme280_hex_bytes(h)
+    return b[0] * 256 + b[1]
+}
+
+fn _bme280_comp_temp() {
+    return _bme280_read_raw_temp() / 5120.0
+}
+
+fn _bme280_comp_press() {
+    return _bme280_read_raw_press() * 1.0
+}
+
+fn _bme280_comp_hum() {
+    return _bme280_read_raw_hum() / 1024.0
+}
+
+_bme280_init_regs()
+
+// ---------- public API ----------
+
+// mode: "sim" (default, hooks/pure values) | "i2c" (register protocol)
+fn set_mode(m) {
+    _bme280_state["mode"] = m
+}
+
+fn mode() {
+    return _bme280_state["mode"]
+}
+
+// When mode == "i2c": true (default) = pure-Mai virtual device (desktop tests);
+// false = host `i2c_xfer` (SimulatedHal echo or real bus).
+fn use_sim_bus(flag) {
+    _bme280_state["use_sim_bus"] = flag
+}
+
+fn set_addr(addr) {
+    _bme280_state["addr"] = addr
+}
+
+fn addr() {
+    return _bme280_state["addr"]
+}
+
+// Override simulation physical values (mode "sim" / default hooks).
+fn set_sim_values(temp, hum, press) {
+    _bme280_state["sim_temp"] = temp
+    _bme280_state["sim_hum"] = hum
+    _bme280_state["sim_press"] = press
+    // Keep virtual register device consistent for sim-i2c tests.
+    let regs = _bme280_state["regs"]
+    _bme280_set_raw_temp(regs, temp * 5120.0)
+    _bme280_set_raw_hum(regs, hum * 1024.0)
+    _bme280_set_raw_press(regs, press)
+}
+
+fn chip_id() {
+    if _bme280_state["mode"] == "i2c" {
+        let h = _bme280_bus_xfer("d0", 1)
+        let b = _bme280_hex_bytes(h)
+        return b[0]
+    }
+    return 96
+}
+
+fn begin(addr) {
+    if addr != null {
+        _bme280_state["addr"] = addr
+    }
+    if _bme280_state["mode"] == "i2c" {
+        let id = chip_id()
+        if id != 96 {
+            _bme280_state["begun"] = false
+            return Err("bme280.begin: chip id " + to_string(id) + " != 0x60 (not a BME280, or host bus missing)")
+        }
+        _bme280_state["begun"] = true
+        return Ok(true)
+    }
+    _bme280_state["begun"] = true
+    return Ok(true)
+}
+
+fn begun() {
+    return _bme280_state["begun"]
+}
+
+fn read_temp() {
+    if _bme280_state["mode"] == "i2c" {
+        return _bme280_comp_temp()
+    }
+    return bme280_temp_c()
+}
+
 fn read_humidity() {
-    return 40.0
+    if _bme280_state["mode"] == "i2c" {
+        return _bme280_comp_hum()
+    }
+    return bme280_humidity_pct()
+}
+
+fn read_pressure() {
+    if _bme280_state["mode"] == "i2c" {
+        return _bme280_comp_press()
+    }
+    return bme280_pressure_pa()
+}
+
+fn read_all() {
+    return {
+        "temp": read_temp(),
+        "humidity": read_humidity(),
+        "pressure": read_pressure()
+    }
 }

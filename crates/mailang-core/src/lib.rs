@@ -33,6 +33,8 @@ pub struct MailangInterpreter {
     max_call_depth: usize,
     /// Execute compiled bytecode on the register VM instead of the stack VM.
     prefer_register: bool,
+    /// Last register-VM instance (so collect_cycles / gc_stats see its heap).
+    last_register: Option<mailang_vm::RegisterVm>,
 }
 
 /// Which VM backend executes compiled bytecode.
@@ -54,6 +56,7 @@ impl MailangInterpreter {
             fuel: None,
             max_call_depth: Vm::DEFAULT_MAX_CALL_DEPTH,
             prefer_register: false,
+            last_register: None,
         }
     }
 
@@ -67,6 +70,7 @@ impl MailangInterpreter {
             fuel: None,
             max_call_depth: Vm::DEFAULT_MAX_CALL_DEPTH,
             prefer_register: false,
+            last_register: None,
         }
     }
 
@@ -120,11 +124,17 @@ impl MailangInterpreter {
 
     /// Break Rc cycles reachable from the VM stack and globals.
     pub fn collect_cycles(&mut self) -> usize {
+        if let Some(rvm) = self.last_register.as_mut() {
+            return rvm.collect_cycles();
+        }
         self.vm.collect_cycles()
     }
 
     /// Mark-sweep heap statistics: (tracked, collections, freed).
     pub fn gc_stats(&self) -> (usize, usize, usize) {
+        if let Some(rvm) = self.last_register.as_ref() {
+            return rvm.gc_stats();
+        }
         self.vm.gc_stats()
     }
 
@@ -143,6 +153,7 @@ impl MailangInterpreter {
             rvm.set_global(name, value.clone());
         }
         let result = rvm.run().map_err(|e| e.to_string())?;
+        self.last_register = Some(rvm);
         Ok(mailang_stdlib::value_to_string(&result))
     }
 

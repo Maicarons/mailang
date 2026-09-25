@@ -1,9 +1,9 @@
-# MaìLang 下一步更新方案（v0.2.6 / 规划 v0.3）
+# MaìLang 下一步更新方案（v0.2.6+ / 规划 Phase L → v0.3.0）
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [v0.2.6](https://github.com/Maicarons/mailang/releases/tag/v0.2.6)
 >
-> 更新日期：2026-09-12（Phase B–F 完成；Phase G 调研）
-> 研究方法：运行时行为验证 + 代码审计 + 竞品对比
+> 更新日期：Phase B–K 已落地；本文末尾 **Phase L** 为下一步发展方案
+> 研究方法：运行时行为验证 + 代码审计 + 测试实测 + 文档交叉核对
 
 ---
 
@@ -368,10 +368,155 @@ Week 4:   回归、文档、发布 v0.3.0
 ```
 
 **v0.3 验收（建议）**
-- [ ] `Ok/Err` 可用 `?` 传播
-- [ ] Array/Map 方法齐全且有测试
-- [ ] 标注类型不匹配在 eval/LSP 可见
-- [ ] Playground wasm 与 CLI 行为一致
-- [ ] CI 全绿 + Release 带二进制 +（可选）crates.io
+- [x] `Ok/Err` 可用 `?` 传播（G1）
+- [x] Array/Map 方法齐全且有测试（G2）
+- [x] 标注类型不匹配在 eval/LSP 可见（G3）
+- [ ] Playground wasm 与 CLI 行为一致（G5 部分）
+- [ ] CI 全绿 + Release 带二进制 +（可选）crates.io（G6 部分）
+
+---
+
+## 十一、Phase L 下一步发展方案（调研 → v0.3.0）
+
+> 调研日期：Phase H–K 代码审计 + `cargo test` / `MAILANG_VM=register` 实测。
+> 核心结论：**语言能力已超前于文档与发布；最大技术债是双后端不一致；最大产品缺口是 IoT 仍停留在模拟 HAL。**
+
+### 11.1 实测基线（研究结论）
+
+| 维度 | 实测结果 | 说明 |
+|------|----------|------|
+| 栈式 VM 集成测试 | **102/102 通过** | 含解构 / 默认参数 / postfix match / trait extends / `?` / GC |
+| 全工作区测试 | **~218 全绿** | analyzer 19 · parser 13 · module 25 · stdlib 15 · compiler generics 8 · core 15+102 等 |
+| 寄存器 VM 同套件 | **73/102（29 失败）** | `MatchPattern→Nop`、类/`this`/`super`/trait、默认参数、GC、部分 `?`/TCO |
+| 包注册表 | **已实现** | `publish/install/search/yank/registry` + FS/HTTP 源 + `.mpkg` |
+| 泛型单态化 | **已实现** | turbofish `id::<int>` → chunk `id$int`，有缓存；类字段仍擦除 |
+| GC | **Rc 断环 + MarkSweepHeap** | 已接入栈 VM；`gc_stats` / `collect_cycles` |
+| 性能 | Fib(30) ~137 ms（~4.25×） | Phase F 达标后未再压测 |
+| 无 `todo!`/`unimplemented!` | **通过** | crates 内无未接桩宏 |
+
+### 11.2 文档滞后（必须先还的债）
+
+下列声明与代码不符，会直接伤害可信度：
+
+| 位置 | 过时声明 | 实际 |
+|------|----------|------|
+| `README.md` / `README_zh.md` | No package registry | 注册表已实现 |
+| `README.md` | Generics are annotation-only | 已有 monomorphization |
+| `AGENTS.md` | No package registry；GC 仅 Rc+手动断环 | 两者均已落地 |
+| `ROADMAP.md` 正文 | 停在 Phase G 规划 | CHANGELOG 已有 H–K |
+| `REPORT.md` | Phase A 时代 | 严重过期 |
+| `benchmark/REPORT.md` | Phase B 数据 | 需按 release 重跑 |
+
+### 11.3 真实缺口（按投入产出排序）
+
+| ID | 项 | 优先级 | 工作量 | 理由 |
+|----|----|--------|--------|------|
+| **L0** | 文档真相对齐（README / AGENTS / REPORT / bench） | **P0** | 0.5–1 天 | 对外门面；不改代码也能立刻提升可信度 |
+| **L1** | 发布 Unreleased H–K → **v0.3.0**（CI 绿 + tag + 二进制） | **P0** | 1–2 天 | 功能已堆在 Unreleased，不发等于没有 |
+| **L2** | **Register VM 对齐栈 VM**（目标 102/102） | **P0** | 1–2 周 | 最大技术债；双后端语义分叉会越拖越贵 |
+| **L3** | IoT 真实路径：ESP32 端到端 + 驱动包从 stub 到契约可用 | **P1** | 1–2 周 | 项目定位护城河；目前只有文档和 SimulatedHal |
+| **L4** | 足迹真实数据：`measure_size` + vs MicroPython 诚实表 | **P1** | 2–3 天 | IoT 叙事需要数字，不能继续 placeholder |
+| **L5** | Parser 错误恢复（token-sync `recover_from_error`） | **P1** | 3–5 天 | REPL / LSP / fmt 体验质变 |
+| **L6** | Playground WASM 刷新 + 示例一键切换 + 错误行列 | **P2** | 2–3 天 | G5 收尾 |
+| **L7** | crates.io 发布（`CARGO_REGISTRY_TOKEN` + multi-crate） | **P2** | 1 天 | 工程收尾，依赖 token |
+| **L8** | 泛型类单态化 **或** 文档明确「字段擦除」 | **P2** | 视选择 | 当前类泛型是 erased layout |
+| **L9** | `async` / 协程 | **P3** | 大 | 无明确 IoT 场景前不启动（与既往决策一致） |
+| **L10** | 寄存器 VM 性能对照（Fib/循环 vs 栈 VM） | **P3** | 2 天 | L2 完成后再比，否则无意义 |
+| **—** | `mailang-macros` 仍为 passthrough | **P3** | 视需求 | 无调用方；勿为「完整」而造宏 |
+
+### 11.4 战略取舍（三选一）
+
+| 方案 | 路径 | 优点 | 风险 |
+|------|------|------|------|
+| **A. 先还债（推荐）** | L0 → L1 → L2 → L3 | 可信度与一致性优先；发布立刻可感知 | IoT 差异化晚 2–3 周 |
+| B. 先 IoT 差异化 | L3 → L4 → L1 | 定位故事最快成形 | 寄存器 VM 债继续膨胀，后端分叉 |
+| C. 先性能/语言深度 | L10 / L8 / L9 | 技术指标好看 | 偏离 IoT 定位；async 无场景支撑 |
+
+**建议采用 A**：一致性是可信度基础，IoT 是定位护城河。L2 可与 L3 后半段并行（驱动契约不依赖寄存器 VM）。
+
+### 11.5 Phase L 详细计划
+
+#### L0. 文档真相对齐（0.5–1 天）
+
+- README / README_zh：删「无注册表 / 泛型仅标注」；改为「FS 注册表 + turbofish 单态化（类字段擦除）」
+- AGENTS.md Current Status：补注册表、mark-sweep、泛型单态化；剩余 gap 改为 L 表
+- REPORT.md：升到 Phase K 诚实状态表（或链接 CHANGELOG + 本文）
+- `benchmark/REPORT.md`：按当前 release 重跑 Fib/循环/调用/插值，标注 `--vm=stack|register`
+
+**验收**：对外文档不再声称「没有已实现的能力」。
+
+#### L1. 发布 v0.3.0（1–2 天）
+
+- CHANGELOG：将 Unreleased H–K 合并进 `[0.3.0]`
+- 工作区版本对齐 tag；`scripts/release.sh` 重跑
+- CI 全绿 + Release 附件含 `mailang` 二进制
+- （可选，同卡 L7）配置 token 后 `cargo publish`
+
+**验收**：GitHub Release v0.3.0 可下载；文档版本号一致。
+
+#### L2. Register VM 对齐（1–2 周，P0 核心）
+
+按失败簇拆解（当前 29 fail）：
+
+1. **Match lowering**：`MatchPattern` 不得再 `→ Nop`；补字面量/范围/Ok|Err|Some/或/守卫/数组与元组解构
+2. **OOP 分发**：类创建、`this`/`super`、方法继承、`super.method`、trait 默认方法注入
+3. **默认参数 prologue**：与栈 VM 同语义（提供/缺省两条路径栈平衡）
+4. **`?` 与 TCO**：`TryQ` 返回路径、尾调用参数基址/表达式栈重叠
+5. **GC 路径**：寄存器帧作为根参与 mark-sweep / `collect_cycles`
+
+**验收**：`MAILANG_VM=register cargo test -p mailang-core --test integration` = **102/102**。
+在此之前 **保持默认 `--vm=stack`**，register 标注 experimental。
+
+#### L3. IoT 真实路径（1–2 周）
+
+- ESP32：按 `docs/guide/esp32-blink.md` 打通一条 **可复现** 真机或 QEMU/模拟器记录（串口输出）
+- 驱动包：`libs/bme280` / `libs/mqtt` 从「空 stub」升为 **host-fn 契约 + 模拟实现 + 测试**（真硬件仍由宿主注入）
+- 明确边界文档：哪些 API 必须 host 提供，哪些纯脚本
+
+**验收**：`examples/iot_blink.mai` 有真实运行证据；驱动包测试进 CI。
+
+#### L4. 足迹真实数据（2–3 天）
+
+- 重跑 `benchmark/measure_size.py`（host CLI + bytecode rlib + wasm）
+- `docs/guide/footprint.md` 填入实测数；MicroPython 对比仅在 **同目标、同功能** 时写比值，否则继续标注不可比
+
+**验收**：无 placeholder 数字。
+
+#### L5. Parser 错误恢复（3–5 天）
+
+- `Parser::recover_from_error`：语句/声明边界 token-sync
+- 一次 parse 收集 **多条** 诊断（LSP/REPL 可见）
+- 带错误测试：坏文件仍尽量产出部分 AST
+
+**验收**：故意含 2+ 语法错误的源文件一次报出多点；LSP 不再卡死。
+
+#### L6–L10（按表推进，不阻塞 v0.3.0）
+
+### 11.6 建议节奏（Phase L）
+
+```
+Week 1:     L0 文档真相 + L1 发布 v0.3.0（立刻可交付）
+Week 2-3:   L2 Register VM 对齐（Match → OOP → 默认参数 → ?/TCO/GC）
+Week 3-4:   L3 IoT 真实路径（可与 L2 后半并行）+ L4 足迹数据
+Week 5:     L5 错误恢复 + L6 Playground + L7 crates.io
+Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
+```
+
+### 11.7 Phase L 验收（→ v0.3.0 / v0.3.x）
+
+- [ ] 文档与代码一致（无「已有却称没有」）
+- [ ] v0.3.0 Release 含 H–K 全部变更 + 二进制
+- [ ] `MAILANG_VM=register` 集成测试 **102/102**
+- [ ] ESP32 blink 有真实运行证据；驱动包契约测试进 CI
+- [ ] 足迹报告无 placeholder
+- [ ] Parser 一次报多错；LSP 可用
+- [ ] （可选）crates.io 可安装
+
+### 11.8 明确不做（本阶段）
+
+- 完整 async 运行时 / 协程调度（无 IoT 场景前冻结）
+- 寄存器 VM 作为默认后端（对齐前不切换）
+- 遥程包注册表 SaaS（保持 FS + 静态 HTTP 托管模型）
+- `mailang-macros` 为完整而造复杂宏（无需求不写）
 
 ---

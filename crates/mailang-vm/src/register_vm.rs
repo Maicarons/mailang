@@ -38,16 +38,57 @@ pub struct RegisterVm {
     upvalue_store: Vec<Value>,
     fuel: Option<u64>,
     max_call_depth: usize,
+    class_table: Vec<RegClass>,
+    gc: mailang_gc::MarkSweepHeap,
+}
+
+#[derive(Clone)]
+struct RegClass {
+    name: String,
+    superclass: Option<String>,
+    methods: Vec<(String, usize)>,
+    properties: Vec<(String, Value)>,
+}
+
+/// Parameter / `this` slot count for each chunk (used as the translator's
+/// starting stack height so `let` locals land on their local registers).
+fn chunk_start_sp(bytecode: &Bytecode, chunk_idx: usize) -> u16 {
+    if chunk_idx == bytecode.main_chunk {
+        return 0;
+    }
+    let mut best: Option<usize> = None;
+    for ch in &bytecode.chunks {
+        for c in &ch.constants {
+            if let Value::Function(f) = c {
+                if f.chunk_index == chunk_idx {
+                    best = Some(best.map_or(f.arity, |b: usize| b.max(f.arity)));
+                }
+            }
+            if let Value::Class(cls) = c {
+                for (_, ci) in cls.methods.iter() {
+                    if *ci == chunk_idx {
+                        // Method chunk without a self-describing FunctionObj:
+                        // at least `this`.
+                        if best.is_none() {
+                            best = Some(1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    best.unwrap_or(0) as u16
 }
 
 impl RegisterVm {
     /// Lower every chunk of `bytecode` and prepare to run chunk 0.
     pub fn new(bytecode: Bytecode) -> Self {
         let mut chunks = Vec::with_capacity(bytecode.chunks.len());
-        for ch in &bytecode.chunks {
-            let reg =
-                mailang_bytecode::StackToRegister::new(&ch.name, &ch.instructions, &ch.constants)
-                    .translate();
+        for (i, ch) in bytecode.chunks.iter().enumerate() {
+            let start = chunk_start_sp(&bytecode, i);
+            let reg = mailang_bytecode::StackToRegister::new(&ch.name, &ch.instructions, &ch.constants)
+                .with_start_sp(start)
+                .translate();
             chunks.push(reg);
         }
         let mut globals = vec![Value::Null; bytecode.global_names.len()];
@@ -73,6 +114,8 @@ impl RegisterVm {
             upvalue_store: Vec::new(),
             fuel: None,
             max_call_depth: 512,
+            class_table: Vec::new(),
+            gc: mailang_gc::MarkSweepHeap::new(),
         }
     }
 
@@ -407,27 +450,27 @@ impl RegisterVm {
                         .get(k as usize)
                         .cloned()
                         .unwrap_or(Value::Null);
+                    if let Value::Class(cls) = &v {
+                        self.class_table.push(RegClass {
+                            name: cls.name.to_string(),
+                            superclass: cls.superclass.as_ref().map(|s| s.to_string()),
+                            methods: cls.methods.iter().map(|(n, ci)| (n.clone(), *ci)).collect(),
+                            properties: cls.properties.as_ref().clone(),
+                        });
+                    }
                     self.rset(base, dst, v);
                 }
                 RegOp::CreateInstance {
                     dst,
                     class,
-                    args: _,
-                    argc: _,
+                    args,
+                    argc,
                 } => {
+                    // Mirror stack Call-on-Class: allocate + run init.
                     let c = self.rget(base, class);
-                    if let Value::Class(cls) = &c {
-                        let mut fields = Vec::new();
-                        for (n, v) in cls.properties.iter() {
-                            fields.push((n.clone(), v.clone()));
-                        }
-                        let inst = Value::Instance {
-                            class_index: 0,
-                            fields: Rc::new(RefCell::new(fields)),
-                        };
-                        self.rset(base, dst, inst);
-                    } else {
-                        self.rset(base, dst, Value::Null);
+                    let ret = self.call_value(c, base, args, argc, dst)?;
+                    if let Some(v) = ret {
+                        return Ok(v);
                     }
                 }
                 RegOp::MakeClosure {
@@ -479,8 +522,16 @@ impl RegisterVm {
                         (WrapKind::Some, Value::Some(i)) => (*i, true),
                         (_, other) => (other, false),
                     };
-                    self.rset(base, dst, inner);
-                    self.rset(base, flag, Value::Bool(ok));
+                    // Fail: write false to both dst and flag so a following
+                    // JumpIfFalse peeks `flag` and the fail-block top (`dst`)
+                    // is also the boolean.
+                    if ok {
+                        self.rset(base, dst, inner);
+                        self.rset(base, flag, Value::Bool(true));
+                    } else {
+                        self.rset(base, dst, Value::Bool(false));
+                        self.rset(base, flag, Value::Bool(false));
+                    }
                 }
                 RegOp::TryQ { dst, src } => {
                     let v = self.rget(base, src);
@@ -576,6 +627,46 @@ impl RegisterVm {
                     c.upvalues.clone(),
                 )
                 .map(|_| None),
+            Value::Class(cls) => {
+                // Constructor: allocate instance from property defaults, then
+                // run `init` with `this` as local 0 and user args as 1.. .
+                let class_idx = self.class_table.len();
+                self.class_table.push(RegClass {
+                    name: cls.name.to_string(),
+                    superclass: cls.superclass.as_ref().map(|s| s.to_string()),
+                    methods: cls.methods.iter().map(|(n, ci)| (n.clone(), *ci)).collect(),
+                    properties: cls.properties.as_ref().clone(),
+                });
+                let mut fields = Vec::new();
+                for (n, v) in cls.properties.iter() {
+                    fields.push((n.clone(), v.clone()));
+                }
+                let instance = Value::Instance {
+                    class_index: class_idx,
+                    fields: Rc::new(RefCell::new(fields)),
+                };
+                self.gc.track(&instance);
+                let init_chunk = cls
+                    .methods
+                    .iter()
+                    .find(|(n, _)| n == "init")
+                    .map(|(_, ci)| *ci);
+                if let Some(chunk) = init_chunk {
+                    self.enter_method(
+                        chunk,
+                        instance,
+                        args_base,
+                        args,
+                        argc,
+                        ret_dst,
+                    )?;
+                    Ok(None)
+                } else {
+                    let ret_base = self.frames.last().map(|f| f.base).unwrap_or(0);
+                    self.rset(ret_base, ret_dst, instance);
+                    Ok(None)
+                }
+            }
             Value::Builtin { name, .. } => {
                 let mut vals = Vec::new();
                 for i in 0..argc as u16 {
@@ -595,6 +686,41 @@ impl RegisterVm {
             }
             _ => Err(VmError::TypeError("Cannot call non-function".into())),
         }
+    }
+
+    /// Enter a method/constructor chunk: local 0 = `this`, locals 1.. = args.
+    fn enter_method(
+        &mut self,
+        chunk: usize,
+        this: Value,
+        args_base: usize,
+        args: u16,
+        argc: u8,
+        ret_dst: u16,
+    ) -> Result<(), VmError> {
+        if self.frames.len() >= self.max_call_depth {
+            return Err(VmError::CallDepthExceeded {
+                limit: self.max_call_depth,
+            });
+        }
+        let n_regs = self.chunks.get(chunk).map(|c| c.n_regs).unwrap_or(8).max(8) as usize;
+        let base = self.regs.len();
+        self.regs.resize(base + n_regs + 16, Value::Null);
+        self.rset(base, 0, this);
+        for i in 0..argc as u16 {
+            let v = self.rget(args_base, args + i);
+            self.rset(base, i + 1, v);
+        }
+        self.frames.push(RegFrame {
+            chunk,
+            ip: 0,
+            base,
+            n_regs,
+            upvalues: Vec::new(),
+            argc: argc as usize,
+            ret_dst,
+        });
+        Ok(())
     }
 
     fn enter_chunk(
@@ -689,16 +815,64 @@ impl RegisterVm {
                 self.rset(base, dst, out);
                 Ok(None)
             }
-            Value::Instance { fields, .. } => {
+            Value::Instance {
+                fields,
+                class_index,
+            } => {
+                // Instance field holding a callable wins; else class method.
                 for (k, v) in fields.borrow().iter() {
                     if k == method {
                         let f = v.clone();
                         return self.call_value(f, base, args, argc, dst);
                     }
                 }
+                if let Some(cls) = self.class_table.get(*class_index).cloned() {
+                    if let Some((_, chunk)) = cls.methods.iter().find(|(n, _)| n == method) {
+                        let chunk = *chunk;
+                        return self.enter_method(chunk, obj, base, args, argc, dst).map(|_| None);
+                    }
+                }
                 Err(VmError::UndefinedFunction(method.to_string()))
             }
             _ => Err(VmError::TypeError("Cannot invoke on this value".into())),
+        }
+    }
+
+    /// Break Rc cycles reachable from registers / globals / upvalues.
+    pub fn collect_cycles(&mut self) -> usize {
+        let mut roots = self.regs.clone();
+        roots.extend_from_slice(&self.globals);
+        roots.extend(self.upvalue_store.iter().cloned());
+        let broken = mailang_gc::collect_cycles(&mut roots);
+        for v in roots.iter() {
+            self.gc.track(v);
+        }
+        let freed = self.gc.collect(&roots);
+        if broken > 0 {
+            broken
+        } else {
+            freed
+        }
+    }
+
+    /// Heap statistics: (tracked, collections, freed).
+    pub fn gc_stats(&self) -> (usize, usize, usize) {
+        (
+            self.gc.tracked_count(),
+            self.gc.collections,
+            self.gc.freed_total,
+        )
+    }
+
+    fn maybe_auto_collect(&mut self) {
+        if self.gc.should_collect() {
+            let mut roots = self.regs.clone();
+            roots.extend_from_slice(&self.globals);
+            roots.extend(self.upvalue_store.iter().cloned());
+            for v in roots.iter() {
+                self.gc.track(v);
+            }
+            self.gc.collect(&roots);
         }
     }
 }

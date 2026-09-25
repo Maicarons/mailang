@@ -155,4 +155,110 @@ impl Parser {
 
         Ok(Program { statements })
     }
+
+    /// Skip tokens until a statement boundary so parsing can resume after an error.
+    ///
+    /// Sync points: newline at brace-depth 0, statement keywords, or EOF.
+    /// Bracket/brace nesting is tracked so we do not stop mid-block.
+    pub fn recover_from_error(&mut self) {
+        let mut brace = 0i32;
+        let mut paren = 0i32;
+        let mut bracket = 0i32;
+        // Drop any half-consumed `>>` split leftover.
+        self.pending = None;
+        // Always make progress: skip the offending token first so we cannot loop.
+        if self.peek() != &Token::Eof {
+            self.advance();
+        }
+
+        loop {
+            match self.peek().clone() {
+                Token::Eof => return,
+                Token::Newline if brace == 0 && paren == 0 && bracket == 0 => {
+                    self.advance();
+                    self.skip_newlines();
+                    return;
+                }
+                Token::LeftBrace => {
+                    brace += 1;
+                    self.advance();
+                }
+                Token::RightBrace => {
+                    if brace == 0 && paren == 0 && bracket == 0 {
+                        // Closing the enclosing block — leave `}` for the caller.
+                        return;
+                    }
+                    brace -= 1;
+                    self.advance();
+                    if brace == 0 && paren == 0 && bracket == 0 {
+                        // Finished a nested block; next newline or keyword is a boundary.
+                        self.skip_newlines();
+                        return;
+                    }
+                }
+                Token::LeftParen => {
+                    paren += 1;
+                    self.advance();
+                }
+                Token::RightParen => {
+                    if paren > 0 {
+                        paren -= 1;
+                    }
+                    self.advance();
+                }
+                Token::LeftBracket => {
+                    bracket += 1;
+                    self.advance();
+                }
+                Token::RightBracket => {
+                    if bracket > 0 {
+                        bracket -= 1;
+                    }
+                    self.advance();
+                }
+                Token::Let
+                | Token::Var
+                | Token::Const
+                | Token::Fn
+                | Token::Class
+                | Token::Trait
+                | Token::If
+                | Token::While
+                | Token::For
+                | Token::Return
+                | Token::Import
+                | Token::Module
+                    if brace == 0 && paren == 0 && bracket == 0 =>
+                {
+                    // Statement-start keyword at top level — stop before it.
+                    return;
+                }
+                _ => {
+                    self.advance();
+                }
+            }
+        }
+    }
+
+    /// Parse a program collecting multiple syntax errors via token-sync recovery.
+    ///
+    /// Always returns a (possibly partial) `Program` plus every error encountered.
+    pub fn parse_program_recovering(&mut self) -> (Program, Vec<ParseError>) {
+        let mut statements = Vec::new();
+        let mut errors = Vec::new();
+        self.skip_newlines();
+
+        while self.peek() != &Token::Eof {
+            match self.parse_statement() {
+                Ok(stmt) => statements.push(stmt),
+                Err(err) => {
+                    errors.push(err);
+                    self.recover_from_error();
+                }
+            }
+            self.skip_newlines();
+        }
+
+        (Program { statements }, errors)
+    }
 }

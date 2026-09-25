@@ -1,9 +1,27 @@
-// bme280 stub — basic usage
-// Values are simulated; host must supply real I2C/SPI for hardware.
+// bme280 — basic usage (sim mode; no host registration required)
+// Real hardware: see README.md host-fn contract (i2c_xfer or bme280_* hooks).
 
 import "bme280"
 
-println("=== bme280 stub example ===")
-println("temp (sim) = {bme280.read_temp()} °C")
-println("humidity (sim) = {bme280.read_humidity()} %")
-println("Note: these are fixed sim values, not a physical sensor.")
+println("=== bme280 example (sim) ===")
+println("mode = {bme280.mode()}")
+
+let r = bme280.begin(0x76)
+println("begin(0x76) = {r}")
+
+println("chip_id = 0x{bme280.chip_id()}")
+println("temp     = {bme280.read_temp()} °C")
+println("humidity = {bme280.read_humidity()} %")
+println("pressure = {bme280.read_pressure()} Pa")
+
+bme280.set_sim_values(22.5, 48.0, 100500.0)
+let all = bme280.read_all()
+println("after set_sim_values: {all}")
+
+// Protocol path against the pure-Mai virtual device (desktop tests).
+bme280.set_mode("i2c")
+bme280.use_sim_bus(true)
+println("sim-i2c chip_id = 0x{bme280.chip_id()}")
+println("sim-i2c temp    = {bme280.read_temp()} °C")
+
+println("Note: values are simulated. Real sensor needs host i2c_xfer or cooked hooks.")

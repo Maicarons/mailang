@@ -7,6 +7,9 @@
 //! slot a virtual register.
 
 use crate::{Opcode, Value};
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// Three-address register instruction. Registers are `u16` indices into a
 /// flat frame-local register file. Constants live in the chunk const table.
@@ -200,10 +203,10 @@ impl RegChunk {
 
 /// Lower a stack instruction stream to register form.
 ///
-/// Strategy: simulate the operand stack. Each stack slot at depth `d` maps to
-/// register `base + d`. Temporaries that need destinations reuse the top slot
-/// (so `Add` is `dst = pop(); lhs = pop(); rhs = pop(); push dst` in stack
-/// terms, which becomes `Add dst=sp-2, lhs=sp-2, rhs=sp-1` then `sp -= 2`).
+/// Strategy: simulate the operand stack with **dataflow stack heights** so
+/// control-flow joins (match arms, if/else, Unwrap success vs fail) get the
+/// correct register indices. Registers are the frame's contiguous stack slots
+/// (locals occupy `0..start_sp`, expression temps grow above).
 pub struct StackToRegister<'a> {
     src_code: &'a [crate::Instruction],
     #[allow(dead_code)]
@@ -213,6 +216,10 @@ pub struct StackToRegister<'a> {
     ip_map: Vec<u32>,
     /// Pending (stack_target, reg_site) jumps to patch.
     jumps: Vec<(usize, usize)>,
+    /// Initial stack height (= parameter / `this` slot count).
+    start_sp: u16,
+    /// Height before each source instruction (dataflow).
+    heights: Vec<u16>,
 }
 
 impl<'a> StackToRegister<'a> {
@@ -227,7 +234,15 @@ impl<'a> StackToRegister<'a> {
             out,
             ip_map: Vec::new(),
             jumps: Vec::new(),
+            start_sp: 0,
+            heights: Vec::new(),
         }
+    }
+
+    /// Set the frame's initial stack height (parameter count, including `this`).
+    pub fn with_start_sp(mut self, start_sp: u16) -> Self {
+        self.start_sp = start_sp;
+        self
     }
 
     fn emit(&mut self, op: RegOp) -> usize {
@@ -242,26 +257,12 @@ impl<'a> StackToRegister<'a> {
     }
 
     pub fn translate(mut self) -> RegChunk {
-        // Virtual stack height (for register assignment of expression slots).
-        // Registers 0..n_locals-1 are frame locals (same indices as stack locals).
-        // Expression stack occupies registers starting at `n_locals`, so temps
-        // never clobber parameters / `let` slots.
-        let mut max_local = 0u16;
-        for ins in self.src_code {
-            if matches!(ins.opcode, Opcode::LoadLocal | Opcode::StoreLocal) {
-                if let Some(op) = ins.operand {
-                    let idx = op as u16;
-                    if idx + 1 > max_local {
-                        max_local = idx + 1;
-                    }
-                }
-            }
-        }
-        let mut sp: u16 = max_local;
-        self.out.n_regs = self.out.n_regs.max(max_local);
+        let start_sp = self.start_sp;
+        self.heights = compute_heights(self.src_code, start_sp);
+        self.out.n_regs = self.out.n_regs.max(start_sp);
         for (sip, ins) in self.src_code.iter().enumerate() {
             self.ip_map.push(self.out.code.len() as u32);
-            let _ = sip;
+            let mut sp: u16 = self.heights[sip];
             match ins.opcode {
                 Opcode::Push => {
                     let k = ins.operand.unwrap_or(0);
@@ -555,7 +556,20 @@ impl<'a> StackToRegister<'a> {
                     self.emit(RegOp::GetProp { dst, obj, name });
                 }
                 Opcode::MatchPattern => {
-                    self.emit(RegOp::Nop);
+                    // Stack VM pushes Bool(true); keep the same effect.
+                    let dst = sp;
+                    self.use_reg(dst);
+                    let k = {
+                        // Reuse/add a true constant.
+                        let v = Value::Bool(true);
+                        if let Some(i) = self.out.constants.iter().position(|c| c == &v) {
+                            i as u32
+                        } else {
+                            self.out.constants.push(v);
+                            (self.out.constants.len() - 1) as u32
+                        }
+                    };
+                    self.emit(RegOp::LoadConst { dst, k });
                 }
                 Opcode::MakeClosure => {
                     let count = ins.operand.unwrap_or(0) as u8;
@@ -602,7 +616,9 @@ impl<'a> StackToRegister<'a> {
                         Opcode::UnwrapErr => WrapKind::Err,
                         _ => WrapKind::Some,
                     };
-                    // Stack: pop v → push inner, true  OR  push false
+                    // Success: [inner, true] (dst, flag). Fail: [false] at dst,
+                    // and flag is also set false so a following JumpIfFalse
+                    // (which peeks the success-layout top) still branches.
                     let src = sp.saturating_sub(1);
                     let dst = src;
                     let flag = src + 1;
@@ -613,11 +629,8 @@ impl<'a> StackToRegister<'a> {
                         flag,
                         src,
                     });
-                    // On success stack is [inner, bool] (2), on failure [bool] (1).
-                    // Conservative: assume 2 (success path); translator is used
-                    // with the register VM that pushes both and keeps height by
-                    // using flag as the bool top. Model as height += 1.
-                    sp = src + 2;
+                    // Dataflow already models out-height as +1 (success layout).
+                    let _ = sp;
                 }
                 Opcode::Try => {
                     let src = sp.saturating_sub(1);
@@ -657,7 +670,7 @@ impl<'a> StackToRegister<'a> {
             }
         }
         // Patch jumps
-        let mut code = std::mem::take(&mut self.out.code);
+        let mut code = core::mem::take(&mut self.out.code);
         let ip_map = self.ip_map.clone();
         let jumps = self.jumps.clone();
         for (stack_target, site) in jumps {
@@ -667,9 +680,9 @@ impl<'a> StackToRegister<'a> {
                 code.len() as u32
             };
             match &mut code[site] {
-                RegOp::Jump { target } => *target = reg_target,
-                RegOp::JumpIfFalse { target, .. } => *target = reg_target,
-                RegOp::JumpIfTrue { target, .. } => *target = reg_target,
+                RegOp::Jump { ref mut target } => *target = reg_target,
+                RegOp::JumpIfFalse { ref mut target, .. } => *target = reg_target,
+                RegOp::JumpIfTrue { ref mut target, .. } => *target = reg_target,
                 _ => {}
             }
         }
@@ -739,4 +752,223 @@ fn un_kind(op: Opcode) -> UnKind {
         Opcode::BitNot => UnKind::BitNot,
         _ => UnKind::Neg,
     }
+}
+
+fn is_unwrap(op: Opcode) -> bool {
+    matches!(
+        op,
+        Opcode::UnwrapOk | Opcode::UnwrapErr | Opcode::UnwrapSome
+    )
+}
+
+/// Stack height after `op` given height `h` before it (success layout for Unwrap).
+fn stack_out(op: Opcode, h: u16, operand: Option<u32>) -> u16 {
+    match op {
+        Opcode::Push
+        | Opcode::Dup
+        | Opcode::LoadLocal
+        | Opcode::LoadGlobal
+        | Opcode::LoadUpvalue
+        | Opcode::Argc
+        | Opcode::CreateClass
+        | Opcode::CreateInstance
+        | Opcode::GetMethod
+        | Opcode::MatchPattern => h.saturating_add(1),
+        Opcode::Pop
+        | Opcode::StoreGlobal
+        | Opcode::StoreUpvalue
+        | Opcode::Throw => h.saturating_sub(1),
+        Opcode::StoreLocal => {
+            let idx = operand.unwrap_or(0) as u16;
+            let after = h.saturating_sub(1);
+            if idx >= after {
+                idx + 1
+            } else {
+                after
+            }
+        }
+        Opcode::Add
+        | Opcode::Sub
+        | Opcode::Mul
+        | Opcode::Div
+        | Opcode::Mod
+        | Opcode::Pow
+        | Opcode::BitAnd
+        | Opcode::BitOr
+        | Opcode::BitXor
+        | Opcode::Shl
+        | Opcode::Shr
+        | Opcode::And
+        | Opcode::Or
+        | Opcode::Eq
+        | Opcode::Ne
+        | Opcode::Lt
+        | Opcode::Le
+        | Opcode::Gt
+        | Opcode::Ge
+        | Opcode::IndexGet => h.saturating_sub(1),
+        Opcode::IndexSet => h.saturating_sub(2),
+        Opcode::Call => {
+            let argc = operand.unwrap_or(0) as u16;
+            // pop func + argc, push result
+            h.saturating_sub(argc + 1).saturating_add(1)
+        }
+        Opcode::CallDirect => {
+            let argc = operand.unwrap_or(0) as u16;
+            h.saturating_sub(argc).saturating_add(1)
+        }
+        Opcode::Invoke => {
+            let packed = operand.unwrap_or(0);
+            let argc = (packed >> 16) as u16;
+            h.saturating_sub(argc + 1).saturating_add(1)
+        }
+        Opcode::BuildArray => {
+            let count = operand.unwrap_or(0) as u16;
+            h.saturating_sub(count).saturating_add(1)
+        }
+        Opcode::BuildMap => {
+            let pairs = operand.unwrap_or(0) as u16;
+            h.saturating_sub(pairs * 2).saturating_add(1)
+        }
+        Opcode::SetProperty => h.saturating_sub(1),
+        // pop object, push property value → net 0
+        Opcode::GetProperty => h,
+        Opcode::MakeClosure => {
+            let count = operand.unwrap_or(0) as u16;
+            h.saturating_sub(count + 1).saturating_add(1)
+        }
+        Opcode::WrapOk | Opcode::WrapErr | Opcode::WrapSome => h,
+        // Success layout: pop 1, push 2 → +1. Fail path is handled by the
+        // JumpIfFalse taken-edge rule (one less value).
+        Opcode::UnwrapOk | Opcode::UnwrapErr | Opcode::UnwrapSome => h.saturating_add(1),
+        Opcode::Try => h,
+        Opcode::AddImm
+        | Opcode::SubImm
+        | Opcode::MulImm
+        | Opcode::EqImm
+        | Opcode::NeImm
+        | Opcode::LtImm
+        | Opcode::LeImm
+        | Opcode::GtImm
+        | Opcode::GeImm
+        | Opcode::Neg
+        | Opcode::Not
+        | Opcode::BitNot
+        | Opcode::Jump
+        | Opcode::JumpIfFalse
+        | Opcode::JumpIfTrue
+        | Opcode::TryBegin
+        | Opcode::TryEnd
+        | Opcode::Nop => h,
+        Opcode::Return | Opcode::Halt | Opcode::TailCall => h,
+    }
+}
+
+/// Dataflow stack height before each instruction.
+fn compute_heights(code: &[crate::Instruction], start_sp: u16) -> Vec<u16> {
+    let n = code.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut height = vec![u16::MAX; n];
+    let mut work = alloc::collections::VecDeque::new();
+    height[0] = start_sp;
+    work.push_back(0usize);
+
+    while let Some(ip) = work.pop_front() {
+        if ip >= n {
+            continue;
+        }
+        let h = height[ip];
+        let ins = &code[ip];
+        let out = stack_out(ins.opcode, h, ins.operand);
+        match ins.opcode {
+            Opcode::Jump => {
+                let t = ins.operand.unwrap_or(0) as usize;
+                if t < n {
+                    let cur = height[t];
+                    if cur == u16::MAX {
+                        height[t] = out;
+                        work.push_back(t);
+                    } else if cur != out {
+                        let m = cur.max(out);
+                        if m != cur {
+                            height[t] = m;
+                            work.push_back(t);
+                        }
+                    }
+                }
+            }
+            Opcode::JumpIfFalse | Opcode::JumpIfTrue => {
+                // Peeks top; both edges keep `out` unless the previous op was
+                // Unwrap, whose fail path has one fewer value.
+                let taken = if ip > 0 && is_unwrap(code[ip - 1].opcode) {
+                    out.saturating_sub(1)
+                } else {
+                    out
+                };
+                // fallthrough
+                let ft = ip + 1;
+                if ft < n {
+                    let cur = height[ft];
+                    if cur == u16::MAX {
+                        height[ft] = out;
+                        work.push_back(ft);
+                    } else if cur != out {
+                        let m = cur.max(out);
+                        if m != cur {
+                            height[ft] = m;
+                            work.push_back(ft);
+                        }
+                    }
+                }
+                let t = ins.operand.unwrap_or(0) as usize;
+                if t < n {
+                    let cur = height[t];
+                    if cur == u16::MAX {
+                        height[t] = taken;
+                        work.push_back(t);
+                    } else if cur != taken {
+                        let m = cur.max(taken);
+                        if m != cur {
+                            height[t] = m;
+                            work.push_back(t);
+                        }
+                    }
+                }
+            }
+            Opcode::Return | Opcode::Halt | Opcode::TailCall | Opcode::Throw => {
+                if ip + 1 < n {
+                    let cur = height[ip + 1];
+                    if cur == u16::MAX {
+                        height[ip + 1] = out;
+                        work.push_back(ip + 1);
+                    }
+                }
+            }
+            _ => {
+                let ft = ip + 1;
+                if ft < n {
+                    let cur = height[ft];
+                    if cur == u16::MAX {
+                        height[ft] = out;
+                        work.push_back(ft);
+                    } else if cur != out {
+                        let m = cur.max(out);
+                        if m != cur {
+                            height[ft] = m;
+                            work.push_back(ft);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for h in height.iter_mut() {
+        if *h == u16::MAX {
+            *h = start_sp;
+        }
+    }
+    height
 }

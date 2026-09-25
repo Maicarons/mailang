@@ -1,9 +1,26 @@
-// mqtt stub — publish example
-// Returns Ok("sim"); host must supply real transport for delivery.
+// mqtt — basic usage (sim transport; no network)
+// Real delivery: see README.md host-fn contract (mqtt_connect / mqtt_publish / …).
 
 import "mqtt"
 
-println("=== mqtt stub example ===")
+println("=== mqtt example (sim) ===")
+mqtt.reset()
+
+let c = mqtt.connect("broker.local", 1883, "demo-client")
+println("connect = {c}")
+println("connected = {mqtt.is_connected()}")
+
 let r = mqtt.publish("devices/demo/temp", "25.0")
 println("publish result: {r}")
-println("Note: no packets left this machine (stub).")
+println("outbox: {mqtt.outbox()}")
+println("outbox_len: {mqtt.outbox_len()}")
+
+let s = mqtt.subscribe("devices/demo/#")
+println("subscribe = {s}")
+println("subs: {mqtt.subscriptions()}")
+
+let d = mqtt.disconnect()
+println("disconnect = {d}")
+println("connected = {mqtt.is_connected()}")
+
+println("Note: no packets left this machine (sim stubs).")

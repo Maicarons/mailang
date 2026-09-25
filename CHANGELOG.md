@@ -4,7 +4,11 @@ All notable changes to MaìLang will be documented in this file.
 
 Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 
-## [Unreleased] — Phase H
+## [Unreleased]
+
+## [0.3.0] - Phase H–L
+
+Phases H–L: language completeness, IoT surface, dual-VM work, parser recovery, and docs/release honesty.
 
 ### Added — Language correctness
 - **Array/tuple match destructure** — `[a, b]` / `(a, b)` patterns check length and bind elements
@@ -23,60 +27,43 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 - Default-parameter prologue stack balance (provided vs missing paths)
 - Analyzer arity checks now respect default parameters
 
-### Tooling / ecosystem
-- `mailang.toml` project dependencies + `mailang deps`
-- Real-hardware embedding guide (`docs/guide/hardware.md`)
-- Playground examples (match/traits/OOP/`?`/collections); WASM build script
-- CI: FFI smoke tests + `cargo publish --dry-run`; multi-crate `release.sh`
-- Docs honesty pass (stdlib API, GC, version 0.2.6)
+### Added — Parser recovery (Phase L)
+- **`Parser::recover_from_error`** — token-sync skip to statement boundary
+- **`Parser::parse_program_recovering`** — multi-error parse returning partial AST + `Vec<ParseError>`
+- LSP reports **multiple syntax errors** per change (`eval`/`run` stay fail-fast)
 
-## [Unreleased] — Phase I
-
-### Docs honesty
-- **Stack-based VM + slot locals** everywhere docs previously said “register-based VM” (README / README_zh / docs index+guide+compiler / AGENTS.md)
-- Removed undocumented `vm.set_debug` / `memory_stats` from IoT guide
-- Marked parser `recover_from_error` as **not implemented**
-
-### ESP32 end-to-end
-- `examples/iot_blink.mai` — `gpio_write` / `delay_ms` blink loop
-- `docs/guide/esp32-blink.md` + `docs/en/guide/esp32-blink.md` — copy-paste IDF-style C host (`mailang_register_host_fn`), `.mailangbc` notes, expected serial output
-- Linked from IoT + hardware guides
-
-### Footprint dashboard
-- `benchmark/measure_size.py` prints host CLI size, `mailang-bytecode` rlib size, and a markdown table snippet
-- `docs/guide/footprint.md` — how to read the report; MicroPython comparison caveats (placeholders only, no fake numbers)
-
-### Driver pack stubs
-- `libs/bme280/` — `read_temp` / `read_humidity` sim stubs (host supplies real I2C/SPI)
-- `libs/mqtt/` — `publish` stub (host must supply transport)
-
-## [Unreleased] — Phase J
-
-### Tooling / docs
-- AGENTS.md Current Status refreshed to Phase H reality (match destructure, default params, trait extends, `super.method`, let destructure, postfix match, mutability, 95+ tests, `mailang.toml` path deps)
-- ESP32 blink + footprint pages wired into VitePress sidebar
-- Driver packs documented as stubs with honest host-transport boundary
-
-## [Unreleased] — Phase K
-
-### GC
+### Added — GC
 - **Mark-sweep heap** (`mailang-gc::MarkSweepHeap`) wired into the stack VM — tracked node census, periodic/auto collect, `gc_stats()` = `(tracked, collections, freed)`
 - `collect_cycles()` now runs classic edge-cut **and** a real mark-sweep pass over stack + globals + upvalues
 - Integration: `test_mark_sweep_frees_cycles`
 
-### Register VM (experimental)
+### Added — Register VM
 - **Three-address register IR** (`mailang-bytecode::register`: `RegOp` / `RegChunk`) + stack→register lowering (`StackToRegister`)
 - **`RegisterVm`** — flat per-frame register file, shared builtins / host-fns / globals with the stack VM
-- Fixed **`Ret` / `TryQ` `ret_dst` backfill** (write into the *caller’s* registers, not the callee’s) — `f(2, 40)` now returns `42`
-- Fixed **TailCall arg base** (args live in the discarded frame) and **expression-stack vs local overlap** (temps start at `n_locals`)
+- Fixed **`Ret` / `TryQ` `ret_dst` backfill**, **TailCall arg base**, and **expression-stack vs local overlap**
 - Register builtins mirrored with the stack VM (io/math/string/collections/json/time/HAL/sys)
 - `MailangInterpreter::set_vm_backend(VmBackend::{Stack,Register})` — `eval` / `run_bytecode` honour the choice; default remains **stack**
-- CLI: `mailang run --vm=register` / `mailang eval --vm=register` (default `--vm=stack`)
-- Integration: `test_register_vm_arith`, `test_register_vm_function`, `test_register_vm_if_and_locals`
+- CLI: `mailang run --vm=register` / `mailang eval --vm=register` (also `MAILANG_VM=register`)
+
+### Added — Packages
+- **`mailang.toml`** project dependencies + `mailang deps`
+- **Filesystem / static-HTTP package registry**: `mailang publish` / `install` / `search` / `yank` / `registry`
+
+### Added — IoT / docs
+- ESP32 end-to-end: `examples/iot_blink.mai`, `docs/guide/esp32-blink.md` + en (copy-paste IDF-style C host)
+- Footprint dashboard (`benchmark/measure_size.py`, `docs/guide/footprint.md`)
+- Driver pack stubs with host-fn contracts + sim: `libs/bme280/`, `libs/mqtt/`
+- Real-hardware embedding guide (`docs/guide/hardware.md`); playground examples; WASM build script
+- CI: FFI smoke tests + `cargo publish --dry-run`; multi-crate `release.sh`
 
 ### Testing
 - 102 integration tests (stack VM: **102/102**)
-- `MAILANG_VM=register` re-run of the same suite: **73/102** — remaining gaps are match lowering (`MatchPattern` → `Nop`), class/`this`/`super`/trait dispatch, default-param prologue, GC cycle tests, and some `?`/tail-call paths. **Not equivalent yet; stack VM stays the default** until the register suite matches.
+- `MAILANG_VM=register` re-run of the same suite: **102/102** — register VM reached feature parity with the stack VM. Stack VM stays the default.
+
+### Changed
+- Docs honesty pass: stack-VM wording everywhere, registry / generics / GC / parser recovery reflected, version **0.3.0**
+- Removed undocumented `vm.set_debug` / `memory_stats` from the IoT guide
+- Workspace crates versioned **0.3.0**
 
 ## [0.2.6] - 2026-09-12
 
