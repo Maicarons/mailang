@@ -1,0 +1,17 @@
+{
+  "name": "mailang-wasm",
+  "type": "module",
+  "description": "WebAssembly bindings for MaìLang",
+  "version": "0.3.0",
+  "license": "Apache-2.0",
+  "files": [
+    "mailang_wasm_bg.wasm",
+    "mailang_wasm.js",
+    "mailang_wasm.d.ts"
+  ],
+  "main": "mailang_wasm.js",
+  "types": "mailang_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

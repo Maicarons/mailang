@@ -6,7 +6,7 @@ export class WasmInterpreter {
     [Symbol.dispose](): void;
     /**
      * Evaluate MaìLang code and return the output.
-     * Returns the result as a string, or an error message prefixed with "Error: ".
+     * Returns captured println lines, or the expression result if none.
      */
     eval(code: string): string;
     /**
