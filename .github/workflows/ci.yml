@@ -100,8 +100,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Dry-run publish mailang-core (package only)
-        run: cargo publish --dry-run --no-verify -p mailang-core
+      # Leaf crates only: packages that depend on unpublished workspace
+      # versions fail dry-run resolution until the release workflow publishes them.
       - name: Dry-run publish mailang-bytecode
         run: cargo publish --dry-run --no-verify -p mailang-bytecode
+      - name: Dry-run publish mailang-ast
+        run: cargo publish --dry-run --no-verify -p mailang-ast
+      - name: Dry-run publish mailang-core (tolerate unpublished deps)
+        continue-on-error: true
+        run: cargo publish --dry-run --no-verify -p mailang-core
 
