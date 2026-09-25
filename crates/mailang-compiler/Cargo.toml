@@ -6,13 +6,13 @@ license.workspace = true
 description = "Compiler for MaìLang"
 
 [dependencies]
-mailang-ast = { path = "../mailang-ast", version = "0.3.0" }
-mailang-bytecode = { path = "../mailang-bytecode", version = "0.3.0" }
+mailang-ast = { path = "../mailang-ast", version = "0.3.1" }
+mailang-bytecode = { path = "../mailang-bytecode", version = "0.3.1" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-mailang-parser = { path = "../mailang-parser", version = "0.3.0" }
-mailang-bytecode = { path = "../mailang-bytecode", version = "0.3.0" }
+mailang-parser = { path = "../mailang-parser", version = "0.3.1" }
+mailang-bytecode = { path = "../mailang-bytecode", version = "0.3.1" }
 
 [features]
 default = []

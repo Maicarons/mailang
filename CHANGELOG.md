@@ -6,6 +6,17 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 
 ## [Unreleased]
 
+## [0.3.1] - Docs site, CI green, register VM perf
+
+### Changed
+- **Register VM** faster on call-heavy integer code: truncate callee registers on Ret (~2x), Int fast paths for Bin/Cmp, skip urn_fuel when unset. fib still ~10x stack (target 2x) — stack remains default.
+- **Docs site is versioned** under docs/v0.3/ with a nav version switcher (ersions.json); language-version prose removed from doc bodies.
+- **i18n**: Chinese and English guide+reference pages aligned (20 each), including registry, footprint, types, operators, builtins, errors.
+
+### Fixed
+- CI: clippy -D warnings and rustfmt; mailang-bytecode no_std alloc imports and jump backfill (thumbv7em).
+- VitePress: escaped CJK labels in config, srcExclude for internal specs, playground WASM loads from public base URL, root playground redirects to guide.
+
 ## [0.3.0] - Phase H–L
 
 Phases H–L: language completeness, IoT surface, dual-VM work, parser recovery, and docs/release honesty.
