@@ -2,7 +2,7 @@
   "name": "mailang-wasm",
   "type": "module",
   "description": "WebAssembly bindings for MaìLang",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "Apache-2.0",
   "files": [
     "mailang_wasm_bg.wasm",
