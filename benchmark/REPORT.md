@@ -198,3 +198,13 @@ ESP32-C3 @ 160MHz 约比现代 PC 慢 50-100x。
 | 寄存器 VM | ~2000–2700 ms | 功能 102/102，性能待优化 |
 
 测量：mailang run bench_fib30.mai vs mailang run --vm=register bench_fib30.mai（Windows release）。
+
+### Phase M 首轮优化后（Ret 收缩 + 整数快路径）
+
+| 后端 | bench_fib30 | 相对栈式 |
+|------|-------------|----------|
+| 栈式 VM | ~115–125 ms | 1.0x |
+| 寄存器 VM | ~1130–1170 ms | ~10x（优化前 ~15–20x） |
+
+改动：Ret 时 
+egs.truncate(frame.base)，避免寄存器文件无限增长；Bin/Cmp 整数快路径；urn_fuel 空转跳过。目标仍为 <=2x 栈式。

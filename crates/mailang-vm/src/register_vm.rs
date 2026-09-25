@@ -1,4 +1,4 @@
-//! Register-based virtual machine.
+﻿//! Register-based virtual machine.
 //!
 //! Executes [`RegChunk`] three-address code with a flat register file per
 //! frame. Stack bytecode is lowered to this IR by
@@ -15,13 +15,13 @@ use std::rc::Rc;
 struct RegFrame {
     chunk: usize,
     ip: usize,
-    /// Base of this frame’s registers in the flat `regs` file.
+    /// Base of this frame鈥檚 registers in the flat `regs` file.
     base: usize,
     #[allow(dead_code)]
     n_regs: usize,
     upvalues: Vec<usize>,
     argc: usize,
-    /// Where to place the return value (in the caller’s register file).
+    /// Where to place the return value (in the caller鈥檚 register file).
     ret_dst: u16,
 }
 
@@ -154,7 +154,11 @@ impl RegisterVm {
         self.globals.get(slot).cloned().unwrap_or(Value::Null)
     }
 
+    #[inline(always)]
     fn burn_fuel(&mut self) -> Result<(), VmError> {
+        if self.fuel.is_none() {
+            return Ok(());
+        }
         if let Some(f) = self.fuel.as_mut() {
             if *f == 0 {
                 return Err(VmError::FuelExhausted);
@@ -164,17 +168,21 @@ impl RegisterVm {
         Ok(())
     }
 
+    #[inline(always)]
     fn rget(&self, frame_base: usize, r: u16) -> Value {
-        self.regs
-            .get(frame_base + r as usize)
-            .cloned()
-            .unwrap_or(Value::Null)
+        let i = frame_base + r as usize;
+        if i < self.regs.len() {
+            self.regs[i].clone()
+        } else {
+            Value::Null
+        }
     }
 
+    #[inline(always)]
     fn rset(&mut self, frame_base: usize, r: u16, v: Value) {
         let i = frame_base + r as usize;
         if i >= self.regs.len() {
-            self.regs.resize(i + 1, Value::Null);
+            self.regs.resize(i + 32, Value::Null);
         }
         self.regs[i] = v;
     }
@@ -277,7 +285,30 @@ impl RegisterVm {
                 } => {
                     let a = self.rget(base, lhs);
                     let b = self.rget(base, rhs);
-                    let v = bin_apply(kind, &a, &b)?;
+                    let v = match (&a, &b) {
+                        (Value::Int(x), Value::Int(y)) => {
+                            use BinKind::*;
+                            match kind {
+                                Add => Value::Int(x.wrapping_add(*y)),
+                                Sub => Value::Int(x.wrapping_sub(*y)),
+                                Mul => Value::Int(x.wrapping_mul(*y)),
+                                Div => {
+                                    if *y == 0 {
+                                        return Err(VmError::DivisionByZero);
+                                    }
+                                    Value::Int(x.wrapping_div(*y))
+                                }
+                                Mod => {
+                                    if *y == 0 {
+                                        return Err(VmError::DivisionByZero);
+                                    }
+                                    Value::Int(x.wrapping_rem(*y))
+                                }
+                                _ => bin_apply(kind, &a, &b)?,
+                            }
+                        }
+                        _ => bin_apply(kind, &a, &b)?,
+                    };
                     self.rset(base, dst, v);
                 }
                 RegOp::BinImm {
@@ -314,7 +345,20 @@ impl RegisterVm {
                 } => {
                     let a = self.rget(base, lhs);
                     let b = self.rget(base, rhs);
-                    let v = Value::Bool(cmp_apply(kind, &a, &b));
+                    let v = Value::Bool(match (&a, &b) {
+                        (Value::Int(x), Value::Int(y)) => {
+                            use CmpKind::*;
+                            match kind {
+                                Eq => x == y,
+                                Ne => x != y,
+                                Lt => x < y,
+                                Le => x <= y,
+                                Gt => x > y,
+                                Ge => x >= y,
+                            }
+                        }
+                        _ => cmp_apply(kind, &a, &b),
+                    });
                     self.rset(base, dst, v);
                 }
                 RegOp::CmpImm {
@@ -374,6 +418,8 @@ impl RegisterVm {
                 RegOp::Ret { src } => {
                     let v = self.rget(base, src);
                     if let Some(frame) = self.frames.pop() {
+                        // Free callee registers so the file does not grow unbounded.
+                        self.regs.truncate(frame.base);
                         // `ret_dst` is relative to the **caller's** register file.
                         if let Some(caller) = self.frames.last() {
                             self.rset(caller.base, frame.ret_dst, v.clone());
@@ -743,7 +789,7 @@ impl RegisterVm {
         let n_regs = self.chunks[chunk].n_regs.max(8) as usize;
         let base = self.regs.len();
         self.regs.resize(base + n_regs + 16, Value::Null);
-        // Copy args into the new frame’s param registers.
+        // Copy args into the new frame鈥檚 param registers.
         for i in 0..argc_us {
             let v = self.rget(args_base, args + i as u16);
             self.rset(base, i as u16, v);
@@ -776,7 +822,7 @@ impl RegisterVm {
         for i in 0..argc as u16 {
             vals.push(self.rget(base, args + i));
         }
-        // Instance method: look up Function/Closure in instance map or class — simplified:
+        // Instance method: look up Function/Closure in instance map or class 鈥?simplified:
         // treat missing methods as errors (same as stack VM user methods need class table).
         if let Value::Map(entries) = &obj {
             for (k, v) in entries.borrow().iter() {
@@ -1126,7 +1172,7 @@ fn register_builtins(map: &mut HashMap<String, fn(&[Value]) -> Result<Value, Str
     map.insert("process_exit".into(), mailang_stdlib::builtin_process_exit);
 }
 
-/// Bridge to the stack VM’s collection-method implementations so the register
+/// Bridge to the stack VM鈥檚 collection-method implementations so the register
 /// VM does not duplicate them.
 pub mod invoke_support {
     use crate::error::VmError;
