@@ -1219,4 +1219,40 @@ fn test_negative_int_immediate_inside_function() {
     assert_eq!(eval("let a = 23.5\na > -10"), "true");
 }
 
+// ===== Phase N 后续（M7 + `elif` 落空）：裸 `if` 尾值与 `elif` 分支结尾 =====
+//
+// ① `compile_body_value` 只把「尾表达式」当值，裸 `if` 落到 `_` 分支推 `null`：
+//    `fn f(n) { if n > 0 { 1 } else { 2 } }` 两个后端都返回 `null`。
+// ② `Stmt::If` 的每个 `elif` 分支结尾那条 `Jump` 从未被 patch（`let _jump_end`），
+//    操作数是 0，于是落到指令 0——一个不含 `return` 的 `elif` 分支会死循环。
+// 下面三种形状两个后端都必须一致。
+
+#[test]
+fn test_tail_if_is_the_function_result() {
+    // 尾 `if`（then/else 都到尾）就是函数的返回值：1 + 2。
+    let src = "fn f(n) {\n    if n > 0 {\n        1\n    } else {\n        2\n    }\n}\nf(1) + f(-1)";
+    assert_eq!(eval(src), "3");
+}
+
+#[test]
+fn test_tail_if_with_elif_chain_is_the_function_result() {
+    let src = "fn sign(n) {\n    if n > 0 {\n        \"pos\"\n    } elif n < 0 {\n        \"neg\"\n    } else {\n        \"zero\"\n    }\n}\nsign(5) + sign(-5) + sign(0)";
+    assert_eq!(eval(src), "posnegzero");
+}
+
+#[test]
+fn test_tail_if_branch_locals_do_not_eat_the_result() {
+    // 分支内的局部量位于结果之下：收尾要用 `Slide` 而不是逐条 `Pop`，否则会把结果
+    // 本身弹掉（实现中一度 `multi(3)` 返回 4 而不是 8）。
+    let src = "fn multi(n) {\n    if n > 0 {\n        var a = n + 1\n        var b = a * 2\n        b\n    } else {\n        0 - n\n    }\n}\nmulti(3)";
+    assert_eq!(eval(src), "8");
+}
+
+#[test]
+fn test_elif_branch_falls_through_to_the_end() {
+    // 从前这条会死循环（elif 分支结尾的 Jump 指向指令 0）。
+    let src = "fn f(n) {\n    var out = \"\"\n    if n == 0 {\n        out = out + \"a\"\n    } elif n == 1 {\n        out = out + \"b\"\n    } else {\n        out = out + \"c\"\n    }\n    return out\n}\nf(1)";
+    assert_eq!(eval(src), "b");
+}
+
 // ---

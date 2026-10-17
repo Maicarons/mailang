@@ -223,6 +223,26 @@ impl Compiler {
         count
     }
 
+    /// Like `end_scope`, but the scope produced a value that must survive on the
+    /// operand stack. The scope's locals sit *below* that value, so popping
+    /// would eat it; one `Slide` drops them from underneath instead.
+    fn end_scope_keeping_value(&mut self) -> usize {
+        self.current.scope_depth -= 1;
+        let mut count = 0;
+        while let Some(local) = self.current.locals.last() {
+            if local.depth > self.current.scope_depth {
+                self.current.locals.pop();
+                count += 1;
+            } else {
+                break;
+            }
+        }
+        if count > 0 {
+            self.emit(Opcode::Slide, Some(count as u32), 0);
+        }
+        count
+    }
+
     fn resolve_local(&self, name: &str) -> Option<u32> {
         // `self` is an alias for the implicit receiver (`this`, local 0).
         let name = if name == "self" { "this" } else { name };
@@ -397,45 +417,13 @@ impl Compiler {
                 elif_branches,
                 else_branch,
             } => {
-                self.compile_expression(condition)?;
-                let jump_else = self.emit_jump(Opcode::JumpIfFalse, 0);
-                self.emit(Opcode::Pop, None, 0);
-
-                self.begin_scope();
-                for stmt in then_branch {
-                    self.compile_statement(stmt)?;
-                }
-                self.end_scope();
-
-                let jump_end = self.emit_jump(Opcode::Jump, 0);
-                self.patch_jump(jump_else)?;
-                self.emit(Opcode::Pop, None, 0);
-
-                for (cond, body) in elif_branches {
-                    self.compile_expression(cond)?;
-                    let jump = self.emit_jump(Opcode::JumpIfFalse, 0);
-                    self.emit(Opcode::Pop, None, 0);
-
-                    self.begin_scope();
-                    for stmt in body {
-                        self.compile_statement(stmt)?;
-                    }
-                    self.end_scope();
-
-                    let _jump_end = self.emit_jump(Opcode::Jump, 0);
-                    self.patch_jump(jump)?;
-                    self.emit(Opcode::Pop, None, 0);
-                }
-
-                if let Some(body) = else_branch {
-                    self.begin_scope();
-                    for stmt in body {
-                        self.compile_statement(stmt)?;
-                    }
-                    self.end_scope();
-                }
-
-                self.patch_jump(jump_end)?;
+                self.compile_if(
+                    condition,
+                    then_branch,
+                    elif_branches,
+                    else_branch.as_deref(),
+                    false,
+                )?;
             }
             Stmt::For {
                 variable,
@@ -1378,7 +1366,7 @@ impl Compiler {
 
     /// Compile a function body so that it leaves exactly one value on the
     /// operand stack: the trailing expression's value when the last statement
-    /// is an expression statement, `null` otherwise.
+    /// is an expression statement or a tail `if`, `null` otherwise.
     ///
     /// This is what makes `fn classify(n) { match n { ... } }` yield the
     /// selected arm (a body's trailing expression is its result; there is no
@@ -1400,14 +1388,99 @@ impl Compiler {
                     self.emit_push_constant(Value::Null, 0)?;
                 }
             }
-            // Only an expression statement carries a value: a bare `if`/`while`
-            // block as the last statement still yields `null`.
+            // A bare `if`/`elif`/`else` in tail position yields the selected
+            // branch's value, like the trailing expression of any other body.
+            Stmt::If {
+                condition,
+                then_branch,
+                elif_branches,
+                else_branch,
+            } => {
+                self.compile_if(
+                    condition,
+                    then_branch,
+                    elif_branches,
+                    else_branch.as_deref(),
+                    true,
+                )?;
+            }
+            // Any other statement carries no value: `null`.
             _ => {
                 self.compile_statement(last)?;
                 self.emit_push_constant(Value::Null, 0)?;
             }
         }
         Ok(())
+    }
+
+    /// Compile an `if` / `elif` / `else`. Every branch that reaches its own end
+    /// jumps to a single patch point, so a branch without a `return` no longer
+    /// falls through into the next one — the previous code left each `elif`
+    /// branch's end jump unpatched, i.e. pointing at instruction 0 of the chunk.
+    ///
+    /// With `want_value`, each branch is compiled in *value* mode: its trailing
+    /// statement leaves one value on the operand stack, so a bare `if` at the
+    /// end of a body yields the selected branch's value. Without it, branches
+    /// are ordinary statement lists and leave nothing.
+    fn compile_if(
+        &mut self,
+        condition: &Expr,
+        then_branch: &[Stmt],
+        elif_branches: &[(Expr, Vec<Stmt>)],
+        else_branch: Option<&[Stmt]>,
+        want_value: bool,
+    ) -> Result<(), CompilerError> {
+        // Branch ends (and, in value mode, the `else`-less `null`) all join here.
+        let mut end_jumps: Vec<usize> = Vec::new();
+
+        // `JumpIfFalse` peeks, so each path pops the condition it tested.
+        self.compile_expression(condition)?;
+        let jump_else = self.emit_jump(Opcode::JumpIfFalse, 0);
+        self.emit(Opcode::Pop, None, 0);
+        self.compile_if_branch(then_branch, want_value)?;
+        end_jumps.push(self.emit_jump(Opcode::Jump, 0));
+        self.patch_jump(jump_else)?;
+        self.emit(Opcode::Pop, None, 0);
+
+        for (cond, body) in elif_branches {
+            self.compile_expression(cond)?;
+            let jump_next = self.emit_jump(Opcode::JumpIfFalse, 0);
+            self.emit(Opcode::Pop, None, 0);
+            self.compile_if_branch(body, want_value)?;
+            end_jumps.push(self.emit_jump(Opcode::Jump, 0));
+            self.patch_jump(jump_next)?;
+            self.emit(Opcode::Pop, None, 0);
+        }
+
+        match else_branch {
+            Some(body) => self.compile_if_branch(body, want_value)?,
+            // A value-mode `if` with no `else` still owes a value.
+            None if want_value => self.emit_push_constant(Value::Null, 0)?,
+            None => {}
+        }
+
+        for jump in end_jumps {
+            self.patch_jump(jump)?;
+        }
+        Ok(())
+    }
+
+    /// One branch of an `if` in its own scope; value mode compiles the body so
+    /// its trailing statement is the branch's result and keeps that result
+    /// while dropping the branch's locals.
+    fn compile_if_branch(&mut self, body: &[Stmt], want_value: bool) -> Result<(), CompilerError> {
+        self.begin_scope();
+        let result = if want_value {
+            self.compile_body_value(body)
+        } else {
+            body.iter().try_for_each(|stmt| self.compile_statement(stmt))
+        };
+        if want_value {
+            self.end_scope_keeping_value();
+        } else {
+            self.end_scope();
+        }
+        result
     }
 
     fn emit_jump(&mut self, opcode: Opcode, target: usize) -> usize {
