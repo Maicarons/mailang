@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999996 (TeX Live 2024) (preloaded format=xelatex 2024.12.17)  25 SEP 2026 20:53
+This is XeTeX, Version 3.141592653-2.6-0.999996 (TeX Live 2024) (preloaded format=xelatex 2024.12.17)  17 OCT 2026 11:58
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1183,7 +1183,7 @@ Package fontspec Info: Font family 'SourceHanSansCN(0)' created for font
 
 
 LaTeX Font Warning: Font shape `TU/SourceHanSerifCN(0)/m/it' undefined
-(Font)              using `TU/SourceHanSerifCN(0)/m/n' instead on input line 11
+(Font)              using `TU/SourceHanSerifCN(0)/m/n' instead on input line 10
 4.
 
 [1
@@ -1201,43 +1201,44 @@ Overfull \hbox (43.47139pt too wide) in paragraph at lines 287--288
  [][] 
  []
 
-
-Overfull \hbox (406.15567pt too wide) in paragraph at lines 364--365
-\TU/SourceHanSerifCN(0)/m/n/10 默 认 后 端 为 带 槽 位 局 部 变 量 的 栈 式 虚 拟 机。|  运 行 时 值 \
-TU/NotoSansMono(0)/m/it/10 Value \TU/SourceHanSerifCN(0)/m/n/10 是 统 一 的 动 态 类 型
- 枚 举，|  覆 盖 \TU/NotoSansMono(0)/m/it/10 Null\TU/TeXGyreTermes(0)/m/n/10 /\TU/No
-toSansMono(0)/m/it/10 Bool\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it
-/10 Int\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Float\TU/TeXGyr
-eTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Str\TU/TeXGyreTermes(0)/m/n/10 /
-\TU/NotoSansMono(0)/m/it/10 Char\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0
-)/m/it/10 Array\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Map\TU/
-TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Tuple\TU/TeXGyreTermes(0)/
-m/n/10 /\TU/NotoSansMono(0)/m/it/10 Function\TU/TeXGyreTermes(0)/m/n/10 /\TU/No
-toSansMono(0)/m/it/10 Closure\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m
-/it/10 Class\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Instance\T
-U/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Ok\TU/TeXGyreTermes(0)/m
-/n/10 /\TU/NotoSansMono(0)/m/it/10 Err\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSans
-Mono(0)/m/it/10 Some
+[4]
+Overfull \hbox (237.50568pt too wide) in paragraph at lines 373--374
+[]\TU/SourceHanSerifCN(0)/m/it/10 运 行 时 值 \TU/NotoSansMono(0)/m/it/10 Value \TU
+/SourceHanSerifCN(0)/m/it/10 是 统 一 的 动 态 类 型 枚 举，|  覆 盖 \TU/NotoSansMono(0)/m/i
+t/10 Null\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Bool\TU/TeXGy
+reTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Int\TU/TeXGyreTermes(0)/m/n/10 
+/\TU/NotoSansMono(0)/m/it/10 Float\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono
+(0)/m/it/10 Str\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Char\TU
+/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Array\TU/TeXGyreTermes(0)
+/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Map\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSa
+nsMono(0)/m/it/10 Tuple\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10
+ Function\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Closure\TU/Te
+XGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Class\TU/TeXGyreTermes(0)/m/
+n/10 /\TU/NotoSansMono(0)/m/it/10 Instance\TU/TeXGyreTermes(0)/m/n/10 /\TU/Noto
+SansMono(0)/m/it/10 Ok\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 
+Err\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 Some
  []
 
-[4] [5] [6]
-Package pgfplots info on input line 464: Using 'lua backend=false' for axis: x 
+[5]
+Overfull \hbox (25.67569pt too wide) in paragraph at lines 400--401
+[]\TU/SourceHanSerifCN(0)/m/it/10 寄 存 器 后 端 的 取 指 循 环 把 \TU/NotoSansMono(0)/m/i
+t/10 ip\TU/TeXGyreTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 chunk\TU/TeXGyr
+eTermes(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 base \TU/SourceHanSerifCN(0)/m/i
+t/10 提 升 为 循 环 局 部 变 量、| \TU/NotoSansMono(0)/m/it/10 Ret \TU/SourceHanSerifCN(0
+)/m/it/10 时 截 断 寄 存 器 文 件、| \TU/NotoSansMono(0)/m/it/10 BinImm\TU/TeXGyreTermes
+(0)/m/n/10 /\TU/NotoSansMono(0)/m/it/10 CmpImm
+ []
+
+[6]
+Package pgfplots info on input line 473: Using 'lua backend=false' for axis: x 
 coord trafo unsupported.
-
-Overfull \hbox (25.78738pt too wide) in paragraph at lines 504--505
-\TU/SourceHanSerifCN(0)/m/n/10 字 节 码 以 \TU/NotoSansMono(0)/m/it/10 .mailangbc \
-TU/SourceHanSerifCN(0)/m/n/10 形 式 持 久 化，|  便 于 嵌 入 宿 主 免 源 码 分 发。|  编 译 目 标 在 \
-TU/TeXGyreTermes(0)/m/n/10 CI \TU/SourceHanSerifCN(0)/m/n/10 中 对 \TU/NotoSansMo
-no(0)/m/it/10 thumbv7em-none-eabihf
- []
-
-[7] [8]
-Underfull \hbox (badness 6094) in paragraph at lines 612--615
+ [7] [8] [9]
+Underfull \hbox (badness 6094) in paragraph at lines 628--631
 []\TU/TeXGyreTermes(0)/m/n/10 Rust Project Developers, “The Rustonomicon: FFI,”
  2024. [][]$[][][][][] [] [] [] [][][] [] [][][][][][][][][][] [] [][][] []
  []
 
-[9] (./main.aux)
+[10] (./main.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2022/08/05>
@@ -1250,12 +1251,12 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: F631596DC2671926ABD60FC5BDCF9063;2328.
  ) 
 Here is how much of TeX's memory you used:
- 38554 strings out of 474773
- 970711 string characters out of 5761288
- 2093842 words of memory out of 5000000
- 60077 multiletter control sequences out of 15000+600000
- 567340 words of font info for 129 fonts, out of 8000000 for 9000
+ 38625 strings out of 474773
+ 975549 string characters out of 5761288
+ 2094842 words of memory out of 5000000
+ 60147 multiletter control sequences out of 15000+600000
+ 567348 words of font info for 130 fonts, out of 8000000 for 9000
  1348 hyphenation exceptions out of 8191
- 84i,11n,93p,903b,2289s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 84i,11n,93p,1003b,2289s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on main.xdv (9 pages, 238112 bytes).
+Output written on main.xdv (10 pages, 273676 bytes).

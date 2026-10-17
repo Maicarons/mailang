@@ -45,51 +45,53 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.4}虚拟机}{4}{subsection.4.4}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces MaìLang Rust 工作区 crate 概览（共 16 个）。}}{5}{table.1}\protected@file@percent }
 \newlabel{tab:crates}{{1}{5}{MaìLang Rust 工作区 crate 概览（共 16 个）。}{table.1}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces 两种虚拟机后端：(a) 默认栈式虚拟机，局部变量解析为栈槽位；(b) 可选寄存器虚拟机，将栈操作降为 \texttt  {RegOp} 的 dst/src 寄存器寻址。两后端通过同一套 102 项集成测试。}}{5}{figure.2}\protected@file@percent }
-\newlabel{fig:vm}{{2}{5}{两种虚拟机后端：(a) 默认栈式虚拟机，局部变量解析为栈槽位；(b) 可选寄存器虚拟机，将栈操作降为 \texttt {RegOp} 的 dst/src 寄存器寻址。两后端通过同一套 102 项集成测试。}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces 两种虚拟机后端：(a) 栈式虚拟机（可选），局部变量解析为栈槽位；(b) 寄存器虚拟机（自 v0.4 起为默认），将栈操作降为 \texttt  {RegOp} 的 dst/src 寄存器寻址。两后端共享同一份栈字节码，通过同一套 137 项集成测试与 64 个程序的逐字节比对。}}{5}{figure.2}\protected@file@percent }
+\newlabel{fig:vm}{{2}{5}{两种虚拟机后端：(a) 栈式虚拟机（可选），局部变量解析为栈槽位；(b) 寄存器虚拟机（自 v0.4 起为默认），将栈操作降为 \texttt {RegOp} 的 dst/src 寄存器寻址。两后端共享同一份栈字节码，通过同一套 137 项集成测试与 64 个程序的逐字节比对。}{figure.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.5}内存管理}{5}{subsection.4.5}\protected@file@percent }
 \newlabel{sec:gc}{{4.5}{5}{内存管理}{subsection.4.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}性能优化}{5}{subsection.4.6}\protected@file@percent }
-\newlabel{sec:perf}{{4.6}{5}{性能优化}{subsection.4.6}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces 集成测试通过率。}}{6}{table.2}\protected@file@percent }
-\newlabel{tab:tests}{{2}{6}{集成测试通过率。}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}性能优化}{6}{subsection.4.6}\protected@file@percent }
+\newlabel{sec:perf}{{4.6}{6}{性能优化}{subsection.4.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.7}跨平台与嵌入}{6}{subsection.4.7}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{C FFI。}{6}{section*.5}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{WebAssembly。}{6}{section*.6}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{IoT HAL。}{6}{section*.7}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{多语言绑定。}{6}{section*.8}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.8}工具链}{6}{subsection.4.8}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5}实验与评估}{6}{section.5}\protected@file@percent }
-\newlabel{sec:eval}{{5}{6}{实验与评估}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}实验环境}{6}{subsection.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}正确性测试}{6}{subsection.5.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces 测试与双后端一致性。}}{7}{table.2}\protected@file@percent }
+\newlabel{tab:tests}{{2}{7}{测试与双后端一致性。}{table.2}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Fibonacci(30) 递归基准：Phase A 基线与 Phase F 优化后的耗时对比（release 构建，7 次平均）。加速比约 $4.25\times $。}}{7}{figure.3}\protected@file@percent }
 \newlabel{fig:accel}{{3}{7}{Fibonacci(30) 递归基准：Phase A 基线与 Phase F 优化后的耗时对比（release 构建，7 次平均）。加速比约 $4.25\times $。}{figure.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces 典型负载耗时对比（ms，7 次平均；越低越好）。QuickJS 列中「—」表示未测。}}{7}{table.3}\protected@file@percent }
-\newlabel{tab:bench}{{3}{7}{典型负载耗时对比（ms，7 次平均；越低越好）。QuickJS 列中「—」表示未测。}{table.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}实验与评估}{7}{section.5}\protected@file@percent }
+\newlabel{sec:eval}{{5}{7}{实验与评估}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}实验环境}{7}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}正确性测试}{7}{subsection.5.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.3}性能结果}{7}{subsection.5.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{递归热点：Fibonacci(30)。}{7}{section*.9}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{与 Python / Node.js / QuickJS 的对比。}{7}{section*.10}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{相对优势的量化。}{7}{section*.11}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{IoT 场景推算。}{7}{section*.12}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}产物体积}{7}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{v0.4 复测：双后端绝对性能。}{7}{section*.10}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces 典型负载耗时对比（ms，7 次平均；越低越好）。QuickJS 列中「—」表示未测。}}{8}{table.3}\protected@file@percent }
+\newlabel{tab:bench}{{3}{8}{典型负载耗时对比（ms，7 次平均；越低越好）。QuickJS 列中「—」表示未测。}{table.3}{}}
+\@writefile{toc}{\contentsline {paragraph}{内存复测。}{8}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{与 Python / Node.js / QuickJS 的对比。}{8}{section*.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{相对优势的量化。}{8}{section*.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IoT 场景推算。}{8}{section*.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}产物体积}{8}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}讨论与局限}{8}{section.6}\protected@file@percent }
+\newlabel{sec:limits}{{6}{8}{讨论与局限}{section.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{无 \texttt  {async}。}{8}{section*.15}\protected@file@percent }
 \bibcite{lua}{1}
 \bibcite{micropython}{2}
 \bibcite{quickjs}{3}
 \bibcite{rust}{4}
 \bibcite{java}{5}
 \bibcite{csharp}{6}
-\@writefile{toc}{\contentsline {section}{\numberline {6}讨论与局限}{8}{section.6}\protected@file@percent }
-\newlabel{sec:limits}{{6}{8}{讨论与局限}{section.6}{}}
-\@writefile{toc}{\contentsline {paragraph}{无 \texttt  {async}。}{8}{section*.13}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{泛型类字段擦除。}{8}{section*.14}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{IoT HAL 默认模拟。}{8}{section*.15}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{GC 非增量。}{8}{section*.16}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{寄存器 VM 为可选后端。}{8}{section*.17}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{注册表与宏。}{8}{section*.18}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7}结论}{8}{section.7}\protected@file@percent }
-\newlabel{sec:concl}{{7}{8}{结论}{section.7}{}}
 \bibcite{wasm}{7}
+\@writefile{toc}{\contentsline {paragraph}{泛型类字段擦除。}{9}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IoT HAL 默认模拟。}{9}{section*.17}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{GC 非增量。}{9}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{双后端并存。}{9}{section*.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{注册表与宏。}{9}{section*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}结论}{9}{section.7}\protected@file@percent }
+\newlabel{sec:concl}{{7}{9}{结论}{section.7}{}}
 \bibcite{ffi}{8}
 \bibcite{vm-design}{9}
 \bibcite{generics}{10}
@@ -98,4 +100,4 @@
 \bibcite{appel}{13}
 \bibcite{rust-ffi}{14}
 \bibcite{mailang}{15}
-\gdef \@abspage@last{9}
+\gdef \@abspage@last{10}

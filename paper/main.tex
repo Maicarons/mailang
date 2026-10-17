@@ -92,7 +92,7 @@
 
 \date{%
   预印本（Preprint）\\
-  版本 0.3.0 \quad · \quad 2026
+  版本 0.4.0 \quad · \quad 2026
 }
 
 \begin{document}
@@ -101,7 +101,7 @@
 
 % ══════════════════════════════════════════════════════════════════
 \begin{abstract}
-物联网（IoT）与跨平台软件开发对编程语言提出了相互拉扯的需求：一方面需要足够小的运行时足迹与可预测的性能以适配 MCU 级设备，另一方面又需要现代语言特性（面向对象、模式匹配、错误处理、泛型）与多宿主嵌入能力。本文提出并实现 \textbf{MaìLang（麦语）}——一门以 Rust 编写、面向 IoT 与跨平台场景的现代编程语言。MaìLang 采用经典流水线架构（词法分析 $\rightarrow$ 语法分析 $\rightarrow$ 字节码编译 $\rightarrow$ 虚拟机），默认后端为带槽位局部变量（slot locals）的栈式字节码虚拟机，并提供特性对齐的可选寄存器虚拟机。语言层面融合了类与继承、Trait、Rust 风格的 \texttt{Result}/\texttt{Option} 与 \texttt{?} 错误传播、模式匹配、字符串插值、UTF-8 原生标识符以及泛型函数 monomorphization；运行时层面实现了引用计数、环收集与标记清扫堆的混合垃圾回收，以及 \texttt{CallDirect}、尾调用优化（TCO）等热路径优化。跨平台能力通过 C FFI、WebAssembly、模拟 HAL 与多语言绑定演示覆盖 12 种宿主语言。实验表明：在 Fibonacci(30) 递归基准上，优化后的 MaìLang 约需 137\,ms，相对早期基线加速约 $4.25\times$；在循环、函数调用与字符串插值等典型负载上优于 CPython 与 Node.js（V8）。集成测试套件在栈式与寄存器两种虚拟机上均达 102/102 通过率，全工作区约 218 项测试全绿。本文系统描述 MaìLang 的语言设计、编译器与虚拟机实现、内存管理策略与跨平台嵌入方案，并诚实报告当前局限（无 \texttt{async}、泛型类字段擦除、IoT HAL 默认模拟等）。
+物联网（IoT）与跨平台软件开发对编程语言提出了相互拉扯的需求：一方面需要足够小的运行时足迹与可预测的性能以适配 MCU 级设备，另一方面又需要现代语言特性（面向对象、模式匹配、错误处理、泛型）与多宿主嵌入能力。本文提出并实现 \textbf{MaìLang（麦语）}——一门以 Rust 编写、面向 IoT 与跨平台场景的现代编程语言。MaìLang 采用经典流水线架构（词法分析 $\rightarrow$ 语法分析 $\rightarrow$ 字节码编译 $\rightarrow$ 虚拟机）。编译器始终产出与后端无关的栈式字节码，而自 v0.4 起\emph{默认执行后端}为寄存器（三地址）虚拟机：运行时一次性把栈字节码降为寄存器 IR，栈式后端则保留为可选后端。语言层面融合了类与继承、Trait、Rust 风格的 \texttt{Result}/\texttt{Option} 与 \texttt{?} 错误传播、模式匹配、字符串插值、UTF-8 原生标识符以及泛型函数 monomorphization；运行时层面实现了引用计数、环收集与标记清扫堆的混合垃圾回收，以及 \texttt{CallDirect}、尾调用优化（TCO）等热路径优化。跨平台能力通过 C FFI、WebAssembly、模拟 HAL 与多语言绑定演示覆盖 12 种宿主语言。实验表明：两种后端在全部 64 个已发布示例与库程序上逐字节一致，性能仅相差几个百分点（Fibonacci(30) 递归：栈式 119\,ms、寄存器 116\,ms，比值 $0.97\times$），相对早期基线累计加速约 $4.9\times$；在循环、函数调用与字符串插值等典型负载上优于 CPython 与 Node.js（V8）。集成测试套件在默认后端与 \texttt{--vm=stack} 两种配置下均为 137/137，全工作区 261 项测试全绿。本文系统描述 MaìLang 的语言设计、编译器与虚拟机实现、内存管理策略与跨平台嵌入方案，并诚实报告当前局限（无 \texttt{async}、泛型类字段擦除、IoT HAL 默认模拟等）。
 \end{abstract}
 
 \vspace{1em}
@@ -119,7 +119,7 @@ MaìLang（麦语）正是针对这一缺口的设计与实现。文件扩展名
 
 \begin{enumerate}
   \item \textbf{现代语言特性}：类与继承、Trait、闭包、模式匹配、\texttt{Result}/\texttt{Option} 与 \texttt{?}、字符串插值、UTF-8 标识符、泛型函数 monomorphization。
-  \item \textbf{可预测的解释执行}：默认栈式字节码虚拟机（slot locals + \texttt{CallDirect} + TCO），可选寄存器虚拟机实现特性对齐。
+  \item \textbf{可预测的解释执行}：栈式字节码 + slot locals（\texttt{CallDirect} + TCO）构成的字节码格式与后端无关，默认由寄存器（三地址）虚拟机执行，栈式虚拟机保留为可选后端。
   \item \textbf{混合内存管理}：\texttt{Rc} 引用计数 + \texttt{collect\_cycles()} 断环 + 标记清扫堆（\texttt{MarkSweepHeap}）。
   \item \textbf{跨平台嵌入}：C ABI FFI、WebAssembly、模拟 HAL、多语言绑定，以及字节码产物 \texttt{.mailangbc}。
   \item \textbf{工程完备性}：解析器错误恢复、分析器、LSP、格式化器、模块系统 v2、文件/静态 HTTP 包注册表。
@@ -129,8 +129,8 @@ MaìLang（麦语）正是针对这一缺口的设计与实现。文件扩展名
 
 \begin{itemize}
   \item 提出并实现 MaìLang 语言设计与完整实现流水线，全部以 Rust 工作区组织为 16 个 crate，覆盖词法、语法、分析、编译、虚拟机、GC、标准库、FFI、WASM、LSP 与包管理。
-  \item 给出栈式/寄存器双后端的字节码虚拟机设计，并在两种后端上通过同一套 102 项集成测试验证特性对齐。
-  \item 实现面向 IoT 场景的混合 GC（引用计数 + 环断边 + 标记清扫）与一系列热路径优化（胖 \texttt{Value} 的 \texttt{Rc} 化、全局槽表、立即数融合、\texttt{CallDirect} 等），使 Fibonacci(30) 相对早期基线加速约 $4.25\times$。
+  \item 给出栈式/寄存器双后端的字节码虚拟机设计，并在两种后端上通过同一套 137 项集成测试与 64 个程序的逐字节比对验证特性对齐；默认后端自 v0.4 起为寄存器虚拟机。
+  \item 实现面向 IoT 场景的混合 GC（引用计数 + 环断边 + 标记清扫）与一系列热路径优化（胖 \texttt{Value} 的 \texttt{Rc} 化、全局槽表、立即数融合、\texttt{CallDirect} 等），使 Fibonacci(30) 相对早期基线累计加速约 $4.9\times$（Phase F 阶段为 $4.25\times$）。
   \item 提供覆盖 C、Python、Node.js、Go、Java、Kotlin、C\#、Swift、PHP、Ruby、Lua、TypeScript 共 12 种宿主的绑定演示与可复现基准，并诚实报告局限。
 \end{itemize}
 
@@ -304,7 +304,7 @@ mailang-parser & 语法 & 递归下降 + Pratt；错误恢复 \\
 mailang-analyzer & 语义 & 诊断 / 参数个数 / 简单类型 \\
 mailang-compiler & 编译 & 字节码生成；泛型 monomorphization \\
 mailang-bytecode & IR & 栈式 IR + 寄存器 IR；\texttt{Value} \\
-mailang-vm & 执行 & 栈式 VM（默认）+ 寄存器 VM \\
+mailang-vm & 执行 & 寄存器 VM（默认）+ 栈式 VM \\
 mailang-gc & 内存 & 断环 + \texttt{MarkSweepHeap} \\
 mailang-stdlib & 运行时 & io/math/string/json/time/HAL \\
 mailang-core & 集成 & Parser $\rightarrow$ Compiler $\rightarrow$ VM \\
@@ -335,7 +335,7 @@ mailang-macros & 扩展 & 过程宏（当前为透传桩） \\
   lbl/.style={font=\footnotesize},
 ]
 % Stack VM
-\node[lbl, anchor=west] at (0,1.6) {\textbf{(a) 栈式 VM + slot locals}};
+\node[lbl, anchor=west] at (0,1.6) {\textbf{(a) 栈式 VM + slot locals（可选后端）}};
 \foreach \i/\c in {0/blue, 1/blue, 2/orange, 3/orange, 4/green, 5/green} {
   \node[cell=\c] (s\i) at ({0.35+\i*0.75}, 0.7) {};
 }
@@ -345,7 +345,7 @@ mailang-macros & 扩展 & 过程宏（当前为透传桩） \\
 \draw[-{Stealth}, thick, gray] (5.0, 0.7) -- (5.7, 0.7);
 
 % Register VM
-\node[lbl, anchor=west] at (0,-2.2) {\textbf{(b) 寄存器 VM（可选后端）}};
+\node[lbl, anchor=west] at (0,-2.2) {\textbf{(b) 寄存器 VM（v0.4 起为默认后端）}};
 \foreach \i/\c in {0/violet, 1/violet, 2/violet, 3/violet, 4/violet} {
   \node[cell=\c] (r\i) at ({0.35+\i*0.75}, -3.1) {R\i};
 }
@@ -353,7 +353,7 @@ mailang-macros & 扩展 & 过程宏（当前为透传桩） \\
       fill=red!10] at (7.2, -3.1) {RegOp：dst/src 寻址};
 \draw[-{Stealth}, thick, gray] (4.2, -3.1) -- (5.5, -3.1);
 \end{tikzpicture}
-\caption{两种虚拟机后端：(a) 默认栈式虚拟机，局部变量解析为栈槽位；(b) 可选寄存器虚拟机，将栈操作降为 \texttt{RegOp} 的 dst/src 寄存器寻址。两后端通过同一套 102 项集成测试。}
+\caption{两种虚拟机后端：(a) 栈式虚拟机（可选），局部变量解析为栈槽位；(b) 寄存器虚拟机（自 v0.4 起为默认），将栈操作降为 \texttt{RegOp} 的 dst/src 寄存器寻址。两后端共享同一份栈字节码，通过同一套 137 项集成测试与 64 个程序的逐字节比对。}
 \label{fig:vm}
 \end{figure}
 
@@ -361,9 +361,16 @@ mailang-macros & 扩展 & 过程宏（当前为透传桩） \\
 
 \subsection{虚拟机}
 
-默认后端为带槽位局部变量的栈式虚拟机。运行时值 \texttt{Value} 是统一的动态类型枚举，覆盖 \texttt{Null}/\texttt{Bool}/\texttt{Int}/\texttt{Float}/\texttt{Str}/\texttt{Char}/\texttt{Array}/\texttt{Map}/\texttt{Tuple}/\texttt{Function}/\texttt{Closure}/\texttt{Class}/\texttt{Instance}/\texttt{Ok}/\texttt{Err}/\texttt{Some} 等变体。堆对象经 \texttt{Rc}/\texttt{Rc<RefCell<\dots>>} 共享，避免深拷贝。
+编译器只产出一种中间表示——栈式字节码（局部变量在编译期解析为帧内 slot）。执行该表示的后端有两种：
 
-可选寄存器虚拟机通过 \texttt{MAILANG\_VM=register} 或 \texttt{--vm=register} 启用，将栈 IR 降为寄存器 IR，与栈式后端保持特性对齐。
+\begin{itemize}
+  \item \textbf{寄存器（三地址）虚拟机：自 v0.4 起为默认后端}。运行前由 \texttt{StackToRegister} 一次性把栈 IR 降为寄存器 IR（\texttt{RegOp} 以 dst/src 寄存器寻址），每次 \texttt{run}/\texttt{eval} 只付一次降级成本，不改变持久化字节码；
+  \item \textbf{栈式虚拟机（可选后端）}：操作数走显式操作数栈，局部变量按帧内 slot 索引访问。
+\end{itemize}
+
+两种后端始终一起编译，因此切换默认后端不改变二进制的构成。后端选择遵循确定性优先级：\texttt{--vm} 命令行参数优先于 \texttt{MAILANG\_VM} 环境变量，后者优先于默认值（寄存器）；无法识别的环境变量取值一律回落到默认，以免游离变量破坏一次运行。\texttt{mailang repl} 同样接受 \texttt{--vm}。
+
+运行时值 \texttt{Value} 是统一的动态类型枚举，覆盖 \texttt{Null}/\texttt{Bool}/\texttt{Int}/\texttt{Float}/\texttt{Str}/\texttt{Char}/\texttt{Array}/\texttt{Map}/\texttt{Tuple}/\texttt{Function}/\texttt{Closure}/\texttt{Class}/\texttt{Instance}/\texttt{Ok}/\texttt{Err}/\texttt{Some} 等变体。堆对象经 \texttt{Rc}/\texttt{Rc<RefCell<\dots>>} 共享，避免深拷贝。
 
 \subsection{内存管理}
 \label{sec:gc}
@@ -373,7 +380,7 @@ mailang-macros & 扩展 & 过程宏（当前为透传桩） \\
 \begin{enumerate}
   \item \textbf{日常分配/释放}：\texttt{Rc} 引用计数，热路径零额外开销；
   \item \textbf{环断边}：\texttt{collect\_cycles()} 从根出发 DFS，在灰集中发现回边时将其替换为 \texttt{Null}，使环可被引用计数释放；
-  \item \textbf{标记清扫}：\texttt{MarkSweepHeap} 维护堆节点普查表（heap census），从 VM 根（栈 / 全局 / upvalue）标记可达节点，清扫不可达节点并清除子边，从而真正回收环状垃圾。分配计数越过阈值时自动触发回收，阈值随回收次数增长（经典「代际提示」风格）。
+  \item \textbf{标记清扫}：\texttt{MarkSweepHeap} 维护堆节点普查表（heap census），从 VM 根（栈 / 全局 / upvalue）标记可达节点，清扫不可达节点并清除子边，从而真正回收环状垃圾。分配计数越过阈值时自动触发回收，阈值取 $\max(\text{MIN}, \text{live}\times 2)$——与存活集绑定的有界阈值。早期实现按 $\times 1.5$ 无上限递增阈值，在分配密集的循环中使堆占用线性增长（200 万/400 万次迭代分别达 151\,MB/333\,MB）；改为有界阈值后，同一负载的峰值工作集稳定在约 5\,MB。
 \end{enumerate}
 
 \texttt{gc\_stats()} 暴露（tracked, collections, freed）统计，便于嵌入宿主观察回收行为。增量/并发 GC 尚未实现，见第~\ref{sec:limits} 节。
@@ -390,6 +397,7 @@ mailang-macros & 扩展 & 过程宏（当前为透传桩） \\
   \item 自递归尾调用复用栈帧（TCO）；
   \item \texttt{CallDirect} 调用已知顶层函数，去掉函数占位槽；
   \item 算术/跳转立即数融合；
+  \item 寄存器后端的取指循环把 \texttt{ip}/\texttt{chunk}/\texttt{base} 提升为循环局部变量、\texttt{Ret} 时截断寄存器文件、\texttt{BinImm}/\texttt{CmpImm} 整数快路径，使其 Fibonacci(30) 从 $\sim$1150\,ms 降到与栈式后端持平；
   \item workspace release 采用 \texttt{lto} + \texttt{codegen-units=1} + \texttt{panic="abort"}。
 \end{itemize}
 
@@ -409,7 +417,7 @@ mailang-macros & 扩展 & 过程宏（当前为透传桩） \\
 
 \subsection{工具链}
 
-CLI 提供 \texttt{run}/\texttt{eval}/\texttt{build}/\texttt{fmt}/\texttt{deps}/\texttt{registry}/\texttt{lsp}；字节码可持久化为 \texttt{.mailangbc}。LSP 基于 parser 错误恢复，支持多语法错误诊断与补全、跳转、悬停。分析器提供参数个数与简单类型诊断。
+CLI 提供 \texttt{run}/\texttt{eval}/\texttt{build}/\texttt{disasm}/\texttt{fmt}/\texttt{deps}/\texttt{registry}/\texttt{lsp} 以及交互式 \texttt{repl}；\texttt{run}/\texttt{eval}/\texttt{repl} 接受 \texttt{--vm} 选择执行后端，\texttt{disasm} 可打印编译器产出的栈字节码，或默认后端实际执行的寄存器降级形式。字节码可持久化为 \texttt{.mailangbc}，该产物与后端无关，同一份文件在两种后端下输出一致。LSP 基于 parser 错误恢复，支持多语法错误诊断与补全、跳转、悬停。分析器提供参数个数与简单类型诊断。
 
 % ══════════════════════════════════════════════════════════════════
 \section{实验与评估}
@@ -417,24 +425,25 @@ CLI 提供 \texttt{run}/\texttt{eval}/\texttt{build}/\texttt{fmt}/\texttt{deps}/
 
 \subsection{实验环境}
 
-所有性能数据来自 Windows 11 桌面环境（Intel CPU），Rust stable 工具链，\texttt{cargo build --release} 构建；基准取 7 次运行平均值。对比解释器包括 CPython 3.14、Node.js（V8 JIT）与 QuickJS（2025-04-26）。MaìLang 为 0.3.0（Phase L，栈式字节码解释器 + slot locals）。
+所有性能数据来自 Windows 11 桌面环境（Intel CPU），Rust stable 工具链，\texttt{cargo build --release} 构建，release profile 启用 \texttt{lto} + \texttt{codegen-units=1} + \texttt{panic="abort"}。对比解释器包括 CPython 3.14、Node.js（V8 JIT）与 QuickJS（2025-04-26）。报告的 MaìLang 数据分两批：横向对比表与 Phase F 加速数据是 Phase L 时期以 7 次运行平均值采集的，v0.4 的双后端数据由 \texttt{benchmark/measure\_fib.ps1} 以 3 次取最小值采集（口径不同，两批数字不宜直接相减）。项目当前版本为 0.4.0（Phase N 收尾 + 默认后端切换）。
 
 \subsection{正确性测试}
 
-集成测试套件共 102 项，覆盖算术、变量可变性、函数与默认参数、闭包、控制流、字符串插值、集合方法、模式匹配、OOP 与 Trait、\texttt{Result}/\texttt{Option} 与 \texttt{?}、模块导入、GC 回收路径等。如表~\ref{tab:tests} 所示，\textbf{栈式与寄存器两种虚拟机后端均 102/102 通过}，全工作区约 218 项测试全绿，验证了双后端特性对齐。
+集成测试套件共 137 项，覆盖算术、变量可变性、函数与默认参数、闭包、控制流、字符串插值、集合方法、模式匹配、OOP 与 Trait、\texttt{Result}/\texttt{Option} 与 \texttt{?}、模块导入、GC 回收路径，以及若干后端缺陷的回归用例（寄存器后端绕过宿主钩子、栈式后端直接调用帧的尾调用覆盖调用者槽位等）。如表~\ref{tab:tests} 所示，\textbf{默认后端（寄存器 VM）与 \texttt{--vm=stack} 两种配置均 137/137 通过}，全工作区 261 项测试全绿。行为层面的对齐另有独立门禁：\texttt{benchmark/compare\_backends.ps1} 把 \texttt{examples/} 与 \texttt{libs/} 下全部 66 个 \texttt{.mai} 程序在两种后端各跑一遍并逐字节比对输出（2 个因输出不确定或永不终止而跳过），当前 64/64 一致，任何新增差异都会使该门禁失败。
 
 \begin{table}[t]
 \centering
-\caption{集成测试通过率。}
+\caption{测试与双后端一致性。}
 \label{tab:tests}
 \small
 \begin{tabular}{@{}lcc@{}}
 \toprule
-\textbf{执行后端} & \textbf{通过 / 总数} & \textbf{说明} \\
+\textbf{执行配置} & \textbf{通过 / 总数} & \textbf{说明} \\
 \midrule
-栈式 VM（默认） & 102/102 & \texttt{mailang run} \\
-寄存器 VM（可选） & 102/102 & \texttt{MAILANG\_VM=register} \\
-全工作区测试 & 约 218 全绿 & 含单元与集成 \\
+默认后端（寄存器 VM） & 137/137 & \texttt{mailang run}，\texttt{MAILANG\_VM} 未设 \\
+栈式 VM（可选后端） & 137/137 & \texttt{--vm=stack} / \texttt{MAILANG\_VM=stack} \\
+全工作区测试 & 261 全绿 & 含单元与集成 \\
+逐字节双后端比对 & 64/64 一致 & \texttt{benchmark/compare\_backends.ps1} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -469,6 +478,12 @@ CLI 提供 \texttt{run}/\texttt{eval}/\texttt{build}/\texttt{fmt}/\texttt{deps}/
 \label{fig:accel}
 \end{figure}
 
+\paragraph{v0.4 复测：双后端绝对性能。}
+v0.4 的默认后端是寄存器 VM。以 \texttt{benchmark/measure\_fib.ps1} 采集（同一二进制，3 次取最小值）得：栈式 119\,ms、寄存器 116\,ms、不带 \texttt{--vm} 的默认运行 116\,ms，寄存器对栈式比值为 $0.97\times$——两者仅差几个百分点，远低于 $2.0\times$ 的验收门限；默认运行始终跟随寄存器线。同一台机器在负载较高时重跑一遍，三条线一起上浮（栈式 188\,ms、寄存器 176\,ms、默认 174\,ms，比值 $0.94\times$）：两后端的相对关系稳定，绝对数字随机器负载波动。以本批最快样本对 Phase A 基线 581.59\,ms 计，累计加速约 $5.0\times$（$4.9$--$5.0\times$）；即便取负载较重那一次的采样，仍有 $3.1$--$3.3\times$，即 $3\times$ 验收目标在两种后端与两次采样下均成立。
+
+\paragraph{内存复测。}
+同一分配密集循环（\texttt{len([1,2,3])} 累加）在 200 万与 400 万次迭代下的峰值工作集为 5.1\,MB（默认后端）与 4.9--5.1\,MB（\texttt{--vm=stack}），不随迭代次数增长，门限为 64\,MB。作为对照，有界阈值修复之前同一负载分别达到 151\,MB 与 333\,MB。
+
 \paragraph{与 Python / Node.js / QuickJS 的对比。}
 表~\ref{tab:bench} 给出四项典型负载的横向对比（越低越好）。可以看出：MaìLang 在循环、函数调用与字符串插值上均快于 CPython 与 Node.js；相对同为解释器的 QuickJS，字符串插值基本持平，循环与调用仍有差距，深度递归差距最大——这与解释器缺少内联缓存、无寄存器分配有关，也是后续优化方向。
 
@@ -486,22 +501,23 @@ Fibonacci(30) 递归 & 581.6$^{\dagger}$ & 165.5 & — & 70.6 \\
 函数调用 $100$k & 45.6 & 100.9 & 51.2 & 16.0 \\
 字符串插值 $10$k & 9.2 & 91.2 & 47.8 & 9.2 \\
 \midrule
-Fibonacci(30)（优化后） & \textbf{137.0} & — & — & 70.6 \\
+Fibonacci(30)（Phase F 优化后） & 137.0 & — & — & 70.6 \\
+Fibonacci(30)（v0.4 默认后端） & \textbf{$\approx$116--119} & — & — & 70.6 \\
 \bottomrule
 \end{tabular}
 \\[2pt]
-{\footnotesize $^{\dagger}$ 为 Phase A 基线，对应表中与 Python/Node/QuickJS 同批测量；优化后数据为 Phase F 单独复测。}
+{\footnotesize $^{\dagger}$ 为 Phase A 基线，与表中 Python/Node/QuickJS 同批测量（7 次平均）；后两行为 Phase F 与 v0.4 的单独复测，v0.4 为 3 次取最小值，机器负载较重时会升至 174--188\,ms。}
 \end{table}
 
 \paragraph{相对优势的量化。}
-以 Phase A 基线口径计算：循环负载较 CPython 快约 $3.0\times$、较 Node.js 快约 $1.5\times$；函数调用较 CPython 快约 $2.2\times$；字符串插值较 CPython 快约 $9.9\times$、较 Node.js 快约 $5.2\times$，与 QuickJS 持平。优化后 Fibonacci(30)（137\,ms）已接近 QuickJS（70.6\,ms）的 $1.94\times$ 范围，而仍具备 CPython 之外的现代语言特性集合。
+以 Phase A 基线口径计算：循环负载较 CPython 快约 $3.0\times$、较 Node.js 快约 $1.5\times$；函数调用较 CPython 快约 $2.2\times$；字符串插值较 CPython 快约 $9.9\times$、较 Node.js 快约 $5.2\times$，与 QuickJS 持平。v0.4 的 Fibonacci(30)（116--119\,ms）约为 QuickJS（70.6\,ms）的 $1.6$--$1.7\times$，而仍具备 CPython 之外的现代语言特性集合。
 
 \paragraph{IoT 场景推算。}
 以 ESP32-C3 @ 160\,MHz 相对现代 PC 慢 $50$--$100\times$ 的经验系数外推：循环 $100$k 约 $1.8$--$3.5$\,s，字符串插值 $10$k 约 $0.5$--$0.9$\,s。相较 MicroPython 的经验估计，MaìLang 在循环与字符串密集负载上预计有 $2$--$10\times$ 优势。需要强调：该推算\textbf{尚未在真实硬件上验证}，当前 IoT HAL 为模拟实现。
 
 \subsection{产物体积}
 
-字节码以 \texttt{.mailangbc} 形式持久化，便于嵌入宿主免源码分发。编译目标在 CI 中对 \texttt{thumbv7em-none-eabihf} 与 \texttt{riscv32imc-unknown-none-elf} 做体积约束检查。详细足迹数据随发布流程持续补充。
+字节码以 \texttt{.mailangbc} 形式持久化，便于嵌入宿主免源码分发；该产物与执行后端无关，同一份文件在两种后端下输出一致（CI 对同一 \texttt{.mailangbc} 的无参数运行与 \texttt{--vm=stack} 运行做 \texttt{diff} 断言）。体积最敏感的目标是 WebAssembly：\texttt{wasm32-unknown-unknown} 的 release 产物（\texttt{cargo build --release -p mailang-wasm}，未经 wasm-pack/wasm-opt 后处理）为 975{,}309 字节，而默认后端从栈式换成寄存器只增加 4 字节——两种后端始终一起编译，默认值本身不引入新代码，代价仅是每次运行多付一次栈到寄存器的降级。\texttt{mailang build examples/hello.mai} 产出的 \texttt{.mailangbc} 为 116 字节（1 个 chunk）。两个嵌入式目标 \texttt{thumbv7em-none-eabihf} 与 \texttt{riscv32imc-unknown-none-elf} 在 CI 中做 \texttt{no\_std} 构建并报告 \texttt{mailang-bytecode} 的 rlib 体积（446.1\,KiB / 447.3\,KiB，含元数据，并非最终链接足迹）；目前只有构建检查，没有体积门限，也未在真实硬件上验证。
 
 % ══════════════════════════════════════════════════════════════════
 \section{讨论与局限}
@@ -519,8 +535,8 @@ Fibonacci(30)（优化后） & \textbf{137.0} & — & — & 70.6 \\
 \paragraph{GC 非增量。}
 Rc + 标记清扫可回收环，但回收过程非增量/并发，最坏延迟不可控。对硬实时 MCU 场景需进一步做分配预算或区域式内存策略。
 
-\paragraph{寄存器 VM 为可选后端。}
-尽管与栈式后端特性对齐（102/102），默认后端仍是栈式 VM；寄存器后端的长期维护成本需在路线图中评估。
+\paragraph{双后端并存。}
+默认后端自 v0.4 起为寄存器 VM，栈式 VM 保留为可选后端。两者共享同一份字节码、同一套测试（137/137）与 64 个程序的逐字节比对，性能也基本持平（$0.94$--$0.97\times$），因此双后端并存的收益是一条可回退的保守路径；代价是每个新特性都要在两条执行路径上实现并验证，这一长期维护成本是路线图中的显式条目。
 
 \paragraph{注册表与宏。}
 包注册表仅支持本地/静态 HTTP，无公共托管服务；\texttt{mailang-macros} 仍为透传桩，过程宏体系尚未落地。
@@ -529,9 +545,9 @@ Rc + 标记清扫可回收环，但回收过程非增量/并发，最坏延迟�
 \section{结论}
 \label{sec:concl}
 
-本文提出了 MaìLang（麦语）——一门以 Rust 实现、面向 IoT 与跨平台开发的现代编程语言。通过「现代语言特性 + 字节码解释执行 + 混合 GC + 多宿主嵌入」的组合设计，MaìLang 在表达能力与运行时可控性之间取得了务实平衡。双虚拟机后端通过同一套 102 项集成测试验证特性对齐；热路径优化使 Fibonacci(30) 相对早期基线加速约 $4.25\times$；在循环、函数调用与字符串插值等典型负载上优于 CPython 与 Node.js。
+本文提出了 MaìLang（麦语）——一门以 Rust 实现、面向 IoT 与跨平台开发的现代编程语言。通过「现代语言特性 + 字节码解释执行 + 混合 GC + 多宿主嵌入」的组合设计，MaìLang 在表达能力与运行时可控性之间取得了务实平衡。编译器只产出一种与后端无关的栈式字节码，寄存器（默认）与栈式（可选）两个后端在全部 137 项集成测试与 64 个已发布程序上完全一致，性能相差仅几个百分点；热路径优化使 Fibonacci(30) 相对早期基线累计加速约 $4.9\times$；在循环、函数调用与字符串插值等典型负载上优于 CPython 与 Node.js。
 
-未来工作包括：真实 IoT HAL 与硬件验证、增量 GC、泛型类 monomorphization、\texttt{async} 支持、寄存器 VM 深度优化，以及公共包注册表服务。我们希望 MaìLang 能为「一门语言贯通 MCU 与云端」的工程实践提供可复用的参考实现。
+未来工作包括：真实 IoT HAL 与硬件验证、增量 GC、泛型类 monomorphization、\texttt{async} 支持、双后端执行路径的持续一致性维护，以及公共包注册表服务。我们希望 MaìLang 能为「一门语言贯通 MCU 与云端」的工程实践提供可复用的参考实现。
 
 % ══════════════════════════════════════════════════════════════════
 \section*{致谢}
