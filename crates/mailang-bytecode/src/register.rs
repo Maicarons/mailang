@@ -176,7 +176,8 @@ pub enum WrapKind {
 }
 
 /// Parameter / `this` slot count for a chunk: the translator's starting stack
-/// height, so `let` locals land on their own registers.
+/// height ([`RegChunk::param_slots`]), so `let` locals land on their own
+/// registers.
 ///
 /// The register VM and the disassembler must agree on this, so it lives next
 /// to the translator. `arity` on a `RegChunk` stays 0 for chunks reached
@@ -210,21 +211,41 @@ pub fn parameter_slots(bytecode: &Bytecode, chunk_idx: usize) -> u16 {
     best.unwrap_or(0) as u16
 }
 
-/// A register-mode chunk (function body).
+/// A register-mode chunk (function body), i.e. one frame layout.
+///
+/// Three different quantities used to share one field: the frame's window size,
+/// the count of parameter slots to reserve at the bottom of the frame, and the
+/// declared parameter count. They are kept apart here because they answer
+/// different questions and only happen to coincide for a plain function:
+///
+/// * [`RegChunk::n_regs`] - how many registers the frame needs (window size);
+/// * [`RegChunk::param_slots`] - how many of them are reserved for the
+///   parameters and an implicit `this` (the translator's initial stack height);
+/// * [`RegChunk::arity`] / [`RegChunk::required`] - the parameter-count contract
+///   from the chunk's `FunctionObj`, used to check a call.
 #[derive(Debug, Clone)]
 pub struct RegChunk {
     pub name: String,
     pub code: Vec<RegOp>,
     pub constants: Vec<Value>,
-    /// Number of registers the frame must allocate (max index + 1).
+    /// Registers the frame must allocate: the highest register index any
+    /// instruction of the chunk uses, plus one.
     pub n_regs: u16,
-    /// Declared parameter count (max).
+    /// Registers reserved at the bottom of the frame for parameters and an
+    /// implicit `this`: this is the translator's initial stack height, so the
+    /// chunk's own `let`/`var` locals and every expression temp live at
+    /// `param_slots..n_regs`.
+    ///
+    /// It is *not* the declared parameter count and it is not the function's
+    /// arity: a method reserves an extra slot for `this`, and a chunk reached
+    /// through `CallDirect` has no `FunctionObj` to ask.
+    pub param_slots: u16,
+    /// Declared parameter count (max) of the chunk's `FunctionObj`, used for
+    /// the arity check when the call site holds the function value.
+    /// Stays 0 for chunks that only `CallDirect` reaches.
     pub arity: usize,
+    /// Declared required-parameter count, as [`RegChunk::arity`].
     pub required: usize,
-    /// Parameter / `this` slot count this chunk was lowered with. Parameters
-    /// live in `0..start_sp`, so registers at or above it are locals/temps.
-    /// `arity` stays 0 for chunks reached through `CallDirect` (no FunctionObj).
-    pub start_sp: u16,
 }
 
 impl RegChunk {
@@ -234,9 +255,9 @@ impl RegChunk {
             code: Vec::new(),
             constants: Vec::new(),
             n_regs: 0,
+            param_slots: 0,
             arity: 0,
             required: 0,
-            start_sp: 0,
         }
     }
 }
@@ -246,7 +267,7 @@ impl RegChunk {
 /// Strategy: simulate the operand stack with **dataflow stack heights** so
 /// control-flow joins (match arms, if/else, Unwrap success vs fail) get the
 /// correct register indices. Registers are the frame's contiguous stack slots
-/// (locals occupy `0..start_sp`, expression temps grow above).
+/// (parameters occupy `0..param_slots`, locals and expression temps grow above).
 pub struct StackToRegister<'a> {
     src_code: &'a [crate::Instruction],
     #[allow(dead_code)]
@@ -257,7 +278,7 @@ pub struct StackToRegister<'a> {
     /// Pending (stack_target, reg_site) jumps to patch.
     jumps: Vec<(usize, usize)>,
     /// Initial stack height (= parameter / `this` slot count).
-    start_sp: u16,
+    param_slots: u16,
     /// Height before each source instruction (dataflow).
     heights: Vec<u16>,
 }
@@ -274,14 +295,15 @@ impl<'a> StackToRegister<'a> {
             out,
             ip_map: Vec::new(),
             jumps: Vec::new(),
-            start_sp: 0,
+            param_slots: 0,
             heights: Vec::new(),
         }
     }
 
-    /// Set the frame's initial stack height (parameter count, including `this`).
-    pub fn with_start_sp(mut self, start_sp: u16) -> Self {
-        self.start_sp = start_sp;
+    /// Set the frame's initial stack height: the parameter / `this` slot count
+    /// the chunk was compiled with (see [`RegChunk::param_slots`]).
+    pub fn with_param_slots(mut self, param_slots: u16) -> Self {
+        self.param_slots = param_slots;
         self
     }
 
@@ -298,10 +320,10 @@ impl<'a> StackToRegister<'a> {
 
     #[allow(unused_assignments)]
     pub fn translate(mut self) -> RegChunk {
-        let start_sp = self.start_sp;
-        self.heights = compute_heights(self.src_code, start_sp);
-        self.out.n_regs = self.out.n_regs.max(start_sp);
-        self.out.start_sp = start_sp;
+        let param_slots = self.param_slots;
+        self.heights = compute_heights(self.src_code, param_slots);
+        self.out.n_regs = self.out.n_regs.max(param_slots);
+        self.out.param_slots = param_slots;
         for (sip, ins) in self.src_code.iter().enumerate() {
             self.ip_map.push(self.out.code.len() as u32);
             let mut sp: u16 = self.heights[sip];
@@ -925,14 +947,14 @@ fn stack_out(op: Opcode, h: u16, operand: Option<u32>) -> u16 {
 }
 
 /// Dataflow stack height before each instruction.
-fn compute_heights(code: &[crate::Instruction], start_sp: u16) -> Vec<u16> {
+fn compute_heights(code: &[crate::Instruction], param_slots: u16) -> Vec<u16> {
     let n = code.len();
     if n == 0 {
         return Vec::new();
     }
     let mut height = vec![u16::MAX; n];
     let mut work = alloc::collections::VecDeque::new();
-    height[0] = start_sp;
+    height[0] = param_slots;
     work.push_back(0usize);
 
     while let Some(ip) = work.pop_front() {
@@ -1027,7 +1049,7 @@ fn compute_heights(code: &[crate::Instruction], start_sp: u16) -> Vec<u16> {
 
     for h in height.iter_mut() {
         if *h == u16::MAX {
-            *h = start_sp;
+            *h = param_slots;
         }
     }
     height

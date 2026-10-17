@@ -60,10 +60,10 @@ impl RegisterVm {
     pub fn new(bytecode: Bytecode) -> Self {
         let mut chunks = Vec::with_capacity(bytecode.chunks.len());
         for (i, ch) in bytecode.chunks.iter().enumerate() {
-            let start = mailang_bytecode::parameter_slots(&bytecode, i);
+            let slots = mailang_bytecode::parameter_slots(&bytecode, i);
             let reg =
                 mailang_bytecode::StackToRegister::new(&ch.name, &ch.instructions, &ch.constants)
-                    .with_start_sp(start)
+                    .with_param_slots(slots)
                     .translate();
             chunks.push(reg);
         }
@@ -753,7 +753,10 @@ impl RegisterVm {
                     }
                     let callee = chunk as usize;
                     let callee_regs = self.chunks[callee].n_regs.max(8) as usize;
-                    let callee_params = self.chunks[callee].start_sp as usize;
+                    // A direct call carries no `FunctionObj`, so the declared
+                    // arity is unknown; the slot count the chunk was lowered
+                    // with is what the missing-argument prologue fills.
+                    let callee_slots = self.chunks[callee].param_slots as usize;
                     // Arguments are already in place at [base + args, .. + argc):
                     // take over those registers as the callee window (see
                     // `enter_chunk` for why this is safe).
@@ -765,7 +768,7 @@ impl RegisterVm {
                     // Parameters the caller left out are materialised by the
                     // callee's prologue from `Argc`; clear the reused window so
                     // they read as Null instead of the caller's leftovers.
-                    if argc_us < callee_params {
+                    if argc_us < callee_slots {
                         for slot in self
                             .regs
                             .iter_mut()

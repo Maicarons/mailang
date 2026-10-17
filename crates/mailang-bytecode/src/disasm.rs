@@ -57,19 +57,19 @@ pub fn disassemble_register(bytecode: &Bytecode, only: Option<usize>) -> String 
         if only.is_some_and(|o| o != i) {
             continue;
         }
-        let start_sp = parameter_slots(bytecode, i);
+        let slots = parameter_slots(bytecode, i);
         let reg = StackToRegister::new(&ch.name, &ch.instructions, &ch.constants)
-            .with_start_sp(start_sp)
+            .with_param_slots(slots)
             .translate();
         let _ = writeln!(
             out,
-            "== chunk {} ({}) == {} regops, {} regs, start_sp {} (params 0..{})",
+            "== chunk {} ({}) == {} regops, {} regs, {} param slots (registers 0..{})",
             i,
             reg.name,
             reg.code.len(),
             reg.n_regs,
-            reg.start_sp,
-            reg.start_sp,
+            reg.param_slots,
+            reg.param_slots,
         );
         for (rip, op) in reg.code.iter().enumerate() {
             let _ = writeln!(
