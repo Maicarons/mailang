@@ -33,7 +33,7 @@ cargo test test_basic_arithmetic
 
 # Clippy and formatting
 cargo clippy --workspace
-cargo fmt --workspace
+cargo fmt --all
 
 # Build WASM target
 cargo build -p mailang-wasm --target wasm32-unknown-unknown
@@ -41,6 +41,18 @@ cargo build -p mailang-wasm --target wasm32-unknown-unknown
 # Cross-compile for embedded targets (requires `cross` tool)
 cross build -p mailang-cli --target thumbv7em-none-eabihf
 cross build -p mailang-cli --target riscv32imc-unknown-none-elf
+```
+
+**Platform-gated code needs a cross-target check.** `cargo check`, `clippy` and `test` only compile
+the branch that matches the host, so anything behind `#[cfg(not(windows))]` (or a `#[cfg(windows)]`
+one on Linux) can be broken while every local command is green. That is exactly how a missing
+`PartialEq` on the CLI's `--host` enum passed here on Windows and failed the `Check`/`Clippy`/`Test`
+jobs on `ubuntu-latest` with `E0369`. Before pushing a change that touches such a branch, compile
+for the other platform too:
+
+```bash
+cargo check --workspace --target x86_64-unknown-linux-gnu
+cargo clippy --workspace --all-targets --target x86_64-unknown-linux-gnu -- -D warnings
 ```
 
 ## Architecture

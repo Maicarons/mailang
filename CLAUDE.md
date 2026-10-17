@@ -33,7 +33,7 @@ cargo test test_basic_arithmetic
 
 # Clippy and formatting
 cargo clippy --workspace
-cargo fmt --workspace
+cargo fmt --all
 
 # Build WASM target
 cargo build -p mailang-wasm --target wasm32-unknown-unknown
