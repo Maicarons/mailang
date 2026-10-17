@@ -18,13 +18,83 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo check --workspace
 
+  host-packs:
+    name: Packs (host=${{ matrix.host }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each test suite asserts one backend, so they pair up rather than
+        # crossing: `test_*` asserts the pure-Mai simulation (the default, no
+        # host installed) and must run under `sim`, while `host_*` asserts that
+        # a real backend took over and therefore needs its own host.
+        include:
+          - host: sim
+            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
+          - host: tui
+            tests: libs\tui\test\host_tui.mai
+          - host: gui
+            tests: libs\gui\test\host_gui.mai
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p mailang-cli
+      - name: Pack tests
+        shell: pwsh
+        run: |
+          foreach ($t in "${{ matrix.tests }}".Split(" ")) {
+            Write-Host "== $t  (--host=${{ matrix.host }})"
+            .\target\release\mailang.exe run --host=${{ matrix.host }} $t
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
   test:
-    name: Test
+    name: Test (${{ matrix.vm }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every test runs on both backends: `MAILANG_VM=register` switches the
+        # suite to the register VM, which is the equivalence gate required
+        # before any default-backend switch.
+        vm: [stack, register]
+    env:
+      MAILANG_VM: ${{ matrix.vm == 'register' && 'register' || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace
+
+  bench:
+    name: Bench fib30 (${{ matrix.vm }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vm: [stack, register]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p mailang-cli
+      # Informational baseline for ROADMAP M1 (register VM <= 2x stack).
+      - name: Time fib30
+        run: |
+          if [ "${{ matrix.vm }}" = "register" ]; then
+            BIN="./target/release/mailang run --vm=register bench_fib30.mai"
+          else
+            BIN="./target/release/mailang run bench_fib30.mai"
+          fi
+          START=$(date +%s%N)
+          $BIN > /dev/null
+          END=$(date +%s%N)
+          echo "fib30 (${{ matrix.vm }}): $(( (END - START) / 1000000 )) ms"
+      # Behavioural equivalence gate: every example / library program must
+      # produce identical output on both backends. Programs that are known to
+      # differ are listed in benchmark/known_backend_mismatches.txt (ROADMAP
+      # Phase M 13.3 / 13.5); a mismatch outside that list fails the job.
+      - name: Compare backends on real programs
+        if: matrix.vm == 'stack'
+        run: pwsh benchmark/compare_backends.ps1
 
   fmt:
     name: Format

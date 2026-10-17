@@ -1,0 +1,54 @@
+// GUI 实机测试（需要 --host=gui）
+//
+//   cargo run -p mailang-cli --release -- run --host=gui libs/gui/test/host_gui.mai
+//
+// 与 test_gui.mai 的区别：那份断言纯模拟；这份检查 Win32 宿主钩子确实接管，
+// 并且显示列表（cmd_*）在宿主接管后依然可读。
+
+import "gui"
+
+var passed = 0
+var failed = 0
+
+fn check(condition, msg) {
+    if condition {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+// 1) 宿主创建了真实 Win32 窗口，句柄为正
+gui.reset()
+var win = gui.open_window("host test", 320, 240)
+check(win > 0, "open_window 返回正句柄")
+check(gui.is_open(win), "窗口处于打开状态")
+
+// 2) 绘制钩子被宿主接管（真实后端返回 "win32"，桩返回 "sim"）
+gui.begin(win)
+var r = gui.draw_rect(win, 10, 10, 100, 40, "red")
+check(r == "win32", "draw_rect 返回 win32（宿主已接管）")
+var t = gui.draw_text(win, 10, 60, "host", "white")
+check(t == "win32", "draw_text 返回 win32")
+
+// 3) 显示列表仍然记录（职责已从钩子上移到库层）
+check(gui.cmd_count() >= 2, "cmd_count 仍可读")
+
+// 4) present 走宿主：把 DIB 提交到真实窗口
+gui.draw_rect(win, 0, 0, 320, 240, "blue")
+gui.present(win)
+check(gui.frame_count() > 0, "present 已计数")
+
+// 5) 事件轮询不崩溃（无事件时返回 Err 值而非宿主错误）
+gui.poll_event()
+
+// 6) 关闭真实窗口
+gui.close_window(win)
+check(gui.is_open(win) == false, "窗口已关闭")
+
+println("host_gui: 通过 {passed} 失败 {failed}")
+if failed > 0 {
+    process_exit(1)
+}
+process_exit(0)

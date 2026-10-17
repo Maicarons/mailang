@@ -53,8 +53,16 @@ pub enum VmError {
     },
 }
 
+impl From<String> for VmError {
+    /// A host function reported failure; surfaced as a runtime error so the
+    /// message the host chose is what the script sees.
+    fn from(message: String) -> Self {
+        VmError::RuntimeError(message)
+    }
+}
+
 impl VmError {
-    /// Wrap `self` with a source location and call-stack trace (if not already located).
+    /// Wrap `self` with a source location and a call-stack trace (if not already located).
     pub fn located(self, location: impl Into<String>, frames: Vec<String>) -> Self {
         if matches!(self, VmError::Located { .. }) {
             return self;

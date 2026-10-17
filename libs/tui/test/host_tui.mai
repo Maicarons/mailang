@@ -1,0 +1,50 @@
+// TUI 实机测试（需要 --host=tui）
+//
+//   cargo run -p mailang-cli --release -- run --host=tui libs/tui/test/host_tui.mai
+//
+// 与 test_tui.mai 的区别：那份断言纯模拟；这份检查宿主钩子确实接管，
+// 并且帧缓冲记录（out()/written()）在宿主接管后依然可读。
+
+import "tui"
+
+var passed = 0
+var failed = 0
+
+fn check(condition, msg) {
+    if condition {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+// 1) write() 的返回值来自宿主（模拟桩返回 "sim"，真实宿主返回 "tty"）
+var r = tui.write("host-write-probe\n")
+check(r == "tty", "write 返回 tty（宿主已接管）")
+
+// 2) 帧缓冲仍然记录（职责已从钩子上移到库层）
+check(tui.written() > 0, "written() 仍可读")
+check(tui.out_text().contains("host-write-probe"), "out_text 含写入内容")
+
+// 3) 真实终端尺寸：宿主返回 GetConsoleScreenBufferInfo 的结果
+var size = tui.term_size()
+check(len(size) == 2, "term_size 返回两项")
+check(size[0] > 0 && size[1] > 0, "term_size 为正数")
+
+// 4) is_tty 在真实宿主下为 true
+check(tui.is_tty() == true, "is_tty 为 true")
+
+// 5) 无按键待处理时 read_key 返回 Err（非阻塞）
+var k = tui.read_key()
+check(k != null, "read_key 返回非 null")
+
+// 6) 经宿主写入的 ANSI 真的落到 stdout：这里用 line() 画一条分隔线
+tui.line(tui.csi("2J"))
+tui.line(tui.bold(tui.color("TUI host backend active", "green")))
+
+println("host_tui:通过 {passed} 失败 {failed}")
+if failed > 0 {
+    process_exit(1)
+}
+process_exit(0)

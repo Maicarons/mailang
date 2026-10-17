@@ -1,0 +1,118 @@
+// ui 模块基础使用示例
+// Run from repo root:
+//   cargo run -p mailang-cli --release -- run libs/ui/example/basic.mai
+
+import "tui"
+
+println("=== ui 模块示例 ===")
+
+// ---- 颜色与样式 ----
+println("")
+println("--- 颜色与样式 ---")
+tui.puts(tui.bold(tui.color("粗体红字", "red")))
+tui.puts(tui.color("绿色", "green"))
+tui.puts(tui.bg("蓝底", "blue"))
+tui.puts(tui.underline("下划线"))
+tui.puts(tui.attr("组合属性", ["bold", "yellow"]))
+tui.puts(tui.dim("暗淡文本"))
+
+// ---- 文本布局 ----
+println("")
+println("--- 文本布局 ---")
+var content = "内容"
+var long_text = "这是一段很长的文本需要截断"
+var unit = "23.5C"
+var temp_label = "温度"
+var bar = "="
+var a_left = "left"
+var a_center = "center"
+var a_right = "right"
+println("[左]{tui.pad(content, 12, a_left)}[右]")
+println("[中]{tui.pad(content, 12, a_center)}[右]")
+println("[右]{tui.pad(content, 12, a_right)}[右]")
+println("repeat: {tui.repeat(bar, 20)}")
+println("truncate: {tui.truncate(long_text, 10)}")
+println("kv: {tui.kv(temp_label, unit, 8)}|")
+
+// ---- 组件 ----
+println("")
+println("--- 组件 ---")
+var compile_label = "编译"
+println("percent(3,4) = {tui.percent(3, 4)}")
+println("bar(0,4,10)  = {tui.progress_bar(0, 4, 10)}")
+println("bar(2,4,10)  = {tui.progress_bar(2, 4, 10)}")
+println("bar(4,4,10)  = {tui.progress_bar(4, 4, 10)}")
+println("labeled      = {tui.progress_labeled(1, 4, 10)}")
+println("task         = {tui.progress_task(compile_label, 7, 10, 8, 30)}")
+
+var info = [["语言", "MaìLang"], ["版本", "0.3.1"], ["后端", "stack / register"]]
+var t = tui.table(info, [10, 12])
+var i = 0
+while i < len(t) {
+    println(t[i])
+    i = i + 1
+}
+
+// 注意：box 按字符数计算宽度（width 的已知限制），CJK 字符在终端里占两格，
+// 因此这里用 ASCII 文本演示边框对齐；中文内容请自行预留宽度。
+var framed = tui.box(["Box title", "second line"], "double")
+i = 0
+while i < len(framed) {
+    println(framed[i])
+    i = i + 1
+}
+
+// ---- 终端信息 ----
+println("")
+println("--- 终端信息 ---")
+println("mode     = {tui.mode()}")
+println("size     = {tui.term_cols()} x {tui.term_rows()}")
+println("is_tty   = {tui.is_tty()}")
+tui.set_size(100, 30)
+println("resized  = {tui.term_cols()} x {tui.term_rows()}")
+tui.set_size(80, 24)
+
+// ---- 按键 ----
+println("")
+println("--- 按键 ---")
+
+// 不要用 has_key() 作为循环条件：宿主接管 read_key() 后按键来自真实控制台，
+// 而 has_key() 仍读包内队列，两者会不一致而导致死循环。
+// 直接以 read_key() 的返回值驱动循环，模拟与实机模式下都能正确终止。
+fn key_is_ok(r) {
+    return match r {
+        Ok(v) => true
+        Err(e) => false
+    }
+}
+
+fn key_label(r) {
+    return match r {
+        Ok(v) => tui.key_name(v)
+        Err(e) => "none"
+    }
+}
+
+tui.queue_keys(["\u{1b}[A", "\r", "q"])
+var keys = []
+var k = tui.read_key()
+var got = key_is_ok(k)
+while got {
+    keys = keys + [key_label(k)]
+    k = tui.read_key()
+    got = key_is_ok(k)
+}
+println("读到按键: {keys}")
+
+// ---- 输出缓冲 ----
+println("")
+println("--- 输出缓冲 ---")
+tui.clear()
+tui.write(tui.color("写入缓冲的彩色文本", "magenta"))
+tui.line(tui.bold("第二行"))
+println("written 字符数 = {tui.written()}")
+println("out_text 长度   = {len(tui.out_text())}")
+println("out 块数        = {len(tui.out())}")
+
+println("")
+println("=== 示例结束 ===") 

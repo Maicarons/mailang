@@ -186,6 +186,10 @@ pub struct RegChunk {
     /// Declared parameter count (max).
     pub arity: usize,
     pub required: usize,
+    /// Parameter / `this` slot count this chunk was lowered with. Parameters
+    /// live in `0..start_sp`, so registers at or above it are locals/temps.
+    /// `arity` stays 0 for chunks reached through `CallDirect` (no FunctionObj).
+    pub start_sp: u16,
 }
 
 impl RegChunk {
@@ -197,6 +201,7 @@ impl RegChunk {
             n_regs: 0,
             arity: 0,
             required: 0,
+            start_sp: 0,
         }
     }
 }
@@ -261,6 +266,7 @@ impl<'a> StackToRegister<'a> {
         let start_sp = self.start_sp;
         self.heights = compute_heights(self.src_code, start_sp);
         self.out.n_regs = self.out.n_regs.max(start_sp);
+        self.out.start_sp = start_sp;
         for (sip, ins) in self.src_code.iter().enumerate() {
             self.ip_map.push(self.out.code.len() as u32);
             let mut sp: u16 = self.heights[sip];

@@ -1,4 +1,4 @@
-﻿//! Register-based virtual machine.
+//! Register-based virtual machine.
 //!
 //! Executes [`RegChunk`] three-address code with a flat register file per
 //! frame. Stack bytecode is lowered to this IR by
@@ -12,17 +12,19 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+/// One activation record. Kept deliberately small (40 bytes): every call
+/// copies one of these onto the frame stack, so padding shows up directly in
+/// call-heavy benchmarks. `n_regs` is *not* stored - it is a property of the
+/// chunk (`self.chunks[chunk].n_regs`) and only needed while opening a frame.
 struct RegFrame {
-    chunk: usize,
-    ip: usize,
-    /// Base of this frame鈥檚 registers in the flat `regs` file.
-    base: usize,
-    #[allow(dead_code)]
-    n_regs: usize,
-    upvalues: Vec<usize>,
-    argc: usize,
-    /// Where to place the return value (in the caller鈥檚 register file).
+    chunk: u32,
+    ip: u32,
+    /// Base of this frame's registers in the flat `regs` file.
+    base: u32,
+    argc: u16,
+    /// Where to place the return value (in the caller's register file).
     ret_dst: u16,
+    upvalues: Vec<usize>,
 }
 
 /// Register-mode interpreter. Shares builtins / host-fns / globals with the
@@ -171,10 +173,16 @@ impl RegisterVm {
     #[inline(always)]
     fn rget(&self, frame_base: usize, r: u16) -> Value {
         let i = frame_base + r as usize;
-        if i < self.regs.len() {
-            self.regs[i].clone()
-        } else {
-            Value::Null
+        // Scalar fast path: Copy types avoid a refcount bump and let LLVM keep
+        // the payload in a register (mirrors the stack Vm's `LoadLocal`).
+        match self.regs.get(i) {
+            Some(Value::Int(n)) => Value::Int(*n),
+            Some(Value::Bool(b)) => Value::Bool(*b),
+            Some(Value::Float(f)) => Value::Float(*f),
+            Some(Value::Char(c)) => Value::Char(*c),
+            Some(Value::Null) => Value::Null,
+            Some(v) => v.clone(),
+            None => Value::Null,
         }
     }
 
@@ -187,6 +195,19 @@ impl RegisterVm {
         self.regs[i] = v;
     }
 
+    /// Register a freshly allocated heap node with the census. Called at the
+    /// points that actually create `Rc` nodes (array/map literals, constructor
+    /// instances, builtin results) rather than on every register write: the
+    /// collector only ever sweeps tracked nodes, so tracking a node twice is
+    /// harmless while tracking it late merely delays cycle collection.
+    #[inline]
+    fn track_new(&mut self, v: &Value) {
+        if is_heap_node(v) {
+            self.gc.track(v);
+            self.maybe_auto_collect();
+        }
+    }
+
     /// Run the main chunk (chunk 0) to completion.
     pub fn run(&mut self) -> Result<Value, VmError> {
         let n_regs = self.chunks.first().map(|c| c.n_regs).unwrap_or(16) as usize;
@@ -196,7 +217,6 @@ impl RegisterVm {
             chunk: 0,
             ip: 0,
             base: 0,
-            n_regs,
             upvalues: Vec::new(),
             argc: 0,
             ret_dst: 0,
@@ -205,15 +225,42 @@ impl RegisterVm {
     }
 
     fn run_loop(&mut self) -> Result<Value, VmError> {
+        // `ip` / `chunk_idx` / `base` are kept in locals for the whole loop and
+        // only written back to the frame stack on calls (so the callee can find
+        // the caller's resume point) and re-read after a frame push/pop. This
+        // removes three `frames.last()` walks plus a `frames.last_mut()` write
+        // from every dispatched instruction.
+        let mut ip: usize = 0;
+        let mut chunk_idx: usize = 0;
+        let mut base: usize = 0;
+
+        /// Write the live instruction pointer back into the current frame.
+        macro_rules! flush_ip {
+            () => {
+                if let Some(f) = self.frames.last_mut() {
+                    f.ip = ip as u32;
+                }
+            };
+        }
+        /// Re-read frame state after the frame stack changed.
+        macro_rules! sync_frame {
+            () => {
+                if let Some(f) = self.frames.last() {
+                    ip = f.ip as usize;
+                    chunk_idx = f.chunk as usize;
+                    base = f.base as usize;
+                }
+            };
+        }
+
+        if let Some(f) = self.frames.last() {
+            ip = f.ip as usize;
+            chunk_idx = f.chunk as usize;
+            base = f.base as usize;
+        }
+
         loop {
             self.burn_fuel()?;
-            let (chunk_idx, ip) = {
-                let f = self
-                    .frames
-                    .last()
-                    .ok_or(VmError::Internal("no frame".into()))?;
-                (f.chunk, f.ip)
-            };
             let op = {
                 let ch = &self.chunks[chunk_idx];
                 if ip >= ch.code.len() {
@@ -221,10 +268,7 @@ impl RegisterVm {
                 }
                 ch.code[ip]
             };
-            if let Some(f) = self.frames.last_mut() {
-                f.ip += 1;
-            }
-            let base = self.frames.last().map(|f| f.base).unwrap_or(0);
+            ip += 1;
 
             match op {
                 RegOp::Nop => {}
@@ -318,7 +362,33 @@ impl RegisterVm {
                     imm,
                 } => {
                     let a = self.rget(base, lhs);
-                    let v = bin_apply(kind, &a, &Value::Int(imm))?;
+                    // Integer fast path, mirroring the stack Vm's `*Imm` opcodes:
+                    // avoids materialising `Value::Int(imm)` and the big
+                    // `bin_apply` dispatch for the overwhelmingly common case.
+                    let v = match &a {
+                        Value::Int(x) => {
+                            use BinKind::*;
+                            match kind {
+                                Add => Value::Int(x.wrapping_add(imm)),
+                                Sub => Value::Int(x.wrapping_sub(imm)),
+                                Mul => Value::Int(x.wrapping_mul(imm)),
+                                Div => {
+                                    if imm == 0 {
+                                        return Err(VmError::DivisionByZero);
+                                    }
+                                    Value::Int(x.wrapping_div(imm))
+                                }
+                                Mod => {
+                                    if imm == 0 {
+                                        return Err(VmError::DivisionByZero);
+                                    }
+                                    Value::Int(x.wrapping_rem(imm))
+                                }
+                                _ => bin_apply(kind, &a, &Value::Int(imm))?,
+                            }
+                        }
+                        _ => bin_apply(kind, &a, &Value::Int(imm))?,
+                    };
                     self.rset(base, dst, v);
                 }
                 RegOp::Un { op: kind, dst, src } => {
@@ -368,28 +438,36 @@ impl RegisterVm {
                     imm,
                 } => {
                     let a = self.rget(base, lhs);
-                    let v = Value::Bool(cmp_apply(kind, &a, &Value::Int(imm)));
+                    // Integer fast path (mirrors the stack Vm's `*Imm` compares).
+                    let v = match &a {
+                        Value::Int(x) => {
+                            use CmpKind::*;
+                            Value::Bool(match kind {
+                                Eq => *x == imm,
+                                Ne => *x != imm,
+                                Lt => *x < imm,
+                                Le => *x <= imm,
+                                Gt => *x > imm,
+                                Ge => *x >= imm,
+                            })
+                        }
+                        _ => Value::Bool(cmp_apply(kind, &a, &Value::Int(imm))),
+                    };
                     self.rset(base, dst, v);
                 }
                 RegOp::Jump { target } => {
-                    if let Some(f) = self.frames.last_mut() {
-                        f.ip = target as usize;
-                    }
+                    ip = target as usize;
                 }
                 RegOp::JumpIfFalse { target, cond } => {
                     let c = self.rget(base, cond);
                     if !truthy(&c) {
-                        if let Some(f) = self.frames.last_mut() {
-                            f.ip = target as usize;
-                        }
+                        ip = target as usize;
                     }
                 }
                 RegOp::JumpIfTrue { target, cond } => {
                     let c = self.rget(base, cond);
                     if truthy(&c) {
-                        if let Some(f) = self.frames.last_mut() {
-                            f.ip = target as usize;
-                        }
+                        ip = target as usize;
                     }
                 }
                 RegOp::Call {
@@ -399,34 +477,85 @@ impl RegisterVm {
                     argc,
                 } => {
                     let fval = self.rget(base, func);
+                    flush_ip!();
                     let ret = self.call_value(fval, base, args, argc, dst)?;
                     if let Some(v) = ret {
                         return Ok(v);
                     }
+                    sync_frame!();
                 }
                 RegOp::TailCall { func, args, argc } => {
                     let fval = self.rget(base, func);
-                    // `args` live in the current frame; `ret_dst` is in the parent.
-                    let ret_dst = self.frames.last().map(|f| f.ret_dst).unwrap_or(0);
-                    let args_base = base;
-                    self.frames.pop();
-                    let ret = self.call_value(fval, args_base, args, argc, ret_dst)?;
-                    if let Some(v) = ret {
-                        return Ok(v);
+                    let argc_us = argc as usize;
+                    // Materialise the arguments first: the source registers may
+                    // overlap the destination frame base.
+                    let mut arg_vals = Vec::with_capacity(argc_us);
+                    for i in 0..argc_us {
+                        arg_vals.push(self.rget(base, args + i as u16));
                     }
+                    let Some(ret_dst) = self.frames.last().map(|f| f.ret_dst) else {
+                        return Err(VmError::Internal("TailCall without frame".into()));
+                    };
+                    match fval {
+                        Value::Function(f) => {
+                            self.check_arity(f.arity, f.required, argc_us)?;
+                            flush_ip!();
+                            self.reuse_frame_for_tail(
+                                f.chunk_index,
+                                base,
+                                arg_vals,
+                                ret_dst,
+                                Vec::new(),
+                            );
+                        }
+                        Value::Closure(c) => {
+                            self.check_arity(c.arity, c.required, argc_us)?;
+                            let ups = c.upvalues.clone();
+                            flush_ip!();
+                            self.reuse_frame_for_tail(
+                                c.function_index,
+                                base,
+                                arg_vals,
+                                ret_dst,
+                                ups,
+                            );
+                        }
+                        other => {
+                            // Builtins / constructors cannot reuse the frame: pop it so
+                            // `call_value` resolves `ret_dst` against the original caller.
+                            flush_ip!();
+                            self.frames.pop();
+                            self.regs.truncate(base);
+                            for (i, v) in arg_vals.into_iter().enumerate() {
+                                self.rset(base, i as u16, v);
+                            }
+                            let ret = self.call_value(other, base, 0, argc, ret_dst)?;
+                            if let Some(v) = ret {
+                                return Ok(v);
+                            }
+                        }
+                    }
+                    sync_frame!();
                 }
                 RegOp::Ret { src } => {
                     let v = self.rget(base, src);
                     if let Some(frame) = self.frames.pop() {
-                        // Free callee registers so the file does not grow unbounded.
-                        self.regs.truncate(frame.base);
-                        // `ret_dst` is relative to the **caller's** register file.
-                        if let Some(caller) = self.frames.last() {
-                            self.rset(caller.base, frame.ret_dst, v.clone());
-                        }
-                        if self.frames.is_empty() {
+                        let Some(caller) = self.frames.last() else {
                             return Ok(v);
-                        }
+                        };
+                        // `ret_dst` is relative to the **caller's** register file.
+                        // Moved (not cloned): the value is not needed afterwards.
+                        let caller_base = caller.base as usize;
+                        let dst = caller_base + frame.ret_dst as usize;
+                        // The callee window holds no live values once the frame is
+                        // popped, and its size is bounded by `max_call_depth *
+                        // n_regs`, so the register file is left in place instead of
+                        // truncating (and running drop glue over) the window on
+                        // every return.
+                        self.regs[dst] = v;
+                        ip = caller.ip as usize;
+                        chunk_idx = caller.chunk as usize;
+                        base = caller_base;
                     } else {
                         return Ok(v);
                     }
@@ -456,17 +585,21 @@ impl RegisterVm {
                 } => {
                     let o = self.rget(base, obj);
                     let key = self.const_str(chunk_idx, name)?;
+                    flush_ip!();
                     let ret = self.invoke(o, &key, base, args, argc, dst)?;
                     if let Some(v) = ret {
                         return Ok(v);
                     }
+                    sync_frame!();
                 }
                 RegOp::BuildArr { dst, start, count } => {
                     let mut items = Vec::with_capacity(count as usize);
                     for i in 0..count {
                         items.push(self.rget(base, start + i));
                     }
-                    self.rset(base, dst, Value::Array(Rc::new(RefCell::new(items))));
+                    let arr = Value::Array(Rc::new(RefCell::new(items)));
+                    self.track_new(&arr);
+                    self.rset(base, dst, arr);
                 }
                 RegOp::BuildMap { dst, start, count } => {
                     let mut pairs = Vec::new();
@@ -477,7 +610,9 @@ impl RegisterVm {
                         pairs.push((k, v));
                         i += 2;
                     }
-                    self.rset(base, dst, Value::Map(Rc::new(RefCell::new(pairs))));
+                    let map = Value::Map(Rc::new(RefCell::new(pairs)));
+                    self.track_new(&map);
+                    self.rset(base, dst, map);
                 }
                 RegOp::IndexGet { dst, obj, idx } => {
                     let o = self.rget(base, obj);
@@ -589,12 +724,13 @@ impl RegisterVm {
                         other => {
                             // Early-return the Err/None from the frame.
                             if let Some(frame) = self.frames.pop() {
-                                if let Some(caller) = self.frames.last() {
-                                    self.rset(caller.base, frame.ret_dst, other.clone());
-                                }
                                 if self.frames.is_empty() {
                                     return Ok(other);
                                 }
+                                let caller_base =
+                                    self.frames.last().map(|f| f.base as usize).unwrap_or(0);
+                                self.regs[caller_base + frame.ret_dst as usize] = other;
+                                sync_frame!();
                             } else {
                                 return Ok(other);
                             }
@@ -613,16 +749,52 @@ impl RegisterVm {
                 } => {
                     // Stack IR CallDirect does not carry a FunctionObj, so
                     // RegChunk.arity is often unset (0). Accept the provided argc.
-                    self.enter_chunk(
-                        chunk as usize,
-                        argc as usize,
-                        0,
-                        base,
-                        args,
-                        argc,
-                        dst,
-                        Vec::new(),
-                    )?;
+                    // `enter_chunk` inlined: this is the hot path for static calls
+                    // (including every recursive call), and the out-of-line version
+                    // costs a nine-argument call per invocation.
+                    flush_ip!();
+                    let argc_us = argc as usize;
+                    if self.frames.len() >= self.max_call_depth {
+                        return Err(VmError::CallDepthExceeded {
+                            limit: self.max_call_depth,
+                        });
+                    }
+                    let callee = chunk as usize;
+                    let callee_regs = self.chunks[callee].n_regs.max(8) as usize;
+                    let callee_params = self.chunks[callee].start_sp as usize;
+                    // Arguments are already in place at [base + args, .. + argc):
+                    // take over those registers as the callee window (see
+                    // `enter_chunk` for why this is safe).
+                    let callee_base = base + args as usize;
+                    let need = callee_base + callee_regs + 16;
+                    if self.regs.len() < need {
+                        self.regs.resize(need, Value::Null);
+                    }
+                    // Parameters the caller left out are materialised by the
+                    // callee's prologue from `Argc`; clear the reused window so
+                    // they read as Null instead of the caller's leftovers.
+                    if argc_us < callee_params {
+                        for slot in self
+                            .regs
+                            .iter_mut()
+                            .take(callee_base + callee_regs)
+                            .skip(callee_base + argc_us)
+                        {
+                            *slot = Value::Null;
+                        }
+                    }
+                    self.frames.push(RegFrame {
+                        chunk: callee as u32,
+                        ip: 0,
+                        base: callee_base as u32,
+                        upvalues: Vec::new(),
+                        argc: argc_us as u16,
+                        ret_dst: dst,
+                    });
+                    // The new frame's state is already known - skip the read-back.
+                    chunk_idx = callee;
+                    ip = 0;
+                    base = callee_base;
                 }
             }
         }
@@ -641,6 +813,7 @@ impl RegisterVm {
     /// (the caller for a normal call; the discarded frame for a tail call).
     /// `ret_dst` is relative to the frame that will still be on the stack
     /// after the call (the original caller).
+    #[inline]
     fn call_value(
         &mut self,
         fval: Value,
@@ -650,8 +823,20 @@ impl RegisterVm {
         ret_dst: u16,
     ) -> Result<Option<Value>, VmError> {
         match fval {
-            Value::Function(f) => self
-                .enter_chunk(
+            // A registered host function overrides a same-named MaìLang
+            // function; module bodies run after host functions are installed, so
+            // the stub would otherwise win. Mirrors the stack VM's Call opcode.
+            Value::Function(ref f) => {
+                if let Some(host) = self.host_fns.get(f.name.as_ref()) {
+                    let mut list = Vec::with_capacity(argc as usize);
+                    for i in 0..argc as u16 {
+                        list.push(self.rget(args_base, args + i));
+                    }
+                    let out = host(&list)?;
+                    self.rset(args_base, ret_dst, out);
+                    return Ok(None);
+                }
+                self.enter_chunk(
                     f.chunk_index,
                     f.arity,
                     f.required,
@@ -661,7 +846,8 @@ impl RegisterVm {
                     ret_dst,
                     Vec::new(),
                 )
-                .map(|_| None),
+                .map(|_| None)
+            }
             Value::Closure(c) => self
                 .enter_chunk(
                     c.function_index,
@@ -692,7 +878,7 @@ impl RegisterVm {
                     class_index: class_idx,
                     fields: Rc::new(RefCell::new(fields)),
                 };
-                self.gc.track(&instance);
+                self.track_new(&instance);
                 let init_chunk = cls
                     .methods
                     .iter()
@@ -702,7 +888,7 @@ impl RegisterVm {
                     self.enter_method(chunk, instance, args_base, args, argc, ret_dst)?;
                     Ok(None)
                 } else {
-                    let ret_base = self.frames.last().map(|f| f.base).unwrap_or(0);
+                    let ret_base = self.frames.last().map(|f| f.base as usize).unwrap_or(0);
                     self.rset(ret_base, ret_dst, instance);
                     Ok(None)
                 }
@@ -720,11 +906,54 @@ impl RegisterVm {
                     return Err(VmError::UndefinedFunction(name.to_string()));
                 };
                 let out = out.map_err(VmError::RuntimeError)?;
-                let ret_base = self.frames.last().map(|f| f.base).unwrap_or(0);
+                self.track_new(&out);
+                let ret_base = self.frames.last().map(|f| f.base as usize).unwrap_or(0);
                 self.rset(ret_base, ret_dst, out);
                 Ok(None)
             }
             _ => Err(VmError::TypeError("Cannot call non-function".into())),
+        }
+    }
+
+    #[inline]
+    fn check_arity(&self, arity: usize, required: usize, found: usize) -> Result<(), VmError> {
+        if found > arity || found < required {
+            return Err(VmError::WrongArgumentCount {
+                expected: arity,
+                found,
+            });
+        }
+        Ok(())
+    }
+
+    /// Re-target the top frame to `chunk` for a tail call, keeping its register
+    /// base. The abandoned locals are dropped and the arguments take over the
+    /// base, so a tail-recursive loop runs in constant register footprint
+    /// (mirrors the stack Vm's `old_base` shuffle in `Opcode::TailCall`).
+    fn reuse_frame_for_tail(
+        &mut self,
+        chunk: usize,
+        base: usize,
+        arg_vals: Vec<Value>,
+        ret_dst: u16,
+        upvalues: Vec<usize>,
+    ) {
+        self.regs.truncate(base);
+        let new_argc = arg_vals.len();
+        for (i, v) in arg_vals.into_iter().enumerate() {
+            self.rset(base, i as u16, v);
+        }
+        let n_regs = self.chunks.get(chunk).map(|c| c.n_regs).unwrap_or(8).max(8) as usize;
+        if self.regs.len() < base + n_regs + 16 {
+            self.regs.resize(base + n_regs + 16, Value::Null);
+        }
+        if let Some(frame) = self.frames.last_mut() {
+            frame.chunk = chunk as u32;
+            frame.ip = 0;
+            frame.base = base as u32;
+            frame.upvalues = upvalues;
+            frame.argc = new_argc as u16;
+            frame.ret_dst = ret_dst;
         }
     }
 
@@ -752,17 +981,17 @@ impl RegisterVm {
             self.rset(base, i + 1, v);
         }
         self.frames.push(RegFrame {
-            chunk,
+            chunk: chunk as u32,
             ip: 0,
-            base,
-            n_regs,
+            base: base as u32,
             upvalues: Vec::new(),
-            argc: argc as usize,
+            argc: argc as u16,
             ret_dst,
         });
         Ok(())
     }
 
+    #[inline]
     fn enter_chunk(
         &mut self,
         chunk: usize,
@@ -780,27 +1009,34 @@ impl RegisterVm {
             });
         }
         let argc_us = argc as usize;
-        if argc_us > arity || argc_us < required {
-            return Err(VmError::WrongArgumentCount {
-                expected: arity,
-                found: argc_us,
-            });
-        }
+        self.check_arity(arity, required, argc_us)?;
         let n_regs = self.chunks[chunk].n_regs.max(8) as usize;
-        let base = self.regs.len();
-        self.regs.resize(base + n_regs + 16, Value::Null);
-        // Copy args into the new frame鈥檚 param registers.
-        for i in 0..argc_us {
-            let v = self.rget(args_base, args + i as u16);
-            self.rset(base, i as u16, v);
+        // The translator maps registers to operand-stack slots, so a call's
+        // argument area is always the top of the caller's live window and every
+        // caller register at or above `args` is dead at the call. The callee can
+        // therefore take over the argument registers in place: no window is
+        // opened at `regs.len()`, no argument is cloned, and nothing of the
+        // caller is overwritten. Mirrors the stack Vm reusing the operand stack
+        // in `Opcode::CallDirect`.
+        let base = args_base + args as usize;
+        let need = base + n_regs + 16;
+        if self.regs.len() < need {
+            self.regs.resize(need, Value::Null);
+        }
+        // Parameters the caller did not supply are filled in by the callee's
+        // prologue from `Argc`; they must read as Null rather than inherit a
+        // stale value from the reused window.
+        if argc_us < arity {
+            for slot in self.regs.iter_mut().take(need).skip(base + argc_us) {
+                *slot = Value::Null;
+            }
         }
         self.frames.push(RegFrame {
-            chunk,
+            chunk: chunk as u32,
             ip: 0,
-            base,
-            n_regs,
+            base: base as u32,
             upvalues,
-            argc: argc_us,
+            argc: argc_us as u16,
             ret_dst,
         });
         Ok(())
@@ -840,18 +1076,21 @@ impl RegisterVm {
             Value::Array(arr) => {
                 let argvals: Vec<Value> = vals[1..].to_vec();
                 let out = invoke_support::array_method(arr, method, &argvals)?;
+                self.track_new(&out);
                 self.rset(base, dst, out);
                 Ok(None)
             }
             Value::Map(entries) => {
                 let argvals: Vec<Value> = vals[1..].to_vec();
                 let out = invoke_support::map_method(entries, method, &argvals)?;
+                self.track_new(&out);
                 self.rset(base, dst, out);
                 Ok(None)
             }
             Value::Str(s) => {
                 let argvals: Vec<Value> = vals[1..].to_vec();
                 let out = invoke_support::str_method(s, method, &argvals)?;
+                self.track_new(&out);
                 self.rset(base, dst, out);
                 Ok(None)
             }
@@ -906,6 +1145,11 @@ impl RegisterVm {
         )
     }
 
+    /// Track a newly allocated heap node with the mark-sweep census.
+    pub fn track_heap(&mut self, v: &Value) {
+        self.gc.track(v);
+    }
+
     fn maybe_auto_collect(&mut self) {
         if self.gc.should_collect() {
             let mut roots = self.regs.clone();
@@ -919,6 +1163,22 @@ impl RegisterVm {
     }
 }
 
+/// Values that own a heap node (`Rc<…>`) and therefore need GC tracking.
+/// Kept in sync with `mailang_gc::node_id`, which rejects everything else.
+#[inline(always)]
+fn is_heap_node(v: &Value) -> bool {
+    matches!(
+        v,
+        Value::Array(_)
+            | Value::Map(_)
+            | Value::Tuple(_)
+            | Value::Instance { .. }
+            | Value::Function(_)
+            | Value::Closure(_)
+            | Value::Class(_)
+    )
+}
+
 fn truthy(v: &Value) -> bool {
     match v {
         Value::Null => false,
@@ -930,13 +1190,83 @@ fn truthy(v: &Value) -> bool {
     }
 }
 
+#[inline]
+/// 数值提升：任一侧是 `Float` 时把另一侧 `Int` 提升为 `Float`（`Int`/`Int`
+/// 返回 `None`，保留整数语义的快路径）。用于补齐 `Float * Int`、
+/// `Int - Float` 等混合算术 —— 语义与栈式 VM 的 `add_values`/`sub_values`/
+/// `mul_values`/`div_values`/`mod_values`/`pow_values` 完全一致（含除零错误）。
+fn mixed_f64(a: &Value, b: &Value) -> Option<(f64, f64)> {
+    match (a, b) {
+        (Value::Float(x), Value::Float(y)) => Some((*x, *y)),
+        (Value::Int(x), Value::Float(y)) => Some((*x as f64, *y)),
+        (Value::Float(x), Value::Int(y)) => Some((*x, *y as f64)),
+        _ => None,
+    }
+}
+
 fn bin_apply(kind: BinKind, a: &Value, b: &Value) -> Result<Value, VmError> {
     use BinKind::*;
+    // Fast path first: Int op Int keeps full i64 semantics (no f64 rounding).
+    if let (Value::Int(x), Value::Int(y)) = (a, b) {
+        return match kind {
+            Add => Ok(Value::Int(x.wrapping_add(*y))),
+            Sub => Ok(Value::Int(x.wrapping_sub(*y))),
+            Mul => Ok(Value::Int(x.wrapping_mul(*y))),
+            Div => {
+                if *y == 0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Int(x / y))
+                }
+            }
+            Mod => {
+                if *y == 0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Int(x % y))
+                }
+            }
+            Pow => Ok(Value::Int(x.pow((*y).max(0) as u32))),
+            BitAnd => Ok(Value::Int(x & y)),
+            BitOr => Ok(Value::Int(x | y)),
+            BitXor => Ok(Value::Int(x ^ y)),
+            Shl => Ok(Value::Int(x << y)),
+            Shr => Ok(Value::Int(x >> y)),
+            _ => bin_apply_non_numeric(kind, a, b),
+        };
+    }
+    // Any Float operand promotes the pair to f64.
+    if let Some((x, y)) = mixed_f64(a, b) {
+        return match kind {
+            Add => Ok(Value::Float(x + y)),
+            Sub => Ok(Value::Float(x - y)),
+            Mul => Ok(Value::Float(x * y)),
+            Div => {
+                if y == 0.0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(x / y))
+                }
+            }
+            Mod => {
+                if y == 0.0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(x % y))
+                }
+            }
+            Pow => Ok(Value::Float(x.powf(y))),
+            _ => bin_apply_non_numeric(kind, a, b),
+        };
+    }
+    bin_apply_non_numeric(kind, a, b)
+}
+
+/// Arithmetic on non-numeric operands: string/array concatenation, string
+/// repetition, logical ops. Split out so the numeric fast paths stay flat.
+fn bin_apply_non_numeric(kind: BinKind, a: &Value, b: &Value) -> Result<Value, VmError> {
+    use BinKind::*;
     match (kind, a, b) {
-        (Add, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x + y)),
-        (Add, Value::Float(x), Value::Float(y)) => Ok(Value::Float(x + y)),
-        (Add, Value::Int(x), Value::Float(y)) => Ok(Value::Float(*x as f64 + y)),
-        (Add, Value::Float(x), Value::Int(y)) => Ok(Value::Float(x + *y as f64)),
         (Add, Value::Str(x), Value::Str(y)) => Ok(Value::Str(format!("{}{}", x, y).into())),
         (Add, Value::Str(x), other) => Ok(Value::Str(
             format!("{}{}", x, mailang_stdlib::value_to_string(other)).into(),
@@ -944,37 +1274,21 @@ fn bin_apply(kind: BinKind, a: &Value, b: &Value) -> Result<Value, VmError> {
         (Add, other, Value::Str(y)) => Ok(Value::Str(
             format!("{}{}", mailang_stdlib::value_to_string(other), y).into(),
         )),
-        (Sub, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x - y)),
-        (Sub, Value::Float(x), Value::Float(y)) => Ok(Value::Float(x - y)),
-        (Mul, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x * y)),
-        (Mul, Value::Float(x), Value::Float(y)) => Ok(Value::Float(x * y)),
-        (Div, Value::Int(x), Value::Int(y)) => {
-            if *y == 0 {
-                Err(VmError::DivisionByZero)
-            } else {
-                Ok(Value::Int(x / y))
-            }
+        (Add, Value::Array(x), Value::Array(y)) => {
+            let mut merged = x.borrow().clone();
+            merged.extend(y.borrow().iter().cloned());
+            Ok(Value::Array(Rc::new(RefCell::new(merged))))
         }
-        (Div, Value::Float(x), Value::Float(y)) => Ok(Value::Float(x / y)),
-        (Mod, Value::Int(x), Value::Int(y)) => {
-            if *y == 0 {
-                Err(VmError::DivisionByZero)
-            } else {
-                Ok(Value::Int(x % y))
-            }
+        (Mul, Value::Str(s), Value::Int(n)) => {
+            Ok(Value::Str(s.repeat((*n).max(0) as usize).into()))
         }
-        (Pow, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x.pow(*y as u32))),
-        (BitAnd, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x & y)),
-        (BitOr, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x | y)),
-        (BitXor, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x ^ y)),
-        (Shl, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x << y)),
-        (Shr, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x >> y)),
         (And, _, _) => Ok(Value::Bool(truthy(a) && truthy(b))),
         (Or, _, _) => Ok(Value::Bool(truthy(a) || truthy(b))),
         _ => Err(VmError::TypeError("Cannot apply binary op".into())),
     }
 }
 
+#[inline]
 fn cmp_apply(kind: CmpKind, a: &Value, b: &Value) -> bool {
     use CmpKind::*;
     match kind {
@@ -982,28 +1296,35 @@ fn cmp_apply(kind: CmpKind, a: &Value, b: &Value) -> bool {
         Ne => a != b,
         Lt => match (a, b) {
             (Value::Int(x), Value::Int(y)) => x < y,
-            (Value::Float(x), Value::Float(y)) => x < y,
             (Value::Str(x), Value::Str(y)) => x < y,
-            _ => false,
+            _ => cmp_f64(a, b, |x, y| x < y),
         },
         Le => match (a, b) {
             (Value::Int(x), Value::Int(y)) => x <= y,
-            (Value::Float(x), Value::Float(y)) => x <= y,
             (Value::Str(x), Value::Str(y)) => x <= y,
-            _ => false,
+            _ => cmp_f64(a, b, |x, y| x <= y),
         },
         Gt => match (a, b) {
             (Value::Int(x), Value::Int(y)) => x > y,
-            (Value::Float(x), Value::Float(y)) => x > y,
             (Value::Str(x), Value::Str(y)) => x > y,
-            _ => false,
+            _ => cmp_f64(a, b, |x, y| x > y),
         },
         Ge => match (a, b) {
             (Value::Int(x), Value::Int(y)) => x >= y,
-            (Value::Float(x), Value::Float(y)) => x >= y,
             (Value::Str(x), Value::Str(y)) => x >= y,
-            _ => false,
+            _ => cmp_f64(a, b, |x, y| x >= y),
         },
+    }
+}
+
+/// `Float` comparison, including `Int`↔`Float` promotion. Operands that are
+/// neither numeric nor strings compare `false`, matching the cases the stack
+/// VM's `compare_values` admits.
+#[inline]
+fn cmp_f64(a: &Value, b: &Value, f: fn(f64, f64) -> bool) -> bool {
+    match mixed_f64(a, b) {
+        Some((x, y)) => f(x, y),
+        None => false,
     }
 }
 

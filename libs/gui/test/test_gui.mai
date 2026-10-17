@@ -1,0 +1,251 @@
+// gui 模块测试（纯 Mai 模拟，不创建真实窗口）
+// Run from repo root:
+//   cargo run -p mailang-cli --release -- run libs/gui/test/test_gui.mai
+
+import "gui"
+
+var passed = 0
+var failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+fn assert_eq(actual, expected, msg) {
+    if actual == expected {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg} expected={expected} actual={actual}")
+    }
+}
+
+// Array equality via `==` compares references, so compare element-wise.
+fn assert_arr_eq(actual, expected, msg) {
+    if len(actual) != len(expected) {
+        failed = failed + 1
+        println("  FAIL: {msg}长度不同 expected={expected} actual={actual}")
+        return
+    }
+    var i = 0
+    while i < len(expected) {
+        if actual[i] != expected[i] {
+            failed = failed + 1
+            println("  FAIL: {msg} 下标{i} expected={expected} actual={actual}")
+            return
+        }
+        i = i + 1
+    }
+    passed = passed + 1
+    println("  PASS: {msg}")
+}
+
+println("=== gui 模块测试 ===")
+
+// ---------- 窗口 ----------
+println("测试窗口:")
+gui.reset()
+assert_eq(gui.mode(), "sim", "默认模式 sim")
+assert_eq(gui.window_count(), 0, "reset 后无窗口")
+
+var w = gui.open_window("Demo", 320, 200)
+assert(w > 0, "open_window 返回正数句柄")
+assert_eq(gui.window_count(), 1, "窗口计数 1")
+assert_eq(gui.title(w), "Demo", "窗口标题")
+assert_eq(gui.width(w), 320, "窗口宽度")
+assert_eq(gui.height(w), 200, "窗口高度")
+assert_eq(gui.is_open(w), true, "窗口已打开")
+
+var w2 = gui.open_window("Second", 100, 100)
+assert(w2 > w, "句柄递增")
+assert_eq(gui.window_count(), 2, "窗口计数 2")
+
+gui.resize(w, 640, 480)
+assert_eq(gui.width(w), 640, "resize 宽度")
+assert_eq(gui.height(w), 480, "resize 高度")
+assert_eq(gui.is_open(9999), false, "未知句柄未打开")
+assert_eq(gui.title(9999), "", "未知句柄标题为空")
+
+gui.close_window(w2)
+assert_eq(gui.is_open(w2), false, "窗口已关闭")
+
+// ---------- 颜色 ----------
+println("测试颜色:")
+assert_arr_eq(gui.named_color("red"), [255, 0, 0, 255], "red")
+assert_arr_eq(gui.named_color("black"), [0, 0, 0, 255], "black")
+assert_arr_eq(gui.named_color("white"), [255, 255, 255, 255], "white")
+assert_arr_eq(gui.named_color("blue"), [0, 0, 255, 255], "blue")
+assert_arr_eq(gui.named_color("nope"), [255, 0, 255, 255], "未知颜色返回 magenta")
+assert_arr_eq(gui.to_rgba("green"), [0, 128, 0, 255], "颜色名转 rgba")
+assert_arr_eq(gui.to_rgba([1, 2, 3]), [1, 2, 3, 255], "rgb 数组补 alpha")
+assert_arr_eq(gui.to_rgba([1, 2, 3, 4]), [1, 2, 3, 4], "rgba 数组直传")
+assert_arr_eq(gui.to_rgba("cyan"), [0, 255, 255, 255], "青色")
+assert_arr_eq(gui.to_rgba(null), [0, 0, 0, 255], "null 视为黑色")
+
+// ---------- 绘制与显示列表 ----------
+println("测试绘制:")
+gui.begin(w)
+assert_eq(gui.cmd_count(), 0, "begin 清空显示列表")
+
+gui.draw_rect(w, 10, 20, 100, 50, "red")
+assert_eq(gui.cmd_count(), 1, "一条绘制命令")
+assert_eq(gui.cmd_op(0), "rect", "op为 rect")
+assert_arr_eq(gui.cmd_args(0), [10, 20, 100, 50], "rect 参数")
+assert_arr_eq(gui.cmd_rgba(0), [255, 0, 0, 255], "rect 颜色")
+assert_eq(gui.cmd_window(0), w, "命令归属窗口")
+
+gui.draw_text(w, 5, 6, "hi", "blue")
+assert_eq(gui.cmd_op(1), "text", "op为 text")
+assert_eq(gui.cmd_text(1), "hi", "文本内容")
+assert_arr_eq(gui.cmd_args(1), [5, 6], "text 参数")
+
+gui.draw_line(w, 0, 0, 10, 10, "green")
+assert_eq(gui.cmd_op(2), "line", "op为 line")
+assert_arr_eq(gui.cmd_args(2), [0, 0, 10, 10], "line 参数")
+
+gui.draw_circle(w, 50, 50, 20, true, "yellow")
+assert_eq(gui.cmd_op(3), "circle", "op为 circle")
+assert_arr_eq(gui.cmd_args(3), [50, 50, 20, true], "circle 参数")
+
+gui.draw_pixel(w, 1, 1, "white")
+assert_eq(gui.cmd_op(4), "rect", "像素是 1x1 矩形")
+assert_arr_eq(gui.cmd_args(4), [1, 1, 1, 1], "像素尺寸")
+
+assert_eq(gui.count_op("rect"), 2, "rect 命令计数")
+assert_eq(gui.find_op("text"), 1, "查找 text 索引")
+assert_eq(gui.find_op("circle"), 3, "查找 circle 索引")
+assert_eq(gui.cmd_op(-1), "", "越界索引返回空串")
+assert_eq(gui.cmd_op(999), "", "超界索引返回空串")
+assert_arr_eq(gui.cmd_args(999), [], "超界参数返回空数组")
+
+gui.begin(w)
+assert_eq(gui.cmd_count(), 0, "再次 begin 清空")
+
+// ---------- 边框（由调用方逐边绘制）----------
+gui.begin(w)
+gui.draw_rect(w, 0, 0, 40, 1, "black")
+gui.draw_rect(w, 0, 29, 40, 1, "black")
+gui.draw_rect(w, 0, 0, 1, 30, "black")
+gui.draw_rect(w, 39, 0, 1, 30, "black")
+assert_eq(gui.cmd_count(), 4, "四条边各一条 rect")
+assert_eq(gui.count_op("rect"), 4, "全部是 rect")
+
+// ---------- 可见性 ----------
+gui.begin(w)
+assert_eq(gui.is_visible(w), false, "创建后默认隐藏")
+var show_r = gui.show(w)
+assert(show_r != null, "show 返回非 null")
+assert_eq(gui.is_visible(w), true, "show 后可见")
+gui.hide(w)
+assert_eq(gui.is_visible(w), false, "hide 后隐藏")
+gui.show(w)
+
+// ---------- present ----------
+gui.present(w)
+assert_eq(gui.frame_count(), 1, "present 计数 1")
+gui.present(w)
+assert_eq(gui.frame_count(), 2, "present 计数 2")
+
+// ---------- 几何 ----------
+println("测试几何:")
+assert_eq(gui.hit_test(5, 5, 0, 0, 10, 10), true, "点在内")
+assert_eq(gui.hit_test(15, 5, 0, 0, 10, 10), false, "点在右外")
+assert_eq(gui.hit_test(5, 15, 0, 0, 10, 10), false, "点在下外")
+assert_eq(gui.hit_test(0, 0, 0, 0, 10, 10), true, "左上角算在内")
+assert_eq(gui.hit_test(10, 10, 0, 0, 10, 10), false, "右下角算在外")
+assert_eq(gui.hit_test_rect(5, 5, [0, 0, 10, 10]), true, "数组形式命中")
+assert_eq(gui.rect_contains([0, 0, 10, 10], 5, 5), true, "rect_contains")
+assert_arr_eq(gui.center_of([0, 0, 10, 20]), [5, 10], "矩形中心")
+assert_eq(gui.clamp_int(5, 0, 10), 5, "clamp 范围内")
+assert_eq(gui.clamp_int(-1, 0, 10), 0, "clamp 下界")
+assert_eq(gui.clamp_int(11, 0, 10), 10, "clamp 上界")
+assert_eq(gui.slider_ratio(0, 5, 10), 0, "滑块 0%")
+assert_eq(gui.slider_ratio(0, 10, 10), 1, "滑块 100%")
+assert_eq(gui.slider_ratio(0, 20, 10), 1, "滑块超出上限钳制")
+assert_eq(gui.slider_ratio(0, 5, 0), 0, "零宽保护")
+
+// ---------- 事件 ----------
+println("测试事件:")
+gui.reset()
+var we = gui.open_window("Events", 200, 100)
+assert_eq(gui.has_events(), false, "初始无事件")
+assert_eq(gui.next_event_kind(), "", "空队列返回空串")
+assert_eq(gui.peek_event_kind(), "", "peek 空队列")
+
+gui.post_key("a", "ctrl")
+assert_eq(gui.has_events(), true, "入队后有事件")
+assert_eq(gui.event_count(), 1, "事件计数 1")
+assert_eq(gui.peek_event_kind(), "key", "peek 不消费")
+assert_eq(gui.next_event_kind(), "key", "读到 key 事件")
+assert_eq(gui.event_count(), 0, "队列已清空")
+
+gui.post_mouse_down(10, 20, "left")
+assert_eq(gui.next_event_kind(), "mousedown", "鼠标按下")
+gui.post_mouse_up(11, 21, "left")
+assert_eq(gui.next_event_kind(), "mouseup", "鼠标释放")
+gui.post_mouse_move(12, 22)
+assert_eq(gui.next_event_kind(), "mousemove", "鼠标移动")
+
+gui.post_resize(640, 480)
+assert_eq(gui.next_event_kind(), "resize", "resize 事件")
+gui.post_close()
+assert_eq(gui.next_event_kind(), "close", "close 事件")
+
+gui.reset()
+gui.post_mouse_down(33, 44, "right")
+assert_eq(gui.next_event_x(), 33, "事件 x")
+gui.post_mouse_move(55, 66)
+assert_eq(gui.next_event_y(), 66, "事件 y")
+gui.post_key("z", "shift")
+assert(gui.next_event_data().contains("z"), "事件 data 含按键")
+assert_eq(gui.has_events(), false, "全部消费完毕")
+
+// ---------- 控件 ----------
+println("测试控件:")
+gui.reset()
+var wc = gui.open_window("Widgets", 300, 200)
+gui.begin(wc)
+gui.panel(wc, [0, 0, 100, 50], "gray")
+assert_eq(gui.cmd_count(), 1, "panel 一条矩形")
+assert_eq(gui.cmd_op(0), "rect", "panel 是矩形")
+gui.begin(wc)
+gui.button(wc, [10, 10, 80, 30], "OK", "blue")
+assert_eq(gui.cmd_count(), 2, "button 两条命令")
+assert_eq(gui.count_op("text"), 1, "button 含一条文本")
+assert_eq(gui.cmd_text(1), "OK", "button 文本内容")
+gui.begin(wc)
+gui.draw_rect(wc, 0, 0, 40, 8, "green")
+gui.draw_rect(wc, 0, 0, 20, 8, "gray")
+assert_eq(gui.cmd_count(), 2, "自绘进度条两条矩形")
+gui.begin(wc)
+gui.label(wc, 5, 5, "hi", "red")
+assert_eq(gui.cmd_op(0), "text", "label 是文本命令")
+assert_eq(gui.cmd_text(0), "hi", "label 文本")
+
+// ---------- 字体 ----------
+println("测试字体:")
+gui.reset()
+assert_eq(gui.font_count(), 0, "初始无字体")
+var f = gui.load_font("assets/font.ttf")
+assert_eq(gui.font_count(), 1, "加载字体后计数 1")
+gui.set_font_cell(10, 20)
+assert_arr_eq(gui.font_cell(), [10, 20], "字体单元格尺寸")
+
+// ---------- 汇总 ----------
+println("")
+if failed > 0 {
+    println("总计: {passed + failed}  通过: {passed}  失败: {failed}")
+    println("ERROR: 有测试失败!")
+    process_exit(1)
+} else {
+    println("总计: {passed + failed}  通过: {passed}  失败: 0")
+    println("全部通过")
+    process_exit(0)
+} 

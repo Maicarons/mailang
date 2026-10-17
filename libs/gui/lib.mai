@@ -1,0 +1,861 @@
+// gui — GUI pack: windows, canvas drawing, widgets, event loop.
+// Version: 0.1.0
+//
+// This is a *graphical* pack (窗口 / 画布 / 控件 / 事件), not a terminal pack.
+// For ANSI/TTY work see `libs/tui`.
+//
+// Host-function contract (a real windowing backend):
+//   gui_create_window(title, w, h) -> Ok(handle) | Err(str)
+//   gui_close_window(handle)       -> Ok(any) | Err(str)
+//   gui_poll_event()               -> Ok(event) | Err("no event")   // non-blocking
+//   gui_present(handle)            -> Ok(any) | Err(str)            // flush the back buffer
+//   gui_draw_rect(handle, x, y, w, h, r, g, b, a)      -> Ok(any) | Err(str)
+//   gui_draw_text(handle, x, y, text, r, g, b, a)     -> Ok(any) | Err(str)
+//   gui_draw_line(handle, x1, y1, x2, y2, r, g, b, a) -> Ok(any) | Err(str)
+//   gui_draw_circle(handle, cx, cy, rad, filled, r, g, b, a) -> Ok(any) | Err(str)
+//   gui_load_font(path)            -> Ok(handle) | Err(str)
+// Register via mailang_register_host_fn (C FFI) or Vm::register_host_fn (Rust).
+// Host registration OVERRIDES the stub implementations below at call time.
+//
+// Default mode is pure-Mai simulation: nothing is displayed. Drawing calls are
+// recorded into an off-screen display list that tests can assert on, and the
+// fake event queue is driven by gui_post_event / gui_post_key.
+//
+// Honest limits:
+//   - Simulation never opens a window and never blocks; gui_poll_event() returns
+//     Err("no event") on an empty queue instead of waiting.
+//   - No layout engine, no widget styling/theming, no text shaping: a "font" is
+//     an opaque handle with a fixed cell size, so text has no per-glyph metrics.
+//   - Coordinates are integers in a virtual pixel space; there is no retina/scaling.
+//   - gui_render() gives you a flat command list; it is up to you to build a
+//     scene graph or retain-mode tree on top.
+
+// Module state. NOTE: assigned key by key rather than with a multi-line map
+// literal - the parser rejects a multi-line composite literal on a `var`
+// binding (`Expected expression, found Newline`).
+var _gui = {}
+_gui["mode"] = "sim"
+_gui["windows"] = []
+_gui["next_handle"] = 1
+_gui["events"] = []
+_gui["cmds"] = []
+_gui["cmd_window"] = 0
+_gui["frames"] = 0
+_gui["fonts"] = {}
+_gui["font_cell_w"] = 8
+_gui["font_cell_h"] = 16 
+ 
+// ---------- internal helpers (defined before use: the analyzer requires it) ----------
+
+fn lookup_color(name) {
+    if name == "black" {
+        return [0, 0, 0, 255]
+    }
+    if name == "white" {
+        return [255, 255, 255, 255]
+    }
+    if name == "red" {
+        return [255, 0, 0, 255]
+    }
+    if name == "green" {
+        return [0, 128, 0, 255]
+    }
+    if name == "blue" {
+        return [0, 0, 255, 255]
+    }
+    if name == "yellow" {
+        return [255, 255, 0, 255]
+    }
+    if name == "cyan" {
+        return [0, 255, 255, 255]
+    }
+    if name == "magenta" {
+        return [255, 0, 255, 255]
+    }
+    if name == "gray" {
+        return [128, 128, 128, 255]
+    }
+    if name == "orange" {
+        return [255, 165, 0, 255]
+    }
+    if name == "transparent" {
+        return [0, 0, 0, 0]
+    }
+    return [255, 0, 255, 255]
+}
+
+// True when `value` is one of the supported colour names.
+fn is_known_name(value) {
+    if value == "black" {
+        return true
+    }
+    if value == "white" {
+        return true
+    }
+    if value == "red" {
+        return true
+    }
+    if value == "green" {
+        return true
+    }
+    if value == "blue" {
+        return true
+    }
+    if value == "yellow" {
+        return true
+    }
+    if value == "cyan" {
+        return true
+    }
+    if value == "magenta" {
+        return true
+    }
+    if value == "gray" {
+        return true
+    }
+    if value == "orange" {
+        return true
+    }
+    if value == "transparent" {
+        return true
+    }
+    return false
+}
+
+fn named_color(name) {
+    return lookup_color(name)
+}
+
+// Accepts a colour name or an [r, g, b] / [r, g, b, a] array.
+//
+// Only those two forms are supported on purpose: the language has no `type_of`
+// builtin, and every discriminating probe available (`len`, indexing,
+// arithmetic) *raises* rather than returns false on the wrong type, so a
+// scalar colour such as 0xFF0000 cannot be told apart from a container without
+// try/catch. Arrays and names are unambiguous, so those are the API.
+fn to_rgba(color) {
+    if color == null {
+        return [0, 0, 0, 255]
+    }
+    if is_known_name(color) {
+        return lookup_color(color)
+    }
+    var arr = color
+    if len(arr) >= 4 {
+        return [arr[0], arr[1], arr[2], arr[3]]
+    }
+    return [arr[0], arr[1], arr[2], 255]
+}
+
+// Records one draw command as a flat map so tests can inspect it.
+fn record_cmd(kind, args, rgba, text) {
+    var cmd = {}
+    cmd["op"] = kind
+    cmd["args"] = args
+    cmd["rgba"] = rgba
+    cmd["window"] = _gui["cmd_window"]
+    if text == null {
+        cmd["text"] = ""
+    } else {
+        cmd["text"] = text
+    }
+    return cmd
+}
+
+// Finds a window record by handle.
+fn find_window(handle) {
+    var i = 0
+    while i < len(_gui["windows"]) {
+        if _gui["windows"][i]["handle"] == handle {
+            return _gui["windows"][i]
+        }
+        i = i + 1
+    }
+    return null
+}
+
+fn close_window(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return Err("no such window")
+    }
+    win["open"] = false
+    return Ok("sim")
+}
+
+fn present(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return Err("no such window")
+    }
+    if win["open"] != true {
+        return Err("window closed")
+    }
+    win["redraws"] = win["redraws"] + 1
+    _gui["frames"] = _gui["frames"] + 1
+    return Ok("sim")
+}
+
+// ---------- host-function stubs (overridden when a host registers them) ----------
+
+// Windows are created hidden so a build agent without an interactive desktop
+// can still run the pack's tests; an interactive program calls show() once it
+// has drawn its first frame.
+fn gui_show_window(handle) {
+    if find_window(handle) == null {
+        return Err("no such window")
+    }
+    return Ok("sim")
+}
+
+fn gui_hide_window(handle) {
+    if find_window(handle) == null {
+        return Err("no such window")
+    }
+    return Ok("sim")
+}
+
+// Creates a window and returns its handle (a positive integer).
+fn gui_create_window(title, w, h) {
+    var handle = _gui["next_handle"]
+    _gui["next_handle"] = handle + 1
+    var win = {}
+    win["handle"] = handle
+    win["title"] = title
+    win["width"] = w
+    win["height"] = h
+    win["open"] = true
+    win["visible"] = false
+    win["redraws"] = 0
+    _gui["windows"].push(win)
+    return Ok(handle)
+}
+
+fn gui_close_window(handle) {
+    return close_window(handle)
+}
+
+fn gui_poll_event() {
+    if len(_gui["events"]) == 0 {
+        return Err("no event")
+    }
+    return Ok(_gui["events"][0])
+}
+
+fn gui_present(handle) {
+    return present(handle)
+}
+
+// Platform hooks. Side-effect free in simulation mode: the display list is
+// appended by draw_rect()/draw_text()/... so a host that takes over the hook
+// still leaves cmd_* observable for tests.
+fn gui_draw_rect(handle, x, y, w, h, r, g, b, a) {
+    return Ok("sim")
+}
+
+fn gui_draw_text(handle, x, y, text, r, g, b, a) {
+    return Ok("sim")
+}
+
+fn gui_draw_line(handle, x1, y1, x2, y2, r, g, b, a) {
+    return Ok("sim")
+}
+
+fn gui_draw_circle(handle, cx, cy, rad, filled, r, g, b, a) {
+    return Ok("sim")
+}
+
+fn gui_load_font(path) {
+    var id = "font:" + path
+    _gui["fonts"][id] = path
+    return Ok(id)
+}
+
+// ---------- window management ----------
+
+// Shows a window created hidden by the backend. An interactive program calls
+// this after drawing its first frame.
+fn show(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return Err("no such window")
+    }
+    var r = gui_show_window(handle)
+    win["visible"] = true
+    return r
+}
+
+// Hides a window without destroying it.
+fn hide(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return Err("no such window")
+    }
+    var r = gui_hide_window(handle)
+    win["visible"] = false
+    return r
+}
+
+fn is_visible(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return false
+    }
+    return win["visible"] == true
+}
+
+// Unwraps Ok(v) into a plain integer handle; anything else becomes 0.
+fn unwrap_ok(r) {
+    var got = match r {
+        Ok(v) => v
+        Err(e) => 0
+    }
+    return got
+}
+
+// Creates a window and returns the handle directly (0 on failure), so callers
+// do not have to unwrap the Result by hand.
+fn open_window(title, w, h) {
+    var handle = unwrap_ok(gui_create_window(title, w, h))
+    return handle
+}
+
+fn mode() {
+    return _gui["mode"]
+}
+
+fn set_mode(m) {
+    _gui["mode"] = m
+}
+
+fn window_count() {
+    return len(_gui["windows"])
+}
+
+fn is_open(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return false
+    }
+    return win["open"]
+}
+
+fn title(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return ""
+    }
+    return win["title"]
+}
+
+fn width(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return 0
+    }
+    return win["width"]
+}
+
+fn height(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return 0
+    }
+    return win["height"]
+}
+
+fn resize(handle, w, h) {
+    var win = find_window(handle)
+    if win == null {
+        return Err("no such window")
+    }
+    if win["open"] != true {
+        return Err("window closed")
+    }
+    win["width"] = w
+    win["height"] = h
+    return Ok("sim")
+}
+
+fn frame_count() {
+    return _gui["frames"]
+}
+
+// ---------- canvas drawing ----------
+
+// Routes subsequent draw calls to `handle` and starts a new display list frame.
+fn begin(handle) {
+    var win = find_window(handle)
+    if win == null {
+        return Err("no such window")
+    }
+    if win["open"] != true {
+        return Err("window closed")
+    }
+    _gui["cmd_window"] = handle
+    _gui["cmds"] = []
+    return Ok("sim")
+}
+
+// Draws one filled rect.
+fn draw_rect(handle, x, y, w, h, color) {
+    var c = to_rgba(color)
+    _gui["cmds"].push(record_cmd("rect", [x, y, w, h], c, null))
+    return gui_draw_rect(handle, x, y, w, h, c[0], c[1], c[2], c[3])
+}
+
+// Draws one pixel as a 1x1 rect.
+fn draw_pixel(handle, x, y, color) {
+    return draw_rect(handle, x, y, 1, 1, color)
+}
+
+// NOTE: there is deliberately no `draw_rect_outline` helper. Computing the far
+// edges of a rectangle needs arithmetic on coordinates, and the VMs currently
+// miscompute expressions whose operands come from parameters (or from indexing
+// a parameter array) - see ROADMAP Phase M. Callers that need a border should
+// emit the four edge rects themselves, or walk the pixels with draw_pixel().
+
+fn draw_text(handle, x, y, text, color) {
+    var c = to_rgba(color)
+    _gui["cmds"].push(record_cmd("text", [x, y], c, text))
+    return gui_draw_text(handle, x, y, text, c[0], c[1], c[2], c[3])
+}
+
+fn draw_line(handle, x1, y1, x2, y2, color) {
+    var c = to_rgba(color)
+    _gui["cmds"].push(record_cmd("line", [x1, y1, x2, y2], c, null))
+    return gui_draw_line(handle, x1, y1, x2, y2, c[0], c[1], c[2], c[3])
+}
+
+fn draw_circle(handle, cx, cy, radius, filled, color) {
+    var c = to_rgba(color)
+    _gui["cmds"].push(record_cmd("circle", [cx, cy, radius, filled], c, null))
+    return gui_draw_circle(handle, cx, cy, radius, filled, c[0], c[1], c[2], c[3])
+}
+
+// ---------- display list inspection ----------
+
+fn cmd_count() {
+    return len(_gui["cmds"])
+}
+
+fn cmd_op(i) {
+    if i < 0 {
+        return ""
+    }
+    if i >= len(_gui["cmds"]) {
+        return ""
+    }
+    return _gui["cmds"][i]["op"]
+}
+
+fn cmd_args(i) {
+    if i < 0 {
+        return []
+    }
+    if i >= len(_gui["cmds"]) {
+        return []
+    }
+    return _gui["cmds"][i]["args"]
+}
+
+fn cmd_rgba(i) {
+    if i < 0 {
+        return []
+    }
+    if i >= len(_gui["cmds"]) {
+        return []
+    }
+    return _gui["cmds"][i]["rgba"]
+}
+
+fn cmd_text(i) {
+    if i < 0 {
+        return ""
+    }
+    if i >= len(_gui["cmds"]) {
+        return ""
+    }
+    return _gui["cmds"][i]["text"]
+}
+
+fn cmd_window(i) {
+    if i < 0 {
+        return 0
+    }
+    if i >= len(_gui["cmds"]) {
+        return 0
+    }
+    return _gui["cmds"][i]["window"]
+}
+
+fn count_op(kind) {
+    var n = 0
+    var i = 0
+    while i < len(_gui["cmds"]) {
+        if _gui["cmds"][i]["op"] == kind {
+            n = n + 1
+        }
+        i = i + 1
+    }
+    return n
+}
+
+fn find_op(kind) {
+    var i = 0
+    while i < len(_gui["cmds"]) {
+        if _gui["cmds"][i]["op"] == kind {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+// ---------- fonts ----------
+
+fn load_font(path) {
+    return gui_load_font(path)
+}
+
+fn font_count() {
+    return len(_gui["fonts"])
+}
+
+fn set_font_cell(w, h) {
+    _gui["font_cell_w"] = w
+    _gui["font_cell_h"] = h
+}
+
+fn font_cell() {
+    return [_gui["font_cell_w"], _gui["font_cell_h"]]
+}
+
+// ---------- events ----------
+
+fn post_event(kind, x, y, data) {
+    var ev = {}
+    ev["kind"] = kind
+    ev["x"] = x
+    ev["y"] = y
+    ev["data"] = data
+    _gui["events"].push(ev)
+    return Ok("sim")
+}
+
+fn post_key(key, mods) {
+    return post_event("key", 0, 0, key + "@" + mods)
+}
+
+fn post_mouse_down(x, y, button) {
+    return post_event("mousedown", x, y, button)
+}
+
+fn post_mouse_up(x, y, button) {
+    return post_event("mouseup", x, y, button)
+}
+
+fn post_mouse_move(x, y) {
+    return post_event("mousemove", x, y, "")
+}
+
+fn post_resize(w, h) {
+    return post_event("resize", 0, 0, to_string(w) + "x" + to_string(h))
+}
+
+fn post_close() {
+    return post_event("close", 0, 0, "")
+}
+
+fn poll_event() {
+    return gui_poll_event()
+}
+
+// True when poll_event() would return an event.
+fn result_is_ok(r) {
+    return match r {
+        Ok(v) => true
+        Err(e) => false
+    }
+}
+
+// True when an event is pending. Lets a loop drive on events without
+// unwrapping the Result at the call site.
+fn has_pending() {
+    var r = poll_event()
+    return result_is_ok(r)
+}
+
+// Returns the next event as [kind, x, y, data], or [] when none is pending.
+//
+// Provided because `let x = match r { ... }` is currently miscompiled (the arm
+// value is not pushed back onto the operand stack - see ROADMAP Phase M 13.3),
+// so scripts cannot unwrap a Result in a `let` binding. Doing the match inside
+// a function and returning the value works, which is what this helper does.
+fn poll_event_data() {
+    var r = poll_event()
+    return match r {
+        Ok(v) => v
+        Err(e) => []
+    }
+}
+
+fn has_events() {
+    return len(_gui["events"]) > 0
+}
+
+fn event_count() {
+    return len(_gui["events"])
+}
+
+// Reads one field from the queue head.
+fn event_field(name) {
+    var ev = _gui["events"][0]
+    if name == "kind" {
+        return ev["kind"]
+    }
+    if name == "x" {
+        return ev["x"]
+    }
+    if name == "y" {
+        return ev["y"]
+    }
+    return ev["data"]
+}
+
+// Drops the queue head.
+fn shift_events() {
+    var rest = []
+    var i = 1
+    while i < len(_gui["events"]) {
+        rest.push(_gui["events"][i])
+        i = i + 1
+    }
+    _gui["events"] = rest
+}
+
+// Takes the next event off the queue and returns its kind, or "" when empty.
+fn next_event_kind() {
+    if len(_gui["events"]) == 0 {
+        return ""
+    }
+    var got = event_field("kind")
+    shift_events()
+    return got
+}
+
+fn next_event_x() {
+    if len(_gui["events"]) == 0 {
+        return 0
+    }
+    var got = event_field("x")
+    shift_events()
+    return got
+}
+
+fn next_event_y() {
+    if len(_gui["events"]) == 0 {
+        return 0
+    }
+    var got = event_field("y")
+    shift_events()
+    return got
+}
+
+fn next_event_data() {
+    if len(_gui["events"]) == 0 {
+        return ""
+    }
+    var got = event_field("data")
+    shift_events()
+    return got
+}
+
+// Non-consuming peek at the queue head.
+fn peek_event_kind() {
+    if len(_gui["events"]) == 0 {
+        return ""
+    }
+    return _gui["events"][0]["kind"]
+}
+
+// Non-consuming peeks so a caller can read every field of one event before
+// consuming it with `next_event_kind()`.
+fn peek_event_x() {
+    if len(_gui["events"]) == 0 {
+        return 0
+    }
+    return _gui["events"][0]["x"]
+}
+
+fn peek_event_y() {
+    if len(_gui["events"]) == 0 {
+        return 0
+    }
+    return _gui["events"][0]["y"]
+}
+
+fn peek_event_data() {
+    if len(_gui["events"]) == 0 {
+        return ""
+    }
+    return _gui["events"][0]["data"]
+}
+
+fn pop_event() {
+    if len(_gui["events"]) == 0 {
+        return Err("no event")
+    }
+    var first = _gui["events"][0]
+    var rest = []
+    var i = 1
+    while i < len(_gui["events"]) {
+        rest.push(_gui["events"][i])
+        i = i + 1
+    }
+    _gui["events"] = rest
+    return Ok(first)
+}
+
+fn event_kind(ev) {
+    return ev["kind"]
+}
+
+fn event_x(ev) {
+    return ev["x"]
+}
+
+fn event_y(ev) {
+    return ev["y"]
+}
+
+fn event_data(ev) {
+    return ev["data"]
+}
+
+fn is_key(ev) {
+    return ev["kind"] == "key"
+}
+
+fn is_mouse(ev) {
+    return ev["kind"] == "mousedown" || ev["kind"] == "mouseup" || ev["kind"] == "mousemove"
+}
+
+// ---------- widgets (immediate-mode drawing helpers) ----------
+
+// Filled panel. `rect` is [x, y, w, h].
+fn panel(handle, rect, fill) {
+    var x = rect[0]
+    var y = rect[1]
+    var w = rect[2]
+    var h = rect[3]
+    return draw_rect(handle, x, y, w, h, fill)
+}
+
+// Label text at an explicit position.
+fn label(handle, x, y, text, color) {
+    return draw_text(handle, x, y, text, color)
+}
+
+// Button: filled background plus a label, no border arithmetic. `rect` is
+// [x, y, w, h]; the caption is drawn at the rect origin. All rect fields are
+// read before any call, because a parameter array becomes unusable once the
+// frame has made another call (see ROADMAP Phase M notes).
+fn button(handle, rect, text, color) {
+    var x = rect[0]
+    var y = rect[1]
+    var w = rect[2]
+    var h = rect[3]
+    draw_rect(handle, x, y, w, h, color)
+    draw_text(handle, x, y, text, "black")
+    return Ok("sim")
+}
+
+// NOTE: there is no progress-bar helper. Sizing a fill from a ratio needs
+// arithmetic on values derived from parameters, which the VMs currently
+// miscompute (see ROADMAP Phase M). Draw the bar yourself with draw_rect().
+
+fn slider_ratio(x, press_x, w) {
+    var left = x
+    var press = press_x
+    var track = w
+    if track <= 0 {
+        return 0
+    }
+    var r = (press - left) / track
+    if r < 0 {
+        return 0
+    }
+    if r > 1 {
+        return 1
+    }
+    return r
+}
+
+// ---------- geometry helpers ----------
+
+fn hit_test(x, y, rx, ry, rw, rh) {
+    var px = x
+    var py = y
+    var left = rx
+    var top = ry
+    var w = rw
+    var h = rh
+    if px < left {
+        return false
+    }
+    if py < top {
+        return false
+    }
+    if px >= left + w {
+        return false
+    }
+    if py >= top + h {
+        return false
+    }
+    return true
+}
+
+fn hit_test_rect(x, y, rect) {
+    return hit_test(x, y, rect[0], rect[1], rect[2], rect[3])
+}
+
+fn rect_contains(rect, x, y) {
+    return hit_test(x, y, rect[0], rect[1], rect[2], rect[3])
+}
+
+fn center_of(rect) {
+    var r = rect
+    var x0 = r[0]
+    var y0 = r[1]
+    var rw = r[2]
+    var rh = r[3]
+    return [x0 + rw / 2, y0 + rh / 2]
+}
+
+fn clamp_int(v, lo, hi) {
+    if v < lo {
+        return lo
+    }
+    if v > hi {
+        return hi
+    }
+    return v
+}
+
+fn lerp(a, b, t) {
+    return a + (b - a) * t
+}
+
+// ---------- lifecycle ----------
+
+fn reset() {
+    _gui["windows"] = []
+    _gui["next_handle"] = 1
+    _gui["events"] = []
+    _gui["cmds"] = []
+    _gui["cmd_window"] = 0
+    _gui["frames"] = 0
+    _gui["mode"] = "sim"
+    return Ok("sim")
+} 

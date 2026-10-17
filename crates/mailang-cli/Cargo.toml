@@ -15,3 +15,6 @@ mailang-module = { path = "../mailang-module", version = "0.3.1" }
 mailang-lsp = { path = "../mailang-lsp", version = "0.3.1" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
+
+[target.x86_64-pc-windows-msvc.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_System_Console", "Win32_System_LibraryLoader", "Win32_UI_Input_KeyboardAndMouse"] }

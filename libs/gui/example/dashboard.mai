@@ -1,0 +1,105 @@
+// gui 模块示例：一个模拟的窗口绘制流程
+// Run from repo root:
+//   cargo run -p mailang-cli --release -- run libs/gui/example/dashboard.mai
+//
+// 默认是纯 Mai 模拟：不创建真实窗口，绘制命令记录在显示列表里，
+// 可以直接读回来验证。真实 GUI 后端请注册 gui_* host 函数。
+
+import "gui"
+
+println("=== gui 模块示例 ===")
+
+// ---- 窗口 ----
+println("")
+println("--- 窗口 ---")
+var win = gui.open_window("Dashboard", 480, 320)
+println("handle    = {win}")
+println("title     = {gui.title(win)}")
+println("size      = {gui.width(win)} x {gui.height(win)}")
+println("is_open   = {gui.is_open(win)}")
+println("mode      = {gui.mode()}")
+
+// ---- 绘制一帧 ----
+println("")
+println("--- 绘制 ---")
+gui.begin(win)
+gui.panel(win, [0, 0, 480, 40], [30, 30, 40])
+gui.button(win, [10, 10, 120, 24], "Refresh", [70, 130, 180])
+gui.label(win, 200, 14, "MaìLang GUI", [230, 230, 230])
+gui.panel(win, [10, 60, 220, 120], [45, 45, 55])
+gui.label(win, 20, 70, "Left panel", [200, 200, 200])
+gui.button(win, [250, 60, 100, 30], "OK", [80, 160, 90])
+gui.button(win, [250, 100, 100, 30], "Cancel", [180, 80, 80])
+gui.draw_rect(win, 10, 200, 200, 12, [60, 60, 70])
+gui.draw_rect(win, 10, 200, 120, 12, [90, 160, 220])
+gui.draw_line(win, 10, 240, 300, 240, [120, 120, 130])
+gui.draw_circle(win, 400, 200, 30, true, [200, 150, 60])
+gui.draw_text(win, 10, 260, "drawn via display list", [180, 180, 190])
+
+println("绘制命令数 = {gui.cmd_count()}")
+gui.present(win)
+println("frame 计数 = {gui.frame_count()}")
+
+// ---- 读回显示列表 ----
+println("")
+println("--- 显示列表 ---")
+var i = 0
+while i < gui.cmd_count() {
+    println("{i}: {gui.cmd_op(i)} {gui.cmd_args(i)}")
+    i = i + 1
+}
+
+// ---- 统计某类命令 ----
+println("")
+var op_rect = "rect"
+var op_text = "text"
+var op_line = "line"
+var op_circle = "circle"
+println("rect 命令数   = {gui.count_op(op_rect)}")
+println("text 命令数   = {gui.count_op(op_text)}")
+println("line 命令数   = {gui.count_op(op_line)}")
+println("circle 命令数 = {gui.count_op(op_circle)}")
+
+// ---- 窗口属性 ----
+println("")
+println("--- 窗口操作 ---")
+gui.resize(win, 640, 480)
+println("resized   = {gui.width(win)} x {gui.height(win)}")
+gui.close_window(win)
+println("closed    = {gui.is_open(win)}")
+
+// ---- 事件 ----
+println("")
+println("--- 事件 ---")
+// peek_* 读取但不消费；next_event_kind() 取走事件
+gui.post_mouse_down(120, 15, "left")
+println("事件类型  = {gui.peek_event_kind()}")
+println("事件 x    = {gui.peek_event_x()}")
+println("事件 y    = {gui.peek_event_y()}")
+println("事件 data = {gui.peek_event_data()}")
+gui.next_event_kind()
+gui.post_key("q", "ctrl")
+println("按键事件  = {gui.peek_event_kind()}")
+println("按键数据  = {gui.peek_event_data()}")
+gui.next_event_kind()
+println("剩余事件  = {gui.event_count()}")
+
+// ---- 颜色 ----
+println("")
+println("--- 颜色 ---")
+var c_red = "red"
+var c_cyan = "cyan"
+println("red        = {gui.named_color(c_red)}")
+println("cyan       = {gui.named_color(c_cyan)}")
+println("rgba 补全  = {gui.to_rgba([10, 20, 30])}")
+
+// ---- 几何 ----
+println("")
+println("--- 几何 ---")
+println("hit(5,5 in 0,0,10,10)   = {gui.hit_test(5, 5, 0, 0, 10, 10)}")
+println("hit(15,5 in 0,0,10,10)  = {gui.hit_test(15, 5, 0, 0, 10, 10)}")
+println("center of [0,0,10,20]   = {gui.center_of([0, 0, 10, 20])}")
+println("slider 0,5 / 10         = {gui.slider_ratio(0, 5, 10)}")
+
+println("")
+println("=== 示例结束 ===") 

@@ -884,6 +884,31 @@ fn test_mark_sweep_frees_cycles() {
 }
 
 #[test]
+fn test_heap_values_are_tracked_on_both_backends() {
+    // The register VM must register heap nodes (arrays / instances) with the
+    // mark-sweep census exactly like the stack VM does on push.
+    let mut interp = interp();
+    let src = "class Box {\n    fn init() { this.v = 1 }\n}\nlet b = Box()\nlet a = [1, 2]\nlet total = a[1] + b.v\ntotal";
+    assert_eq!(interp.eval(src).unwrap(), "3");
+    let (tracked, _, _) = interp.gc_stats();
+    assert!(
+        tracked > 0,
+        "heap nodes should be tracked by the collector, got {tracked}"
+    );
+}
+
+#[test]
+fn test_tail_recursion_keeps_register_file_bounded() {
+    // TailCall reuses the frame instead of nesting one register window per
+    // call: a 20k-deep tail loop must not grow the register file (and must not
+    // hit the call-depth limit, which a nested frame would).
+    let mut interp = interp();
+    interp.set_max_call_depth(64);
+    let src = "fn loop(n, acc) {\n    if n == 0 { return acc }\n    return loop(n - 1, acc + n)\n}\nloop(20000, 0)";
+    assert_eq!(interp.eval(src).unwrap(), "200010000");
+}
+
+#[test]
 fn test_register_vm_arith() {
     let mut interp = interp();
     let bc = interp.compile("1 + 2 * 3").unwrap();
@@ -908,6 +933,65 @@ fn test_register_vm_if_and_locals() {
     let bc = interp.compile(src).unwrap();
     let out = interp.run_bytecode_register(bc).unwrap();
     assert_eq!(out, "1");
+}
+
+// ===== 回归测试：Int/Float 混合算术（ROADMAP Phase M 13.3） =====
+// 寄存器 VM 的 bin_apply 此前只覆盖 Int-Int 与 Float-Float，`Float * Int`
+// 这类混合运算会抛 "Cannot apply binary op"。examples/wasm_demo.mai 与
+// libs/time/example/basic.mai 都踩到了这个缺口。
+
+#[test]
+fn test_mixed_float_int_arithmetic() {
+    assert_eq!(eval("3.14 * 5"), "15.700000000000001");
+    assert_eq!(eval("5 * 3.14"), "15.700000000000001");
+    assert_eq!(eval("7 - 0.5"), "6.5");
+    assert_eq!(eval("0.5 - 7"), "-6.5");
+    assert_eq!(eval("2.5 * 4.0"), "10");
+    assert_eq!(eval("10 / 2.5"), "4");
+    assert_eq!(eval("2.5 / 10"), "0.25");
+    assert_eq!(eval("7.5 % 2.0"), "1.5");
+}
+
+#[test]
+fn test_mixed_float_int_in_function_locals() {
+    // `let` + 混合算术：函数局部变量是此前最容易触发该缺口的形状。
+    let src = "fn area(r) {\n    let pi = 3.14159\n    return pi * r * r\n}\narea(5)";
+    assert_eq!(eval(src), "78.53975");
+}
+
+#[test]
+fn test_float_comparison_against_int() {
+    assert_eq!(eval("var t = 23.5\nt > 20.0"), "true");
+    assert_eq!(eval("var t = 23.5\nt < 20.0"), "false");
+    assert_eq!(eval("var n = 5\nn < 10.5"), "true");
+    assert_eq!(eval("var n = 5\nn >= 10.5"), "false");
+}
+
+// ===== 已知缺陷：match 的槽位与结果传递（ROADMAP Phase M 13.3 / M6） =====
+//
+// 已定位根因，尚未修复，因此**不写成断言**（否则 CI 会红）。修复要点：
+//
+// 1. `compile_bindings_from_stack` 的 `Identifier` 分支只调用 `define_variable`
+//    声明槽位、**不发射 StoreLocal**，依赖"绑定值已位于自己的槽位"这一隐式
+//    不变量。实际绑定值停在操作数栈顶 `locals.len()` 处，比槽位大1，于是
+//    arm 体里的 `LoadLocal` 读到未初始化槽。字节码实证：
+//    `UnwrapOk; Pop; LoadLocal(1); MulImm` —— `v` 取自槽 1，而 7 在栈顶。
+//    只要 match 之前存在任何局部变量就会触发（`let a = 1` 即复现）。
+// 2. arm 的值被 `end_scope_keeping_result` 存进局部槽后**没有压回操作数栈**，
+//    外层 `let m = match {...}` 因此取到 match 之前的残留栈内容。
+//
+// 修复方向与已知冲突：给 `Identifier` 分支补 `StoreLocal(slot)`、并在 arm
+// 末尾补 `LoadLocal(result_slot)`（`n_bind == 0` 时结果已在栈上，不可重载）。
+// 但这两处会改变指令序列，与 `mailang-bytecode/src/register.rs` 的
+// `compute_heights`（dataflow stack height）契约冲突：实测会让寄存器后端的
+// `match [a, b]` 长度检查失效（`[1]` 错配到 `[a, b]` 分支，期望 99 实得 2）。
+// 因此修复必须同时调整寄存器翻译器，不能只改编译器。
+
+#[test]
+fn test_match_range_without_binding_still_selects_branch() {
+    // 无绑定的范围模式当前行为正确，作为后续修复的基准。
+    assert_eq!(eval("match 15 { 1..10 => \"small\" _ => \"big\" }"), "big");
+    assert_eq!(eval("match 10 { 1..=10 => \"in\" _ => \"out\" }"), "in");
 }
 
 // ---

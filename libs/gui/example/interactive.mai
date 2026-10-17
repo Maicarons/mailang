@@ -1,0 +1,232 @@
+// gui 交互示例：真实窗口 + 鼠标 + 键盘
+//
+//   cargo run -p mailang-cli --release -- run --host=gui libs/gui/example/interactive.mai
+//
+// 窗口出现后：
+//   * 点击 "Toggle" 按钮切换开关（矩形变色 + 文字变化）
+//   * 点击 "Step +1" / "Step -1" 按钮累加计数
+//   * 拖动滑块改变进度（按住左键左右拖）
+//   * 按 空格 暂停/继续动画，按 R 重置，按 Esc 或关闭窗口退出
+//
+// 状态变化也会打印到运行该脚本的终端，方便无头环境观察。
+
+import "gui"
+
+var win = gui.open_window("MaìLang GUI — interactive", 560, 380)
+
+// ---------- 状态 ----------
+var toggle = 0
+var counter = 0
+var slider_pos = 20
+var anim = 0
+var running = 1
+var clicks = 0
+var dirty = 1
+
+fn clamp01(v, lo, hi) {
+    return clamp_int(v, lo, hi)
+}
+
+// ---------- 布局常量 ----------
+var TOGGLE_X = 30
+var TOGGLE_Y = 90
+var STEP_UP_X = 240
+var STEP_UP_Y = 90
+var STEP_DOWN_X = 240
+var STEP_DOWN_Y = 130
+var SLIDER_X = 30
+var SLIDER_Y = 200
+var SLIDER_W = 480
+var SLIDER_H = 24
+
+fn set_toggle(h) {
+    toggle = 1 - toggle
+    dirty = 1
+    println("toggle -> {toggle}")
+}
+
+fn bump(d) {
+    counter = counter + d
+    dirty = 1
+    println("counter -> {counter}")
+}
+
+fn move_slider_to(x) {
+    var clamped = clamp01(x, SLIDER_X, SLIDER_X + SLIDER_W - 20)
+    slider_pos = clamped
+    dirty = 1
+}
+
+fn handle_close() {
+    running = 0
+    println("close event")
+}
+
+fn handle_resize(data) {
+    println("resize -> {data}")
+    dirty = 1
+}
+
+// 键盘快捷键。注意：语言不支持 `else if`，只能用嵌套 else。
+fn handle_key(edata) {
+    if edata == " " {
+        running = 1 - running
+        println("animation = {running}")
+        dirty = 1
+    } else {
+        if edata == "r" || edata == "R" {
+            counter = 0
+            slider_pos = 20
+            toggle = 0
+            dirty = 1
+            println("reset")
+        } else {
+            if edata == "\u{1b}" {
+                handle_close()
+            } else {
+                if edata == "+" {
+                    bump(1)
+                } else {
+                    if edata == "-" {
+                        bump(-1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------- 每帧绘制 ----------
+fn draw() {
+    gui.begin(win)
+
+    // 背景
+    gui.draw_rect(win, 0, 0, 560, 380, [24, 26, 34])
+
+    // 标题栏
+    gui.draw_rect(win, 0, 0, 560, 46, [46, 52, 70])
+    gui.draw_text(win, 20, 15, "MaìLang GUI demo", [235, 235, 245])
+
+    // 开关卡片
+    gui.draw_rect(win, TOGGLE_X, TOGGLE_Y, 170, 56, [38, 40, 52])
+    if toggle == 1 {
+        gui.draw_rect(win, TOGGLE_X, TOGGLE_Y, 170, 56, [40, 120, 80])
+        gui.draw_text(win, TOGGLE_X + 14, TOGGLE_Y + 20, "Toggle: ON", [235, 255, 240])
+    } else {
+        gui.draw_text(win, TOGGLE_X + 14, TOGGLE_Y + 20, "Toggle: OFF", [200, 205, 215])
+    }
+
+    // 计数按钮
+    gui.draw_rect(win, STEP_UP_X, STEP_UP_Y, 150, 32, [62, 96, 168])
+    gui.draw_text(win, STEP_UP_X + 14, STEP_UP_Y + 9, "Step +1", [240, 245, 255])
+    gui.draw_rect(win, STEP_DOWN_X, STEP_DOWN_Y, 150, 32, [82, 70, 130])
+    gui.draw_text(win, STEP_DOWN_X + 14, STEP_DOWN_Y + 9, "Step -1", [240, 240, 250])
+
+    // 计数显示
+    var counter_text = "counter = " + to_string(counter)
+    gui.draw_text(win, TOGGLE_X, TOGGLE_Y + 70, counter_text, [250, 215, 120])
+
+    // 滑块轨道 + 填充 + 把手
+    gui.draw_rect(win, SLIDER_X, SLIDER_Y, SLIDER_W, SLIDER_H, [58, 62, 78])
+    var fill_w = slider_pos - SLIDER_X
+    if fill_w > 0 {
+        gui.draw_rect(win, SLIDER_X, SLIDER_Y, fill_w, SLIDER_H, [90, 150, 220])
+    }
+    gui.draw_rect(win, slider_pos, SLIDER_Y - 4, 20, SLIDER_H + 8, [240, 240, 250])
+
+    // 动画条（随 running 滚动）
+    var i = 0
+    while i < 12 {
+        var lit = (i + anim) % 3
+        if lit == 0 {
+            gui.draw_rect(win, 30 + i * 40, 260, 30, 24, [220, 120, 90])
+        } else {
+            gui.draw_rect(win, 30 + i * 40, 260, 30, 24, [70, 74, 92])
+        }
+        i = i + 1
+    }
+
+    // 提示与统计
+    gui.draw_text(win, 30, 310, "click buttons | drag slider | space=pause R=reset ESC=quit", [170, 200, 235])
+    var stat_text = "clicks=" + to_string(clicks) + "  frames=" + to_string(gui.frame_count())
+    gui.draw_text(win, 30, 335, stat_text, [150, 155, 170])
+
+    gui.present(win)
+}
+
+// ---------- 启动 ----------
+// 先画一帧再显示，避免用户看到空白窗口闪烁
+draw()
+var shown = gui.show(win)
+dirty = 1
+println("window shown = {shown}")
+println("click the buttons, drag the slider, press ESC to quit")
+
+// ---------- 主循环 ----------
+var frames = 0
+while running == 1 {
+    // 用 poll_event_data()（无事件时返回 []）避免在 let 绑定里 match，
+    // 那是当前编译器已知缺陷。
+    var ev = gui.poll_event_data()
+    if len(ev) >= 4 {
+        var kind = ev[0]
+        var ex = ev[1]
+        var ey = ev[2]
+        var edata = ev[3]
+
+        if kind == "close" {
+            handle_close()
+        } else {
+            if kind == "resize" {
+                handle_resize(edata)
+            } else {
+                if kind == "mousedown" {
+                    clicks = clicks + 1
+                    // Toggle 卡片
+                    if gui.hit_test(ex, ey, TOGGLE_X, TOGGLE_Y, 170, 56) {
+                        set_toggle(1)
+                    } else {
+                        if gui.hit_test(ex, ey, STEP_UP_X, STEP_UP_Y, 150, 32) {
+                            bump(1)
+                        } else {
+                            if gui.hit_test(ex, ey, STEP_DOWN_X, STEP_DOWN_Y, 150, 32) {
+                                bump(-1)
+                            } else {
+                                if gui.hit_test(ex, ey, SLIDER_X, SLIDER_Y, SLIDER_W, SLIDER_H) {
+                                    move_slider_to(ex)
+                                } else {
+                                    println("click at {ex},{ey} (no widget)")
+                                }
+                            }
+                        }
+                    }
+                    dirty = 1
+                } else {
+                    if kind == "mousemove" {
+                        // 简化：移动到滑条上即跟随
+                        if gui.hit_test(ex, ey, SLIDER_X, SLIDER_Y, SLIDER_W, SLIDER_H) {
+                            move_slider_to(ex)
+                        }
+                    } else {
+                        if kind == "key" {
+                            handle_key(edata)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 动画或状态变化时重绘
+    if running == 1 {
+        anim = anim + 1
+        dirty = 1
+    }
+    if dirty == 1 {
+        draw()
+        frames = frames + 1
+        dirty = 0
+    }
+}
+
+println("bye: presented {frames} frames")

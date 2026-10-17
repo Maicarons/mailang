@@ -159,7 +159,8 @@ impl Lexer {
                 }
                 Some('{') => {
                     self.advance();
-                    // TODO: Handle string interpolation
+                    // Interpolated holes are lowered by the compiler
+                    // (`format!`-style segments); the lexer only keeps the brace.
                     result.push('{');
                 }
                 Some(ch) => {

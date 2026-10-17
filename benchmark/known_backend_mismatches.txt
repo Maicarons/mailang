@@ -1,0 +1,23 @@
+# Programs where the register VM and the stack VM disagree (verified
+# 2026-10-17, Windows release). Paths are relative to the repository root, as
+# `benchmark/compare_backends.ps1` prints them.
+#
+# compare_backends.ps1 fails if a program differs that is not listed here, so
+# adding a line is a deliberate act. Remove a line when the bug behind it is
+# fixed (the script then prints a NOTE telling you to).
+
+# `match` mis-compiles: a bound identifier is never stored into its slot and an
+# arm's value is never pushed back, so both backends produce a wrong value and
+# they disagree on it. See ROADMAP.md Phase M 13.3.
+examples/iot_sensor.mai
+examples/match_demo.mai
+examples/phase_b_check.mai
+examples/try_demo.mai
+
+# Arithmetic on function parameters is miscomputed, and the register VM can
+# lose a parameter's type, so the UI packs' own test suites only pass on the
+# stack VM. See ROADMAP.md Phase M 13.5.
+libs/gui/example/dashboard.mai
+libs/gui/test/test_gui.mai
+libs/tui/example/basic.mai
+libs/tui/test/test_tui.mai

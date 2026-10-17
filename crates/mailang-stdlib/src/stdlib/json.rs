@@ -360,7 +360,7 @@ mod tests {
     #[test]
     fn parse_nested_and_escapes() {
         let v = builtin_json_parse(&[s(r#"{"a":[1,2,{"b":"x\ny"}],"c":null}"#)]).unwrap();
-        let out = builtin_json_stringify(&[v.clone()]).unwrap();
+        let out = builtin_json_stringify(std::slice::from_ref(&v)).unwrap();
         assert_eq!(out, s(r#"{"a":[1,2,{"b":"x\ny"}],"c":null}"#));
     }
 

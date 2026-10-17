@@ -1,0 +1,192 @@
+var _t2 = {"a": 1, "b": 2}
+println(_t2["b"])
+var parts = ["1", "31"]
+println(parts.join(";"))
+fn sz() {
+    return [80, 24]
+}
+println(sz()[0])
+fn sgr(params) {
+    return "\u{1b}[" + params.join(";") + "m"
+}
+println(sgr([1, 31]))
+// ui 模块测试（模拟终端，不接触真实 TTY）
+// Run from repo root:
+//   cargo run -p mailang-cli --release -- run libs/ui/test/test_ttui.mai
+//
+// 注意：match 写在函数体内（全局 let x = match 不可靠，见 ROADMAP Phase M）。
+
+import "tui"
+
+var passed = 0
+var failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+fn assert_eq(actual, expected, msg) {
+    if actual == expected {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg} expected={expected} actual={actual}")
+    }
+}
+
+// Ok/Err assertions live inside functions: global `let x = match` is unreliable.
+fn key_read_is(expected) {
+    var r = tui.read_key()
+    return match r {
+        Ok(v) => v == expected
+        Err(e) => false
+    }
+}
+
+fn key_read_is_err() {
+    var r = tui.read_key()
+    return match r {
+        Ok(v) => false
+        Err(e) => true
+    }
+}
+
+fn term_size_is(cols, rows) {
+    var s = tui.term_size()
+    return s[0] == cols && s[1] == rows
+}
+
+println("=== ui 模块测试 ===")
+
+// ---------- ANSI sequences ----------
+println("测试 ANSI 序列:")
+assert_eq(tui.csi("2J"), "\u{1b}[2J", "csi 2J")
+assert_eq(tui.color("x", "red"), "\u{1b}[31mx\u{1b}[0m", "前景红")
+assert_eq(tui.color("x", "bright_cyan"), "\u{1b}[96mx\u{1b}[0m", "亮青")
+assert_eq(tui.bg("x", "blue"), "\u{1b}[44mx\u{1b}[0m", "背景蓝")
+assert_eq(tui.bold("x"), "\u{1b}[1mx\u{1b}[0m", "bold")
+assert_eq(tui.underline("x"), "\u{1b}[4mx\u{1b}[0m", "underline")
+assert_eq(tui.color("x", "nope"), "x", "未知颜色原样返回")
+assert_eq(tui.style("x", "nope"), "x", "未知样式原样返回")
+assert_eq(tui.attr("x", ["bold", "red"]), "\u{1b}[1;31mx\u{1b}[0m", "attr 组合")
+assert_eq(tui.attr("x", ["nope"]), "x", "attr 全未知原样返回")
+assert_eq(tui.clear_screen(), "\u{1b}[2J", "clear_screen")
+assert_eq(tui.clear_line(), "\u{1b}[2K", "clear_line")
+assert_eq(tui.hide_cursor(), "\u{1b}[?25l", "hide_cursor")
+assert_eq(tui.show_cursor(), "\u{1b}[?25h", "show_cursor")
+assert_eq(tui.enter_alt_screen(), "\u{1b}[?1049h", "enter_alt_screen")
+assert_eq(tui.exit_alt_screen(), "\u{1b}[?1049l", "exit_alt_screen")
+assert_eq(tui.cursor_up(2), "\u{1b}[2A", "cursor_up")
+assert_eq(tui.cursor_to(3, 5), "\u{1b}[3;5H", "cursor_to")
+assert_eq(tui.line_up(), "\u{1b}[1A\u{1b}[2K", "line_up")
+
+// ---------- text layout ----------
+println("测试文本布局:")
+assert_eq(tui.repeat("ab", 3), "ababab", "repeat")
+assert_eq(tui.repeat("-", 0), "", "repeat 0 次")
+assert_eq(tui.width("hello"), 5, "width")
+assert_eq(tui.pad_right("ab", 5), "ab   ", "pad_right")
+assert_eq(tui.pad_left("ab", 5), "   ab", "pad_left")
+assert_eq(tui.pad("ab", 6, "center"), "  ab  ", "pad center")
+assert_eq(tui.pad("ab", 6, "left"), "ab    ", "pad left")
+assert_eq(tui.pad("ab", 6, "right"), "    ab", "pad right")
+assert_eq(tui.pad("abcdef", 3, "left"), "abcdef", "超长不截断")
+assert_eq(tui.truncate("abcdef", 3), "abc", "truncate")
+assert_eq(tui.truncate("ab", 5), "ab", "truncate 短串")
+assert_eq(tui.kv("name", "mai", 6), "name   mai", "kv 对齐")
+
+// ---------- widgets ----------
+println("测试组件:")
+assert_eq(tui.percent(3, 4), 75, "percent")
+assert_eq(tui.percent(0, 0), 0, "percent 除零保护")
+assert_eq(tui.percent(9, 3), 100, "percent 上限")
+assert_eq(tui.percent(-1, 3), 0, "percent 下限")
+assert_eq(tui.progress_bar(0, 4, 6), "[      ]", "bar 0%")
+assert_eq(tui.progress_bar(4, 4, 6), "[======]", "bar 100%")
+assert_eq(tui.progress_bar(2, 4, 4), "[==  ]", "bar 50%")
+assert_eq(tui.progress_labeled(1, 4, 4), "[=   ] 25%", "bar 带百分比")
+assert_eq(tui.join_lines(["a", "b"]), "a\nb", "join_lines")
+
+var rows = [["name", "ver"], ["mailang", "0.3.1"]]
+var tbl = tui.table(rows, [8, 6])
+assert_eq(len(tbl), 2, "table 行数")
+assert_eq(tbl[0], "name      ver   ", "table 列对齐")
+assert_eq(tui.width(tbl[1]), 16, "table 行宽一致")
+
+var boxed = tui.box(["hi"], "single")
+assert_eq(len(boxed), 3, "box 行数")
+assert_eq(boxed[0], "+----+", "box 上边框")
+assert_eq(boxed[1], "| hi |", "box 内容")
+assert_eq(boxed[2], "+----+", "box 下边框")
+assert_eq(tui.box(["hi"], "double")[0], "+====+", "box double")
+
+// ---------- terminal simulation ----------
+println("测试终端模拟:")
+tui.reset()
+assert_eq(tui.mode(), "sim", "默认 sim 模式")
+assert_eq(tui.written(), 0, "reset 后无输出")
+
+tui.write("ab")
+assert_eq(tui.written(), 2, "write 计数")
+assert_eq(len(tui.out()), 1, "out 记录一块")
+tui.line("cd")
+assert_eq(tui.out()[1], "cd\n", "line 补换行")
+assert_eq(tui.written(), 5, "line 计入换行")
+assert(tui.out_text().contains("cd"), "out_text 含写入内容")
+tui.clear()
+assert_eq(tui.written(), 0, "clear 清计数")
+assert_eq(len(tui.out()), 0, "clear 清缓冲")
+
+assert_eq(tui.term_cols(), 80, "默认列 80")
+assert_eq(tui.term_rows(), 24, "默认行 24")
+tui.set_size(120, 40)
+assert(term_size_is(120, 40), "set_size 生效")
+tui.set_size(80, 24)
+
+assert_eq(tui.is_tty(), true, "默认模拟 tty")
+tui.set_tty(false)
+assert_eq(tui.is_tty(), false, "set_tty false")
+tui.set_tty(true)
+
+// ---------- keyboard ----------
+println("测试按键:")
+tui.reset()
+assert_eq(tui.has_key(), false, "初始无按键")
+assert(key_read_is_err(), "空队列返回 Err")
+tui.queue_keys(["q", "\u{1b}[A", "\r"])
+assert_eq(tui.has_key(), true, "入队后有按键")
+assert(key_read_is("q"), "读到 q")
+assert(key_read_is("\u{1b}[A"), "读到方向键")
+assert(key_read_is("\r"), "读到回车")
+assert(key_read_is_err(), "耗尽后 Err")
+assert_eq(tui.key_name("\u{1b}[A"), "up", "key up")
+assert_eq(tui.key_name("\u{1b}[B"), "down", "key down")
+assert_eq(tui.key_name("\r"), "enter", "key enter")
+assert_eq(tui.key_name(" "), "space", "key space")
+assert_eq(tui.key_name("\u{1b}"), "esc", "key esc")
+assert_eq(tui.key_name("\u{7f}"), "backspace", "key backspace")
+assert_eq(tui.key_name("z"), "z", "key 普通字符")
+
+tui.reset()
+assert_eq(tui.out_text(), "", "reset 清缓冲")
+assert_eq(tui.has_key(), false, "reset 清按键队列")
+
+// ---------- summary ----------
+println("")
+if failed > 0 {
+    println("总计: {passed + failed}  通过: {passed}  失败: {failed}")
+    println("ERROR: 有测试失败!")
+    process_exit(1)
+} else {
+    println("总计: {passed + failed}  通过: {passed}  失败: 0")
+    println("全部通过")
+    process_exit(0)
+}
+import "tui"

@@ -1,0 +1,658 @@
+// tui — Terminal UI pack (ANSI sequences + text layout, host contract for real terminals)
+// Version: 0.1.0
+//
+// Host-function contract (real terminal):
+//   tui_term_size()         -> Ok([cols, rows]) | Err(str)
+//   tui_is_tty()            -> bool
+//   tui_read_key()          -> Ok(str) | Err(str)   // raw mode: one key or escape sequence
+//   tui_write(text)         -> Ok(any) | Err(str)   // raw write, no added newline
+//
+// Register via mailang_register_host_fn (C FFI) or Vm::register_host_fn (Rust).
+// Host registration OVERRIDES the stub implementations below at call time
+// (mailang run --host=tui installs the bundled Win32 backend).
+//
+// The stubs are deliberately side-effect free: the frame buffer lives in
+// write()/line() so that recording keeps working when a host takes over the
+// hook, which is what lets tests assert on the exact bytes produced.
+//
+// Default mode is pure-Mai simulation: no TTY, no raw mode, no key decoding.
+// Writes are recorded in an in-memory frame buffer so tests can assert on the
+// exact escape sequences produced, and the terminal reports a fixed 80x24.
+//
+// Honest limits:
+//   - Nothing here touches a real terminal until a host registers the hooks.
+//     ANSI sequences are plain text; a host that pipes stdout sees raw escapes.
+//   - width() counts characters, not East Asian display columns: a CJK ideograph
+//     counts as 1 instead of 2, so padded columns drift on mixed-width text.
+//     Pass pre-padded strings when alignment matters.
+//   - The simulation never blocks. read_key() returns Err when the injected key
+//     queue is empty rather than waiting for input.
+
+// Module state. NOTE: assigned key by key rather than with a multi-line map
+// literal - the parser rejects a multi-line composite literal on a `var`
+// binding (`Expected expression, found Newline`).
+var _tui = {}
+_tui["mode"] = "sim"
+_tui["cols"] = 80
+_tui["rows"] = 24
+_tui["tty"] = true
+_tui["out"] = []
+_tui["keys"] = []
+_tui["key_pos"] = 0
+_tui["written"] = 0
+
+// ---------- terminal hooks (host-overridable by name) ----------
+//
+// These are pure no-ops in simulation mode: the observable behaviour (frame
+// buffer, written counter) lives in write()/line() so that a host replacing
+// the hook does not blind the tests.
+
+fn tui_term_size() {
+    return Ok([_tui["cols"], _tui["rows"]])
+}
+
+fn tui_is_tty() {
+    return _tui["tty"]
+}
+
+fn tui_read_key() {
+    if _tui["key_pos"] >= len(_tui["keys"]) {
+        return Err("tui: no key available (sim)")
+    }
+    var k = _tui["keys"][_tui["key_pos"]]
+    _tui["key_pos"] = _tui["key_pos"] + 1
+    return Ok(k)
+}
+
+fn tui_write(text) {
+    return Ok("sim")
+}
+
+// ---------- ANSI sequence primitives ----------
+
+// Control Sequence Introducer: ESC [ <code>
+fn csi(code) {
+    return "\u{1b}[" + to_string(code)
+}
+
+// SGR sequence from a parameter array, e.g. [1, 31] -> "ESC[1;31m".
+fn sgr(params) {
+    var parts = []
+    var i = 0
+    while i < len(params) {
+        parts.push(to_string(params[i]))
+        i = i + 1
+    }
+    return "\u{1b}[" + parts.join(";") + "m"
+}
+
+// Map a colour name to its SGR parameter, -1 when unknown.
+fn _fg_param(name) {
+    if name == "black" {
+        return 30
+    }
+    if name == "red" {
+        return 31
+    }
+    if name == "green" {
+        return 32
+    }
+    if name == "yellow" {
+        return 33
+    }
+    if name == "blue" {
+        return 34
+    }
+    if name == "magenta" {
+        return 35
+    }
+    if name == "cyan" {
+        return 36
+    }
+    if name == "white" {
+        return 37
+    }
+    if name == "gray" {
+        return 90
+    }
+    if name == "bright_red" {
+        return 91
+    }
+    if name == "bright_green" {
+        return 92
+    }
+    if name == "bright_yellow" {
+        return 93
+    }
+    if name == "bright_blue" {
+        return 94
+    }
+    if name == "bright_magenta" {
+        return 95
+    }
+    if name == "bright_cyan" {
+        return 96
+    }
+    if name == "bright_white" {
+        return 97
+    }
+    return -1
+}
+
+// Map a colour name to its background SGR parameter, -1 when unknown.
+fn _bg_param(name) {
+    var fg = _fg_param(name)
+    if fg < 0 {
+        return -1
+    }
+    return fg + 10
+}
+
+// Map a style name to its SGR parameter, -1 when unknown.
+fn _style_param(name) {
+    if name == "bold" {
+        return 1
+    }
+    if name == "dim" {
+        return 2
+    }
+    if name == "italic" {
+        return 3
+    }
+    if name == "underline" {
+        return 4
+    }
+    if name == "blink" {
+        return 5
+    }
+    if name == "reverse" {
+        return 7
+    }
+    if name == "hidden" {
+        return 8
+    }
+    if name == "strike" {
+        return 9
+    }
+    return -1
+}
+
+// ---------- colours and styles ----------
+
+// Wrap text in a foreground colour. Unknown names are returned unchanged.
+fn color(text, name) {
+    var p = _fg_param(name)
+    if p < 0 {
+        return text
+    }
+    return sgr([p]) + text + sgr([0])
+}
+
+// Wrap text in a background colour. Unknown names are returned unchanged.
+fn bg(text, name) {
+    var p = _bg_param(name)
+    if p < 0 {
+        return text
+    }
+    return sgr([p]) + text + sgr([0])
+}
+
+// Wrap text in a style. Unknown names are returned unchanged.
+fn style(text, name) {
+    var p = _style_param(name)
+    if p < 0 {
+        return text
+    }
+    return sgr([p]) + text + sgr([0])
+}
+
+fn bold(text) {
+    return style(text, "bold")
+}
+
+fn dim(text) {
+    return style(text, "dim")
+}
+
+fn underline(text) {
+    return style(text, "underline")
+}
+
+// Compose attributes into one SGR sequence, e.g. attr("x", ["bold", "red"]).
+fn attr(text, names) {
+    var params = []
+    var i = 0
+    while i < len(names) {
+        var p = _fg_param(names[i])
+        if p < 0 {
+            p = _style_param(names[i])
+        }
+        if p >= 0 {
+            params.push(p)
+        }
+        i = i + 1
+    }
+    if len(params) == 0 {
+        return text
+    }
+    return sgr(params) + text + sgr([0])
+}
+
+// SGR reset: ESC[0m
+fn reset_style() {
+    return sgr([0])
+}
+
+// ---------- screen and cursor control ----------
+
+fn clear_screen() {
+    return csi("2J")
+}
+
+fn clear_line() {
+    return csi("2K")
+}
+
+fn home() {
+    return csi("H")
+}
+
+fn cursor_up(n) {
+    return csi(to_string(n) + "A")
+}
+
+fn cursor_down(n) {
+    return csi(to_string(n) + "B")
+}
+
+fn cursor_forward(n) {
+    return csi(to_string(n) + "C")
+}
+
+fn cursor_back(n) {
+    return csi(to_string(n) + "D")
+}
+
+fn cursor_to(row, col) {
+    return csi(to_string(row) + ";" + to_string(col) + "H")
+}
+
+fn hide_cursor() {
+    return csi("?25l")
+}
+
+fn show_cursor() {
+    return csi("?25h")
+}
+
+fn enter_alt_screen() {
+    return csi("?1049h")
+}
+
+fn exit_alt_screen() {
+    return csi("?1049l")
+}
+
+// Cursor up one line + erase: the core of in-place redraw.
+fn line_up() {
+    return "\u{1b}[1A\u{1b}[2K"
+}
+
+// ---------- output (goes through the host hook) ----------
+
+// Write text without a trailing newline.
+//
+// The frame buffer is updated here rather than in the hook so that a host
+// taking over tui_write still leaves `out()` / `written()` observable.
+fn write(text) {
+    if text == null {
+        return Err("tui.write: text required")
+    }
+    _tui["out"].push(text)
+    _tui["written"] = _tui["written"] + len(text)
+    return tui_write(text)
+}
+
+// Write text followed by a newline.
+fn line(text) {
+    return write(text + "\n")
+}
+
+// Write a line with `print`, so it also reaches a real terminal when no host
+// hook is registered.
+fn puts(text) {
+    print(text + "\n")
+}
+
+// ---------- text layout ----------
+
+// Repeat a single-character string n times.
+fn repeat(ch, n) {
+    var out = ""
+    // Parameters are copied into locals before any arithmetic: the register
+    // backend miscomputes `n` when an operand is a bare parameter.
+    var limit = n
+    var i = 0
+    while i < limit {
+        out = out + ch
+        i = i + 1
+    }
+    return out
+}
+
+// Display width of a string in characters (see Honest limits in README).
+fn width(s) {
+    return len(s)
+}
+
+fn pad_left(s, w) {
+    var src = s
+    var want = w
+    var have = len(src)
+    if have >= want {
+        return src
+    }
+    return repeat(" ", want - have) + src
+}
+
+fn pad_right(s, w) {
+    var src = s
+    var want = w
+    var have = len(src)
+    if have >= want {
+        return src
+    }
+    return src + repeat(" ", want - have)
+}
+
+// Centre `src` in a field of `want` columns.
+fn pad_center(src, want) {
+    var text = src
+    var width_target = want
+    var have = len(text)
+    if width_target <= have {
+        return text
+    }
+    var total = width_target - have
+    var left = total / 2
+    var out = repeat(" ", left) + text
+    out = out + repeat(" ", total - left)
+    return out
+}
+
+// align: "left" | "right" | "center"
+fn pad(s, w, align) {
+    var src = s
+    var want = w
+    if align == "right" {
+        return pad_left(src, want)
+    }
+    if align == "center" {
+        return pad_center(src, want)
+    }
+    return pad_right(src, want)
+}
+
+// Truncate to at most w characters, no ellipsis.
+fn truncate(s, w) {
+    var src = s
+    var want = w
+    if len(src) <= want {
+        return src
+    }
+    var out = ""
+    var i = 0
+    while i < want {
+        // to_string(): indexing yields a Char, and Char + Str is not a
+        // supported operand pair on the register backend.
+        out = out + to_string(src[i])
+        i = i + 1
+    }
+    return out
+}
+
+// ---------- widgets ----------
+
+// Integer completion percentage, clamped to 0..100.
+fn percent(current, total) {
+    var cur = current
+    var tot = total
+    if tot <= 0 {
+        return 0
+    }
+    var p = cur * 100 / tot
+    if p < 0 {
+        return 0
+    }
+    if p > 100 {
+        return 100
+    }
+    return p
+}
+
+// Progress bar, e.g. [====      ]
+fn progress_bar(current, total, bar_width) {
+    var cur = current
+    var tot = total
+    var bar = bar_width
+    var filled = 0
+    if tot > 0 {
+        filled = bar * cur / tot
+    }
+    if filled < 0 {
+        filled = 0
+    }
+    if filled > bar {
+        filled = bar
+    }
+    return "[" + repeat("=", filled) + repeat(" ", bar - filled) + "]"
+}
+
+// Progress bar with a trailing percentage label.
+fn progress_labeled(current, total, bar_width) {
+    return progress_bar(current, total, bar_width) + " " + to_string(percent(current, total)) + "%"
+}
+
+// Render a labelled bar padded to a total width.
+fn progress_task(label, current, total, bar_width, total_width) {
+    var head = label + " "
+    return pad_right(head + progress_labeled(current, total, bar_width), total_width)
+}
+
+// Aligned "label   value" line.
+fn kv(label, value, label_width) {
+    return pad_right(label, label_width) + " " + to_string(value)
+}
+
+// Table with aligned columns. rows is an array of row arrays.
+fn table(rows, widths) {
+    var out = []
+    var r = 0
+    while r < len(rows) {
+        var line = ""
+        var c = 0
+        var row = rows[r]
+        while c < len(widths) {
+            if c > 0 {
+                line = line + "  "
+            }
+            var cell = ""
+            if c < len(row) {
+                cell = to_string(row[c])
+            }
+            line = line + pad_right(cell, widths[c])
+            c = c + 1
+        }
+        out.push(line)
+        r = r + 1
+    }
+    return out
+}
+
+// Box drawing around a block of lines.
+// style_name: "single" | "double" | "round"
+fn box(lines, style_name) {
+    var tl = "+"
+    var tr = "+"
+    var bl = "+"
+    var br = "+"
+    var h = "-"
+    var v = "|"
+    if style_name == "double" {
+        h = "="
+        v = "#"
+    }
+    if style_name == "round" {
+        h = "~"
+    }
+    var inner = 0
+    var i = 0
+    while i < len(lines) {
+        if len(lines[i]) > inner {
+            inner = len(lines[i])
+        }
+        i = i + 1
+    }
+    var out = []
+    out.push(tl + repeat(h, inner + 2) + tr)
+    i = 0
+    while i < len(lines) {
+        out.push(v + " " + pad_right(lines[i], inner) + " " + v)
+        i = i + 1
+    }
+    out.push(bl + repeat(h, inner + 2) + br)
+    return out
+}
+
+// Join lines with newlines.
+fn join_lines(lines) {
+    var out = ""
+    var i = 0
+    while i < len(lines) {
+        if i > 0 {
+            out = out + "\n"
+        }
+        out = out + lines[i]
+        i = i + 1
+    }
+    return out
+}
+
+// ---------- terminal queries (host hooks) ----------
+
+fn is_tty() {
+    return tui_is_tty()
+}
+
+// [cols, rows]; falls back to 80x24 when the host reports an error.
+fn term_size() {
+    var r = tui_term_size()
+    return match r {
+        Ok(v) => v
+        Err(e) => [80, 24]
+    }
+}
+
+fn term_cols() {
+    return term_size()[0]
+}
+
+fn term_rows() {
+    return term_size()[1]
+}
+
+// ---------- keyboard (host hook) ----------
+
+// Next key from the queue, or Err when none is available (sim never blocks).
+fn read_key() {
+    return tui_read_key()
+}
+
+// Queue keys for the next read_key() calls (test/simulation helper).
+fn queue_keys(keys) {
+    _tui["keys"] = keys
+    _tui["key_pos"] = 0
+}
+
+fn has_key() {
+    return _tui["key_pos"] < len(_tui["keys"])
+}
+
+// Translate a raw key into a friendly name: "up", "enter", "q", ...
+fn key_name(key) {
+    if key == "\u{1b}[A" {
+        return "up"
+    }
+    if key == "\u{1b}[B" {
+        return "down"
+    }
+    if key == "\u{1b}[C" {
+        return "right"
+    }
+    if key == "\u{1b}[D" {
+        return "left"
+    }
+    if key == "\r" || key == "\n" {
+        return "enter"
+    }
+    if key == " " {
+        return "space"
+    }
+    if key == "\u{1b}" {
+        return "esc"
+    }
+    if key == "\u{7f}" {
+        return "backspace"
+    }
+    return key
+}
+
+// ---------- simulation state / inspection ----------
+
+fn set_mode(m) {
+    _tui["mode"] = m
+}
+
+fn mode() {
+    return _tui["mode"]
+}
+
+fn set_size(cols, rows) {
+    _tui["cols"] = cols
+    _tui["rows"] = rows
+}
+
+fn set_tty(flag) {
+    _tui["tty"] = flag
+}
+
+// Everything written since the last clear(), as an array of chunks.
+fn out() {
+    return _tui["out"]
+}
+
+// Total characters written since the last clear().
+fn written() {
+    return _tui["written"]
+}
+
+// Everything written since the last clear(), as one string.
+fn out_text() {
+    return join_lines(_tui["out"])
+}
+
+fn clear() {
+    _tui["out"] = []
+    _tui["written"] = 0
+}
+
+fn reset() {
+    _tui["mode"] = "sim"
+    _tui["cols"] = 80
+    _tui["rows"] = 24
+    _tui["tty"] = true
+    _tui["out"] = []
+    _tui["keys"] = []
+    _tui["key_pos"] = 0
+    _tui["written"] = 0
+}

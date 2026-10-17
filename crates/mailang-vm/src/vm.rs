@@ -736,6 +736,21 @@ impl Vm {
                             ))
                         })?;
 
+                    // A registered host function overrides a same-named MaìLang
+                    // function. This has to be checked here, not only for
+                    // `Value::Builtin`: module bodies run *after* host functions
+                    // are installed and would otherwise overwrite the hook with
+                    // their own stub when they initialise their globals.
+                    if let Value::Function(f) = &self.stack[func_index] {
+                        if let Some(host) = self.host_fns.get(f.name.as_ref()) {
+                            let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
+                            self.stack.truncate(func_index);
+                            let call_result = host(&args)?;
+                            self.push(call_result)?;
+                            continue;
+                        }
+                    }
+
                     // Fast path: plain function without cloning the Value.
                     if let Value::Function(f) = &self.stack[func_index] {
                         let arity = f.arity;
@@ -975,6 +990,33 @@ impl Vm {
                             ))
                         })?;
                     let func = self.stack[func_index].clone();
+
+                    // Host override also applies to tail calls (see the Call
+                    // opcode). A host function returns normally, so perform the
+                    // same unwind the Return opcode would.
+                    if let Value::Function(ref f) = func {
+                        if let Some(host) = self.host_fns.get(f.name.as_ref()) {
+                            let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
+                            let call_result = host(&args)?;
+                            self.stack.truncate(func_index);
+                            self.push(call_result)?;
+                            let value = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                            if let Some(frame) = self.call_stack.pop() {
+                                let base = if frame.direct {
+                                    frame.stack_base
+                                } else {
+                                    frame.stack_base.saturating_sub(1)
+                                };
+                                self.stack.truncate(base);
+                                self.chunk_index = frame.chunk_index;
+                                self.ip = frame.ip;
+                                self.stack.push(value);
+                            } else {
+                                return Ok(value);
+                            }
+                            continue;
+                        }
+                    }
 
                     match func {
                         Value::Function(f) => {

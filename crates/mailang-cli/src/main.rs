@@ -11,6 +11,30 @@ use std::path::{Path, PathBuf};
 
 mod repl;
 
+#[cfg(windows)]
+mod hostwin;
+
+/// Real-platform backend selector (`--host=sim|tui|gui`).
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum HostCli {
+    /// Pure-Mai simulation (default): the packs buffer everything in memory
+    Sim,
+    /// Bundled Win32 terminal backend for the `tui` pack
+    Tui,
+    /// Bundled Win32 window + GDI backend for the `gui` pack
+    Gui,
+}
+
+impl HostCli {
+    fn as_str(self) -> &'static str {
+        match self {
+            HostCli::Sim => "sim",
+            HostCli::Tui => "tui",
+            HostCli::Gui => "gui",
+        }
+    }
+}
+
 #[derive(Parser)]
 #[command(
     name = "mailang",
@@ -51,6 +75,9 @@ enum Commands {
         /// VM backend: stack (default) or register (experimental)
         #[arg(long, value_enum, default_value_t = VmCli::Stack)]
         vm: VmCli,
+        /// Host backend for the tui/gui packs: sim (default), tui, gui
+        #[arg(long, value_enum, default_value_t = HostCli::Sim)]
+        host: HostCli,
     },
     /// Evaluate a code snippet
     Eval {
@@ -483,6 +510,7 @@ fn main() {
             file,
             bytecode: use_bytecode,
             vm,
+            host,
         }) => {
             let base_dir = Path::new(&file).parent().unwrap_or(Path::new("."));
             let mut interp = MailangInterpreter::with_modules(base_dir);
@@ -494,18 +522,30 @@ fn main() {
                     .map(|e| e == "mailangbc")
                     .unwrap_or(false);
 
+            // A real backend has to be installed *after* the modules are linked:
+            // `run_bytecode` re-applies host functions over the module globals,
+            // so the hook wins over the pack's stub.
             let result = if is_bc {
                 let bytes = std::fs::read(&file)
                     .map_err(|e| format!("Failed to read bytecode file '{}': {}", file, e));
                 match bytes {
                     Ok(bytes) => match mailang_core::bytecode::decode(&bytes) {
-                        Ok(bc) => interp.run_bytecode(bc),
+                        Ok(bc) => {
+                            install_host(&mut interp, host);
+                            interp.run_bytecode(bc)
+                        }
                         Err(e) => Err(format!("Invalid bytecode file '{}': {:?}", file, e)),
                     },
                     Err(e) => Err(e),
                 }
             } else {
-                interp.eval_file(&file)
+                match interp.compile_file(&file) {
+                    Err(e) => Err(e),
+                    Ok(bc) => {
+                        install_host(&mut interp, host);
+                        interp.run_bytecode(bc)
+                    }
+                }
             };
 
             match result {
@@ -560,6 +600,35 @@ fn main() {
         Some(Commands::Repl) | None => {
             let mut interp = MailangInterpreter::new();
             run_repl(&mut interp);
+        }
+    }
+}
+
+/// Installs the requested host backend, or explains why it is unavailable.
+///
+/// Simulation is the default and needs no host functions: the packs already
+/// carry pure-Mai fallbacks.
+fn install_host(interp: &mut MailangInterpreter, host: HostCli) {
+    #[cfg(windows)]
+    {
+        if let Err(e) = hostwin::install(interp, host.as_str()) {
+            eprintln!(
+                "Error: {} (available backends: {})",
+                e,
+                hostwin::available().join(", ")
+            );
+            std::process::exit(1);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = interp;
+        if host != HostCli::Sim {
+            eprintln!(
+                "Error: no bundled host backend for '{}' on this platform (bundled: tui, gui on Windows).",
+                host.as_str()
+            );
+            std::process::exit(1);
         }
     }
 }
