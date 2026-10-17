@@ -1053,6 +1053,37 @@ fn test_register_vm_if_and_locals() {
     assert_eq!(out, "1");
 }
 
+// ===== Phase N / N3: register heights at an early `return` =====
+//
+// `compute_heights` used to hand a height to `ip + 1` after `Return` / `Halt`
+// / `TailCall` / `Throw`, none of which fall through. When the instruction
+// after an early `return` was also the jump target of the enclosing `if`
+// (`if c { return x } var total = …`), that bogus height won the join and
+// every register above the parameter slots shifted by one: the function's own
+// locals were then read from the wrong register (a `Bool` where a string was
+// expected, and so on). The shapes below pin the fall-through join down on
+// both backends.
+
+#[test]
+fn test_early_return_keeps_later_locals_in_place() {
+    let src = "fn f(n) {\n    if n > 0 {\n        return \"pos\"\n    }\n    var s = \"neg\"\n    return s\n}\nf(1) + \"|\" + f(-1)";
+    assert_eq!(eval(src), "pos|neg");
+}
+
+#[test]
+fn test_early_return_then_local_arithmetic() {
+    let src = "fn total(n) {\n    if n < 0 {\n        return 0\n    }\n    var a = n + 1\n    var b = a * 2\n    return b\n}\ntotal(3)";
+    assert_eq!(eval(src), "8");
+}
+
+#[test]
+fn test_early_return_then_string_local() {
+    // 修好之前 `s` 会落到一个 Bool 槽，`s + s` 于是抛 "Cannot apply binary
+    // op"（早期 return 之后的整个寄存器窗口错位一格）。
+    let src = "fn bar(k) {\n    if k == 0 {\n        return \"\"\n    }\n    var s = \"ab\"\n    return s + s\n}\nbar(1)";
+    assert_eq!(eval(src), "abab");
+}
+
 // ===== 回归测试：Int/Float 混合算术（ROADMAP Phase M 13.3） =====
 // 寄存器 VM 的 bin_apply 此前只覆盖 Int-Int 与 Float-Float，`Float * Int`
 // 这类混合运算会抛 "Cannot apply binary op"。examples/wasm_demo.mai 与

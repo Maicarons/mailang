@@ -1019,15 +1019,17 @@ fn compute_heights(code: &[crate::Instruction], param_slots: u16) -> Vec<u16> {
                     }
                 }
             }
-            Opcode::Return | Opcode::Halt | Opcode::TailCall | Opcode::Throw => {
-                if ip + 1 < n {
-                    let cur = height[ip + 1];
-                    if cur == u16::MAX {
-                        height[ip + 1] = out;
-                        work.push_back(ip + 1);
-                    }
-                }
-            }
+            // A frame-exiting instruction has no successor: `Return`, `Halt`,
+            // `TailCall` and `Throw` never fall through to `ip + 1`. Letting
+            // them propagate a height there (the old code did) meant that the
+            // *unreachable* instruction after an early `return` joined the
+            // height of the taken branch into code that the fall-through path
+            // also reaches — e.g. `if c { return x } var total = …` — so every
+            // register above the parameter slots shifted by one and the
+            // function's own locals were read from (and written to) the wrong
+            // register. Instructions that nothing reaches keep the
+            // `param_slots` fallback applied at the end of this function.
+            Opcode::Return | Opcode::Halt | Opcode::TailCall | Opcode::Throw => {}
             _ => {
                 let ft = ip + 1;
                 if ft < n {
