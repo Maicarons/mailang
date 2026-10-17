@@ -19,21 +19,30 @@ jobs:
       - run: cargo check --workspace
 
   host-packs:
-    name: Packs (host=${{ matrix.host }})
+    name: Packs (host=${{ matrix.host }}, vm=${{ matrix.vm }})
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        # Each test suite asserts one backend, so they pair up rather than
-        # crossing: `test_*` asserts the pure-Mai simulation (the default, no
-        # host installed) and must run under `sim`, while `host_*` asserts that
-        # a real backend took over and therefore needs its own host.
+        # `test_*` asserts the pure-Mai simulation (the default, no host
+        # installed); it is crossed with both VM backends because it must pass
+        # on the stack VM and the register VM alike (the backend gate for the
+        # `libs/tui` + `libs/gui` packs). `host_*` asserts that a real host
+        # backend took over and is only run on the default stack VM: the host
+        # wrappers still hit the parameter-arithmetic defect (ROADMAP Phase M
+        # 13.5 / M8) under `--vm=register`, which is out of Phase N's scope.
         include:
           - host: sim
+            vm: ""
+            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
+          - host: sim
+            vm: register
             tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
           - host: tui
+            vm: ""
             tests: libs\tui\test\host_tui.mai
           - host: gui
+            vm: ""
             tests: libs\gui\test\host_gui.mai
     steps:
       - uses: actions/checkout@v7
@@ -42,9 +51,11 @@ jobs:
       - name: Pack tests
         shell: pwsh
         run: |
+          $vmArgs = @()
+          if ("${{ matrix.vm }}" -ne "") { $vmArgs += "--vm=${{ matrix.vm }}" }
           foreach ($t in "${{ matrix.tests }}".Split(" ")) {
-            Write-Host "== $t  (--host=${{ matrix.host }})"
-            .\target\release\mailang.exe run --host=${{ matrix.host }} $t
+            Write-Host "== $t  (--host=${{ matrix.host }} $($vmArgs -join ' '))"
+            & .\target\release\mailang.exe run @vmArgs --host=${{ matrix.host }} $t
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
