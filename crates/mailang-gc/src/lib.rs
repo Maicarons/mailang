@@ -10,8 +10,11 @@
 //!    child edges (breaks cycles) and drop the collector’s `Rc` handle so the
 //!    cycle can actually deallocate.
 //!
-//! Automatic collection runs when the allocation counter crosses a threshold
-//! (the threshold grows after each collect, like a classic generational hint).
+//! Automatic collection runs when the allocation counter crosses a threshold.
+//! The threshold is recomputed after every collection from the live set
+//! (`max(MIN_THRESHOLD, live * 2)`, capped at `MAX_THRESHOLD`), so the amount
+//! of garbage resident at once stays proportional to what the program actually
+//! holds rather than to how much it has allocated in total.
 
 use mailang_bytecode::Value;
 use std::collections::{HashMap, HashSet};
@@ -83,14 +86,30 @@ struct Tracked {
     state: GcState,
 }
 
+/// Smallest number of allocations between automatic collections.
+///
+/// Also the threshold used while the live set is tiny: collecting every 256
+/// allocations costs a scan of ~256 census entries, which is far cheaper than
+/// holding 256 dead objects alive for longer.
+pub const MIN_THRESHOLD: usize = 256;
+
+/// Hard ceiling for the automatic-collection interval. Even a live set in the
+/// millions must not postpone a collection indefinitely: the census holds a
+/// strong `Rc` per tracked node, so the interval *is* the amount of garbage
+/// that can be resident at once.
+pub const MAX_THRESHOLD: usize = 1_000_000;
+
 /// Mark-sweep heap. The VM registers heap nodes as they are allocated;
 /// `collect` traces from roots and frees unreachable cyclic garbage.
 pub struct MarkSweepHeap {
     nodes: HashMap<GcId, Tracked>,
     /// Allocation counter since last collect.
     allocations: usize,
-    /// Collect when `allocations` reaches this.
+    /// Collect when `allocations` reaches this. Derived from the live set
+    /// after every collection (see [`MarkSweepHeap::collect`]).
     threshold: usize,
+    /// Number of nodes that survived the last collection.
+    live_after_collect: usize,
     /// Stats: total objects freed.
     pub freed_total: usize,
     /// Stats: total collections.
@@ -102,7 +121,8 @@ impl MarkSweepHeap {
         Self {
             nodes: HashMap::new(),
             allocations: 0,
-            threshold: 256,
+            threshold: MIN_THRESHOLD,
+            live_after_collect: 0,
             freed_total: 0,
             collections: 0,
         }
@@ -123,16 +143,38 @@ impl MarkSweepHeap {
         self.nodes.len()
     }
 
+    /// Nodes reachable from the roots as of the last collection.
+    pub fn live_count(&self) -> usize {
+        self.live_after_collect
+    }
+
+    /// Allocations since the last collection.
+    pub fn allocations(&self) -> usize {
+        self.allocations
+    }
+
+    /// Automatic-collection interval in force (allocations).
+    pub fn threshold(&self) -> usize {
+        self.threshold
+    }
+
     pub fn should_collect(&self) -> bool {
         self.allocations >= self.threshold
     }
 
     /// Mark-sweep from `roots`. Returns the number of nodes freed.
+    ///
+    /// The next collection interval is derived from the **live set** instead of
+    /// growing by a fixed factor. A multiplicative threshold (the previous
+    /// `threshold * 1.5`) makes the interval itself grow without bound, and
+    /// since the census holds a strong `Rc` per tracked node, the interval is
+    /// exactly how much garbage can be resident: in `while` loop that allocates
+    /// one array per iteration the peak heap tracked the iteration count
+    /// (151 MB at 2M iterations, 333 MB at 4M). Every collection freed
+    /// everything dead, so the sweep was never the problem.
     pub fn collect(&mut self, roots: &[Value]) -> usize {
         self.collections += 1;
         self.allocations = 0;
-        // Grow threshold (classic heap-growth heuristic).
-        self.threshold = (self.threshold as f64 * 1.5) as usize;
 
         // --- Mark ---
         let mut marked: HashSet<GcId> = HashSet::new();
@@ -170,6 +212,14 @@ impl MarkSweepHeap {
             }
         }
         self.freed_total += freed;
+
+        // After the sweep the census holds exactly the live set. Collect again
+        // once about that many new nodes have been allocated: the resident
+        // garbage is then proportional to the live set, not to the total
+        // number of allocations the program has ever made.
+        self.live_after_collect = self.nodes.len();
+        self.threshold =
+            (self.live_after_collect.saturating_mul(2)).clamp(MIN_THRESHOLD, MAX_THRESHOLD);
         freed
     }
 }

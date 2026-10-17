@@ -898,6 +898,33 @@ fn test_heap_values_are_tracked_on_both_backends() {
 }
 
 #[test]
+fn test_allocation_loop_keeps_census_bounded() {
+    // D4（Phase N N4）：census 对每个被跟踪节点持一个强 `Rc`，所以"收集区间"
+    // 就是驻留垃圾的上限。旧阈值每次收集 ×1.5 且无上限，区间于是随分配总量
+    // 增长：20 万次分配后仍有 51,060 个 census 条目，200 万次迭代时进程峰值
+    // 工作集 151 MB（400 万次 333 MB）。阈值现在按活对象数计算
+    // （`max(MIN_THRESHOLD, live * 2)`），驻留量应与程序实际持有量成正比。
+    let src =
+        "var i = 0\nvar s = 0\nwhile i < 200000 {\n    s = s + len([1, 2, 3])\n    i = i + 1\n}\ns";
+    let mut interp = interp();
+    assert_eq!(interp.eval(src).unwrap(), "600000");
+    let (tracked, cols, freed) = interp.gc_stats();
+    assert!(
+        tracked < 5_000,
+        "census must not grow with the total number of allocations: \
+         {tracked} tracked, {cols} collections, {freed} freed"
+    );
+    assert!(
+        cols > 100,
+        "an allocation loop must trigger automatic collections, got {cols}"
+    );
+    assert!(
+        freed > 100_000,
+        "the sweep must free the garbage (it always could), got {freed}"
+    );
+}
+
+#[test]
 fn test_tail_recursion_keeps_register_file_bounded() {
     // TailCall reuses the frame instead of nesting one register window per
     // call: a 20k-deep tail loop must not grow the register file (and must not
