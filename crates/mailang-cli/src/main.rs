@@ -15,7 +15,7 @@ mod repl;
 mod hostwin;
 
 /// Real-platform backend selector (`--host=sim|tui|gui`).
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 enum HostCli {
     /// Pure-Mai simulation (default): the packs buffer everything in memory
     Sim,
