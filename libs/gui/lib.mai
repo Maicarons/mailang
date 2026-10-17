@@ -411,10 +411,12 @@ fn draw_pixel(handle, x, y, color) {
 
 // NOTE: there is deliberately no `draw_rect_outline` helper. It was left out
 // while the register backend miscomputed `if … return` joins (fixed in Phase
-// N N3); the stack VM still errors when a parameter is forwarded into a deeper
-// call - see ROADMAP Phase M M8. Callers that need a border should emit the
-// four edge rects themselves (with literal colours), or walk the pixels with
-// draw_pixel().
+// N N3) and while the stack VM mis-shuffled a tail call made from a
+// `CallDirect` frame - the shape a helper that forwards a parameter into
+// `draw_rect(handle, x, y, w, h, color)` would use (fixed after Phase N, see
+// ROADMAP 13.9). Both blockers are gone; leaving the helper out is now only an
+// immediate-mode API choice. Callers that want a border can compose the four
+// edge rects from `draw_rect`, or walk the pixels with `draw_pixel()`.
 
 fn draw_text(handle, x, y, text, color) {
     var c = to_rgba(color)

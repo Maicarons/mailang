@@ -624,7 +624,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 | M6 | 修 13.3 的双后端不一致 | ✅ **Phase N 已修**：D1（N1）、D2（N2）、D3（N3）全部落地 + 索引对齐，`compare_backends.ps1` 64/64 一致、manifest 清空。旧"参数缺陷"归因见 13.5 更正 |
 | M7（新增） | 裸 `match`/`if` 作为块尾表达式返回 `null` | ✅ **已修**：`match` 尾值随 N2（值协议）；裸 `if`/`elif`/`else` 尾值随 13.7（值模式 + `Slide` 收尾），并顺带修掉 `elif` 分支落空死循环 |
 | M8a（新增） | 寄存器后端不接管 UI 宿主钩子 | ✅ **已修**（Phase N 之后）：`RegOp::TailCall` 命中 `host_fns` 时如 `Ret` 般交回结果，`host_tui` / `host_gui` 两后端 7/7，见 13.8 |
-| M8b（新增） | 栈式后端若干参数形状报错 | **部分证伪**：\"两个后端都算错参数算术\"不成立——寄存器后端在这些例子算对，栈式后端也不是全错。**仍存**：栈式后端 5 参数的 `y + h - 1` 抛 `Cannot add these types`、参数继续下传报 `len expects …`、`println(f(x))` 尾调用报栈下溢；寄存器后端全部算对。见 13.5 |
+| M8b（新增） | 栈式后端若干参数形状报错 | ✅ **已修**（Phase N 之后）：`Opcode::TailCall` 复用当前帧时一律按 `Call` 布局搬到 `stack_base - 1`，而 `CallDirect` 帧没有 callee 槽位，于是压到调用者的活槽位；内建尾调用的收尾又直接 `truncate(stack_base - 1)` 多丢一格。四种形状修后两后端一致，见 13.9（旧归因更正见 13.5） |
 | M9（新增） | ~~分配密集的循环不回收堆内存~~ | ✅ **Phase N N4 已修**（阈值策略 + census 强引用）；复测栈式 4.9 MB / 寄存器 5.1 MB 平坦，见 13.6 |
 
 ### 13.5 寄存器后端：`if … return` 汇合点的栈高错误（v0.4 P1；Phase N N3 已修）
@@ -646,7 +646,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 
 **修复（Phase N N3）**：① 帧退出指令不再有后继（`compute_heights`）；② 帧布局契约拆成 `n_regs`（窗口大小）/ `param_slots`（参数 + 隐式 `this` 预留）/ `arity` + `required`（声明的形参个数）三个概念，`start_sp` 不再一词三用。修后四个程序在两个后端逐字节一致，`test_tui` 78/78、`test_gui` 98/98 在两个后端都通过；`benchmark/known_backend_mismatches.txt` 已清空。
 
-**仍存（Phase M M8b，不在 Phase N 范围）**：① **栈式后端在若干参数形状下仍会报错**：5 参数函数里的 `y + h - 1` 抛 `Cannot add these types`，把参数继续传进更深一层调用（`to_rgba(color)`）报 `len expects a string, array, map, or tuple`，而寄存器后端在这些形状上算对；② **栈式后端**在 `println(f(x))`（`f` 体以 `return g(a)` 尾调用收尾）时报 `Internal VM error: Stack underflow in Call`。两者都在 `a063f14`（Phase N 之前）已复现，边界尚未完全刻画；因为没有 shipped 程序命中，`compare_backends.ps1` 仍是 64/64。详见 AGENTS.md「Remaining gaps」。
+**已修（Phase M M8b，Phase N 之后）**：栈式后端此前在四种形状下报错或算错（5 参数函数里的 `y + h - 1` 抛 `Cannot add these types`、把参数继续传进更深一层调用（`to_rgba(color)`）报 `len expects a string, array, map, or tuple`、`println(f(x))` 在 `f` 以 `return g(a)` 尾调用收尾时报 `Internal VM error: Stack underflow in Call`，以及同形状下两后端给出不同的值）。寄存器后端一直算对。根因与修法见 13.9，修后两后端在全部四种形状上一致。
 
 **已修（Phase M M8a，Phase N 之后）**：**寄存器后端不接管 `gui_draw_rect` / `gui_draw_text` / `tui_write` 这些宿主钩子**——见 13.8。
 
@@ -700,9 +700,9 @@ fn f(n) {
 
 只要 `elif` 体不以 `return` 收尾就会无限循环（`probe_elif.mai` 在旧二进制 `a063f14` 上 10 秒超时）。修复：`if`/`elif`/`else` 共用一个 `compile_if`，收齐所有分支结尾的 `Jump`，最后统一 patch 到同一个汇合点。
 
-**回归测试**（`crates/mailang-core/tests/integration.rs`，4 个）：尾 `if` 值、尾 `elif` 链值、含局部量的分支不吞结果、`elif` 落空。集成套件栈式与寄存器各 **130/130**，`compare_backends.ps1` 仍 64/64 一致。
+**回归测试**（`crates/mailang-core/tests/integration.rs`，4 个）：尾 `if` 值、尾 `elif` 链值、含局部量的分支不吞结果、`elif` 落空。集成套件栈式与寄存器各 **135/135**，`compare_backends.ps1` 仍 64/64 一致。
 
-**仍未修（M8b）**：见 13.4 / 13.5——栈式后端若干参数形状仍报错。原 M8 的另一半（寄存器后端不接管 UI 宿主钩子）已在 13.8 修好。
+**M8b**：栈式后端若干参数形状（见 13.5 / 13.9）已在 Phase N 之后修掉。
 
 ### 13.8 寄存器后端 `TailCall` 绕过宿主函数覆盖（v0.4 P1；Phase N 之后已修）
 
@@ -717,6 +717,26 @@ fn f(n) {
 
 **修复**：`RegOp::TailCall` 的 `Value::Function` 分支先查 `host_fns`；命中时调用宿主，然后像 `RegOp::Ret` 一样弹出当前帧、把结果写回调用者的 `ret_dst`、恢复 `ip` / `chunk` / `base`，与栈式 VM 的 TailCall 宿主分支逐条对应。
 
-**回归测试**：`test_host_fn_overrides_a_tail_called_function`（非模块路径下的同一形状；去掉修复即失败 `left: "stub" right: "42"`）。`host_tui` / `host_gui` 两个后端都 7/7；CI 的 `host-packs` 矩阵把 `host_*` 也交叉到两个后端。集成套件栈式与寄存器各 **130/130**，`compare_backends.ps1` 仍 64/64。
+**回归测试**：`test_host_fn_overrides_a_tail_called_function`（非模块路径下的同一形状；去掉修复即失败 `left: "stub" right: "42"`）。`host_tui` / `host_gui` 两个后端都 7/7；CI 的 `host-packs` 矩阵把 `host_*` 也交叉到两个后端。集成套件栈式与寄存器各 **135/135**，`compare_backends.ps1` 仍 64/64。
 
-**仍未修**：M8b（栈式后端若干参数形状），见 13.5。
+**后续**：M8b（栈式后端若干参数形状）也已在 13.9 修掉。
+
+### 13.9 栈式后端「直接调用帧」里的尾调用覆盖调用者槽位（v0.4 P1；Phase N 之后已修）
+
+这一节补上 13.5 里记的 M8b：**栈式后端**在四种形状下报错或算错，寄存器后端一直是对的。四种都在 `a063f14`（Phase N 之前）复现：
+
+| 形状 | 最小复现 | 旧栈式 | 旧寄存器 | 修后（两后端） |
+|------|----------|--------|----------|----------------|
+| 5 参数函数里 `y + h - 1` | `var n = helper([1,2,3])` 之后再算 `y + h - 1` | `Type error: Cannot add these types` | `5` | `5` |
+| 参数继续下传 | `var c = to_rgba(color)` 之后 `len(color)` | `len expects a string, array, map, or tuple` | `3` | `3` |
+| `println(f(x))`，`f` 以 `return g(a)` 收尾 | `fn f4(a) { return len(a) }` | `Internal VM error: Stack underflow in Call` | `3` | `3` |
+| 同形状下两后端算出不同的值 | `fn g(a) { return a + 1 }` + `fn f(x) { return g(x) }` + `println(f(1))` | `3` | `2` | `2` |
+
+**根因**：`CallDirect`（编译器对「已知顶层函数、实参个数一致」的调用发出的指令）建立的帧**没有 callee 槽位**——`stack_base` 本身就是第一个实参。而 `Opcode::TailCall` 复用当前帧时一律按 `Call` 布局把 `callee + 实参` 搬到 `stack_base - 1`，正好压到**调用者**操作数栈里的活槽位（调用者的最后一个局部变量或正在计算的槽位）；尾调用目标是内建函数时走另一条收尾路径，它直接 `truncate(stack_base - 1)`，于是把那格整个丢掉。`Return` / `?` / 宿主尾调用那几处早已按 `frame.direct` 区分，只有这两处没有——这也是为什么症状看起来像「参数算术出错」（被覆盖的那格随后参与 `len` / 加法 / 外层 `Call` 的 callee 取用）。
+
+**修复**（`crates/mailang-vm/src/vm.rs`）：① 新增 `frame_result_base(frame)`（`direct` 帧取 `stack_base`，否则取 `stack_base - 1`），`Return` / `?`（`Opcode::Try` 的两条早退）/ 宿主尾调用 / 内建尾调用四处统一使用，消掉散落的同名三元表达式；② 新增 `Vm::shuffle_tail_args(arg_count, func_index)`：`direct` 帧只把**实参**搬到 `stack_base` 并保持 `stack_base` 与 `direct` 不变，非 `direct` 帧保持原搬运（此时目标位移本来就是 0，行为逐字节不变）。
+
+**回归测试**（`crates/mailang-core/tests/integration.rs`，5 个）：`test_tail_call_from_direct_frame_keeps_caller_operands`、`test_builtin_tail_call_from_direct_frame_keeps_caller_operands`、`test_closure_tail_call_from_direct_frame_keeps_caller_operands`、`test_forwarded_parameter_survives_nested_tail_call`、`test_tail_call_from_direct_frame_does_not_corrupt_arithmetic`。它们都用「外层调用自己还占着一格」的形状（`len([f(1), 1, 2])`），使槽位被覆盖时当场报错或算错。集成套件栈式与寄存器各 **135/135**，`compare_backends.ps1` 仍 64/64。
+
+**顺带**：`cargo fmt --all -- --check` 此前有两处不过（`compiler.rs` 里 `compile_body` 的一处换行、`register_vm.rs` 里一行赋值），已一并格式化；CI 的 `fmt` 作业是硬门槛。
+

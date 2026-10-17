@@ -228,3 +228,5 @@ ESP32-C3 @ 160MHz 约比现代 PC 慢 50-100x。
 - `cargo test --workspace`：栈式与 `MAILANG_VM=register` 各 108/108 通过。
 - `benchmark\compare_backends.ps1`：对 `examples/` 与 `libs/` 下 66 个 `.mai` 程序逐字节比对双后端输出，其中 2 个跳过（输出不确定/不终止）—— **64 个比对中 56 identical / 8 mismatched**，8 个全部列在 `benchmark/known_backend_mismatches.txt`（4 处 `match` 编译缺陷 + 4 处参数缺陷，见 `ROADMAP.md` Phase M 13.3 / 13.5）；优化本身零回归。已修 1 处（寄存器 VM 的 `Int`↔`Float` 混合运算，`wasm_demo.mai` 恢复一致）。
 - 测量 fib30：栈式 113 ms / 寄存器 114 ms（min，3 次，Windows release）→ **1.01x，M1 达标**。
+
+> **注（Phase N 之后）**：上面这条 `108/108` 与 `56 identical / 8 mismatched` 是 **Phase M 当时**的数字。Phase N 及其后续已把差异全部收敛：集成测试栈式与寄存器各 **135/135**，`compare_backends.ps1` **64/64 identical**，`known_backend_mismatches.txt` 为空——本节列出的 4 处 `match` 编译缺陷（13.3）与 4 处参数缺陷（即 M8b，见 `ROADMAP.md` 13.9）都已修掉。本节的耗时数字仍是当时的实测记录。

@@ -2,7 +2,7 @@
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 >
-> **状态：Phase N（栈式 VM 与寄存器 VM 均 130/130；`benchmark/compare_backends.ps1` 64/64 一致）**
+> **状态：Phase N（栈式 VM 与寄存器 VM 均 135/135；`benchmark/compare_backends.ps1` 64/64 一致）**
 >
 > 本报告如实反映项目实际状态。阶段规划见 [ROADMAP.md](ROADMAP.md)，变更见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -33,17 +33,17 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 - ✅ C FFI / WASM / CLI(run/eval/build/fmt/deps/registry/lsp) / LSP / 格式化器；CLI 在 Windows 上内置 `--host=sim|tui|gui` 真实后端（`libs/tui`、`libs/gui` 两个 UI 包）
 - ✅ UTF-8 标识符；十六进制/八进制/二进制字面量；块注释
 
-**测试**：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）集成均为 **130/130**；全工作区 **248** 项测试全绿；`benchmark/compare_backends.ps1` 64/64 一致，`benchmark/known_backend_mismatches.txt` 为空。
+**测试**：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）集成均为 **135/135**；全工作区 **253** 项测试全绿；`benchmark/compare_backends.ps1` 64/64 一致，`benchmark/known_backend_mismatches.txt` 为空。
 
 ## 三、已知限制
 
 - ❌ **`async`** — 无 async/await 运行时或语法
-- ⚠️ **寄存器 VM**（`MAILANG_VM=register` / `--vm=register`）— 与栈式 VM 在每个 shipped 程序上一致（130/130 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁），但默认后端仍为栈式 VM
+- ⚠️ **寄存器 VM**（`MAILANG_VM=register` / `--vm=register`）— 与栈式 VM 在每个 shipped 程序上一致（135/135 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁），但默认后端仍为栈式 VM
 - ⚠️ **泛型类** — 字段擦除布局，无按类型 monomorphization
 - ⚠️ **IoT HAL** — 默认模拟实现；真实硬件需通过 FFI 注册 HAL（不声称真实硬件验证）
 - ⚠️ **公共托管注册表** — 仅本地目录 / 静态 HTTP 镜像
 - ⚠️ **mailang-macros** — 仍为 passthrough 桩（无调用方）
-- ⚠️ **参数在部分形状下仍出错（M8b）** — Phase N 修正了旧归因：寄存器后端不是通病，`if … return` 汇合点的栈高错误已修（N3）。**仍存**（先于 Phase N）：栈式后端 5 参函数里 `y + h - 1` 抛 `Cannot add these types`、把参数继续下传报 `len expects …`、`println(f(x))`（`f` 以尾调用收尾）报 `Stack underflow in Call`。见 `ROADMAP.md` Phase M 13.5
+- ✅ **栈式后端若干参数形状报错（M8b）已修**（Phase N 之后）：`CallDirect` 帧没有 callee 槽位，而 `Opcode::TailCall` 一律按 `Call` 布局把 `callee + 实参` 搬到 `stack_base - 1`，压到调用者的活槽位；内建尾调用的收尾还直接 `truncate(stack_base - 1)` 多丢一格。此前表现为 5 参函数里 `y + h - 1` 抛 `Cannot add these types`、把参数继续下传报 `len expects …`、`println(f(x))`（`f` 以尾调用收尾）报 `Stack underflow in Call`，以及同一形状两后端算出不同的值。现两个后端在全部四种形状上一致，5 个回归测试，见 `ROADMAP.md` 13.9
 - ✅ **寄存器后端不接管 `libs/tui`+`libs/gui` 宿主钩子（M8a）已修**（Phase N 之后）：`RegOp::TailCall` 对同名函数跳过了 `host_fns`，`host_*` 套件在 `--vm=register` 下失败；现两个后端都 7/7，见 `ROADMAP.md` 13.8
 - ✅ **分配密集的循环不再泄漏** — Phase N N4 把 census 阈值改为 `max(MIN, live*2)`（原为无上限 ×1.5）并修好寄存器 VM 的新生节点不是 GC 根的问题；同一分配循环 200 万/400 万次峰值 4.9 MB（栈式）/ 5.1 MB（寄存器），不再是 151/333 MB。门禁 `benchmark/measure_memory.ps1`
 
@@ -56,7 +56,7 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 | mailang-parser | ✅ 完整 | 递归下降 + Pratt；**含错误恢复**（`parse_program_recovering`） |
 | mailang-bytecode | ✅ 完整 | 栈 IR + 寄存器 IR |
 | mailang-compiler | ✅ 完整 | 含泛型 monomorphization |
-| mailang-vm | ✅ 完整 | 栈式（默认）+ 寄存器后端，均 130/130 |
+| mailang-vm | ✅ 完整 | 栈式（默认）+ 寄存器后端，均 135/135 |
 | mailang-stdlib | ✅ 可用 | io/math/string/collections/json/time/HAL/sys |
 | mailang-core | ✅ 管道集成 | Parser → Compiler → VM |
 | mailang-cli | ✅ 完整 | run/eval/build/fmt/deps/registry/lsp |
@@ -95,4 +95,4 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 
 ---
 
-**当前状态：栈式 VM 与寄存器 VM 均通过 130/130 集成测试，且在 `examples/`+`libs/` 的全部 64 个 `.mai` 程序上逐字节一致；IoT 默认模拟 HAL。**
+**当前状态：栈式 VM 与寄存器 VM 均通过 135/135 集成测试，且在 `examples/`+`libs/` 的全部 64 个 `.mai` 程序上逐字节一致；IoT 默认模拟 HAL。**

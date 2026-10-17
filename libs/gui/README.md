@@ -202,7 +202,7 @@ cargo run -p mailang-cli --release -- run --host=gui libs/gui/test/host_gui.mai
 
 - 未经 host 注册前不创建真实窗口；绘制只是内存里的命令列表。
 - **测试状态**：模拟套件 `test_gui.mai` 在两个后端都 **98/98** 通过（CI 矩阵）；**宿主套件 `host_gui.mai` 在两个后端都 7/7 通过**（Phase N 之后修好寄存器后端 `TailCall` 绕过宿主覆盖的问题，见 `ROADMAP.md` 13.8）。
-- **没有 `draw_rect_outline` / `progress_bar` 助手**：历史上是因为寄存器后端在 `if … return` 汇合点的栈高错误（Phase N N3 已修）。栈式后端在"把参数继续下传"的形状（如 `to_rgba(color)`）下仍会报错，所以需要边框时请直接发四条 `draw_rect`（颜色用字面量），进度条按已算好的像素宽度发 `draw_rect`。
+- **没有 `draw_rect_outline` / `progress_bar` 助手**：历史上是因为寄存器后端在 `if … return` 汇合点的栈高错误（Phase N N3 已修），以及栈式后端在"把参数继续下传"的形状（如 `to_rgba(color)`）下会报错（Phase N 之后已修，见 `ROADMAP.md` 13.9）。两个阻碍都已消失，现在不提供助手只是即时模式 API 的选择：需要边框时请直接发四条 `draw_rect`，进度条按已算好的像素宽度发 `draw_rect`。
 - 颜色只接受**名称或数组**两种形式：语言没有 `type_of`，而`len()` / 索引 / 算术在类型不符时都是**抛错**而非返回 false，无法在无 `try/catch` 的前提下安全区分标量颜色（如 `0xFF0000`）与容器，故不支持标量。
 - 控件都是即时模式绘制助手，不做布局、不处理交互状态、不做主题。命中判断请用 `hit_test`。
 - 字体只是不透明句柄 + 固定单元格尺寸，没有字形度量、没有换行、没有富文本。
