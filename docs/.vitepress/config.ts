@@ -112,6 +112,13 @@ export default defineConfig({
   base: '/mailang/',
   ignoreDeadLinks: true,
   srcExclude: ['**/MODULE_SPEC.md', '**/compose/**'],
+  // VitePress does not expose the public dir: it lets Vite resolve it from
+  // Vite's root (this docs directory), so the default points at docs/public,
+  // which does not exist here and silently dropped the playground's wasm from
+  // the deployed site. Set it on the Vite side, relative to that same root.
+  vite: {
+    publicDir: '.vitepress/public',
+  },
   vueTemplate: false,
   markdown: {
     config() {},

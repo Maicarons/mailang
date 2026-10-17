@@ -74,14 +74,14 @@ Run MaìLang code online — no tools to install.
       <span v-for="(_, name) in examples" :key="name"
             @click="loadExample(name)"
             style="padding: 4px 12px; border: 1px solid var(--vp-c-divider); border-radius: 6px; cursor: pointer; font-size: 0.85em; user-select: none;">
-        &lbrace;&lbrace; name &rbrace;&rbrace;
+        {{ name }}
       </span>
     </div>
     <div style="display: flex; gap: 8px; align-items: center;">
-      <span v-if="execTime" style="font-size: 0.8em; color: var(--vp-c-text-3);">&lbrace;&lbrace; execTime &rbrace;&rbrace;</span>
+      <span v-if="execTime" style="font-size: 0.8em; color: var(--vp-c-text-3);">{{ execTime }}</span>
       <button @click="runCode" :disabled="running || !engineReady"
               style="padding: 6px 20px; background: #238636; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-        &lbrace;&lbrace; running ? 'Running...' : 'Run' &rbrace;&rbrace;
+        {{ running ? 'Running...' : 'Run' }}
       </button>
     </div>
   </div>
@@ -93,10 +93,10 @@ Run MaìLang code online — no tools to install.
   <div v-if="output || running"
        style="margin-top: 12px; padding: 16px; border: 1px solid var(--vp-c-divider); border-radius: 8px; background: var(--vp-c-bg-alt); font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size: 13px; white-space: pre-wrap; min-height: 2em;">
     <span v-if="running" style="color: var(--vp-c-text-3);">Running...</span>
-    <span v-else>&lbrace;&lbrace; output &rbrace;&rbrace;</span>
+    <span v-else>{{ output }}</span>
   </div>
 
   <div style="margin-top: 8px; font-size: 0.8em; color: var(--vp-c-text-3);">
-    Tip: Press Ctrl+Enter to run &middot; Engine: &lbrace;&lbrace; engineReady ? 'Ready' : 'Loading...' &rbrace;&rbrace;
+    Tip: Press Ctrl+Enter to run &middot; Engine: {{ engineReady ? 'Ready' : 'Loading...' }}
   </div>
 </div>
