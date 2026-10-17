@@ -31,7 +31,9 @@ if ($Vm -ne "") { $argList += "--vm=$Vm" }
 
 $sizes = $Iters -split '[,\s]+' | Where-Object { $_ -ne "" } | ForEach-Object { [int]$_ }
 
-Write-Output ("binary: {0}   vm: {1}   limit: {2} MB" -f $Exe, ($Vm -replace '^$', 'stack'), $LimitMb)
+# M5: an empty -Vm means "whatever the CLI default is", which is the register
+# VM since M5. Pass `-Vm stack` to gate the stack backend instead.
+Write-Output ("binary: {0}   vm: {1}   limit: {2} MB" -f $Exe, ($Vm -replace '^$', 'default (register)'), $LimitMb)
 $failed = $false
 
 foreach ($n in $sizes) {

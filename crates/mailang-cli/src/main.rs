@@ -47,11 +47,11 @@ struct Cli {
 }
 
 /// CLI-facing VM backend selector (`--vm=stack|register`).
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 enum VmCli {
-    /// Classic stack-based bytecode VM (default)
+    /// Classic stack-based bytecode VM
     Stack,
-    /// Register (three-address) VM 鈥?experimental, keep stack as default
+    /// Register (three-address) VM — the default since M5
     Register,
 }
 
@@ -64,12 +64,38 @@ impl From<VmCli> for VmBackend {
     }
 }
 
+/// Environment variable that sets the default backend per process.
+const VM_ENV: &str = "MAILANG_VM";
+
+/// Pick the backend from a `--vm` flag, the `MAILANG_VM` environment variable,
+/// then [`VmBackend::DEFAULT`].
+///
+/// Precedence: flag > environment > default. An unset, empty or unrecognised
+/// environment value falls through to the default, so a stray `MAILANG_VM`
+/// can never break a run.
+fn resolve_vm(flag: Option<VmCli>) -> VmBackend {
+    select_vm(flag, std::env::var(VM_ENV).ok().as_deref())
+}
+
+/// Pure core of [`resolve_vm`] (unit-testable without touching the process
+/// environment).
+fn select_vm(flag: Option<VmCli>, env: Option<&str>) -> VmBackend {
+    if let Some(v) = flag {
+        return v.into();
+    }
+    match env.map(str::trim) {
+        Some("stack") => VmBackend::Stack,
+        Some("register") => VmBackend::Register,
+        _ => VmBackend::DEFAULT,
+    }
+}
+
 /// IR form selected by `mailang disasm`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 enum DisasmCli {
-    /// Stack bytecode the compiler emits (what the default VM runs)
+    /// Stack bytecode as the compiler emits it (what `--vm=stack` runs)
     Stack,
-    /// Three-address register lowering (what `--vm=register` runs)
+    /// Three-address register lowering (what the default `run` uses)
     Register,
     /// Both forms, one after the other
     Both,
@@ -83,9 +109,10 @@ enum Commands {
         /// Interpret `file` as compiled bytecode (`.mailangbc`)
         #[arg(long)]
         bytecode: bool,
-        /// VM backend: stack (default) or register (experimental)
-        #[arg(long, value_enum, default_value_t = VmCli::Stack)]
-        vm: VmCli,
+        /// VM backend: register (default) or stack. Defaults to the
+        /// `MAILANG_VM` environment variable when this flag is absent.
+        #[arg(long, value_enum)]
+        vm: Option<VmCli>,
         /// Host backend for the tui/gui packs: sim (default), tui, gui
         #[arg(long, value_enum, default_value_t = HostCli::Sim)]
         host: HostCli,
@@ -93,9 +120,10 @@ enum Commands {
     /// Evaluate a code snippet
     Eval {
         code: String,
-        /// VM backend: stack (default) or register (experimental)
-        #[arg(long, value_enum, default_value_t = VmCli::Stack)]
-        vm: VmCli,
+        /// VM backend: register (default) or stack. Defaults to the
+        /// `MAILANG_VM` environment variable when this flag is absent.
+        #[arg(long, value_enum)]
+        vm: Option<VmCli>,
     },
     /// Compile a .mai file to .mailangbc bytecode
     Build {
@@ -108,9 +136,9 @@ enum Commands {
     /// lowering, or both
     Disasm {
         file: String,
-        /// Which IR to print: stack (what the default VM runs), register (what
-        /// --vm=register runs), or both
-        #[arg(long, value_enum, default_value_t = DisasmCli::Stack)]
+        /// Which IR to print: register (what the default VM runs), stack (what
+        /// --vm=stack runs), or both
+        #[arg(long, value_enum, default_value_t = DisasmCli::Register)]
         vm: DisasmCli,
         /// Print only this chunk (default: every chunk)
         #[arg(long)]
@@ -199,7 +227,12 @@ enum Commands {
         action: RegistryAction,
     },
     /// Interactive REPL (multi-line continuation on `{` or `\`)
-    Repl,
+    Repl {
+        /// VM backend: register (default) or stack. Defaults to the
+        /// `MAILANG_VM` environment variable when this flag is absent.
+        #[arg(long, value_enum)]
+        vm: Option<VmCli>,
+    },
     /// Run the language server on stdin/stdout
     Lsp,
 }
@@ -537,7 +570,7 @@ fn main() {
         }) => {
             let base_dir = Path::new(&file).parent().unwrap_or(Path::new("."));
             let mut interp = MailangInterpreter::with_modules(base_dir);
-            interp.set_vm_backend(vm.into());
+            interp.set_vm_backend(resolve_vm(vm));
 
             let is_bc = use_bytecode
                 || Path::new(&file)
@@ -581,7 +614,7 @@ fn main() {
         }
         Some(Commands::Eval { code, vm }) => {
             let mut interp = MailangInterpreter::new();
-            interp.set_vm_backend(vm.into());
+            interp.set_vm_backend(resolve_vm(vm));
             match interp.eval(&code) {
                 Ok(output) => print_result(&output),
                 Err(e) => {
@@ -654,11 +687,17 @@ fn main() {
                 }
             }
         }
-        Some(Commands::Repl) | None => {
-            let mut interp = MailangInterpreter::new();
-            run_repl(&mut interp);
-        }
+        Some(Commands::Repl { vm }) => run_repl_with(vm),
+        // Bare `mailang` (no subcommand) is the REPL too.
+        None => run_repl_with(None),
     }
+}
+
+/// Open the REPL on the backend `--vm` / `MAILANG_VM` select.
+fn run_repl_with(vm: Option<VmCli>) {
+    let mut interp = MailangInterpreter::new();
+    interp.set_vm_backend(resolve_vm(vm));
+    run_repl(&mut interp);
 }
 
 /// Installs the requested host backend, or explains why it is unavailable.
@@ -781,6 +820,70 @@ fn run_repl(interp: &mut MailangInterpreter) {
                 eprintln!("Read error: {}", e);
                 break;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// M5: with no flag and no environment the default backend is the
+    /// register VM.
+    #[test]
+    fn default_backend_is_register() {
+        assert_eq!(select_vm(None, None), VmBackend::Register);
+        assert_eq!(VmBackend::DEFAULT, VmBackend::Register);
+    }
+
+    /// M5: `MAILANG_VM=stack` is the documented opt-out.
+    #[test]
+    fn env_can_select_the_stack_backend() {
+        assert_eq!(select_vm(None, Some("stack")), VmBackend::Stack);
+        assert_eq!(select_vm(None, Some("register")), VmBackend::Register);
+        assert_eq!(select_vm(None, Some("  stack ")), VmBackend::Stack);
+    }
+
+    /// An unset, empty or unknown `MAILANG_VM` must not break a run.
+    #[test]
+    fn empty_or_unknown_env_falls_through_to_the_default() {
+        assert_eq!(select_vm(None, Some("")), VmBackend::Register);
+        assert_eq!(select_vm(None, Some("Stack")), VmBackend::Register);
+        assert_eq!(select_vm(None, Some("bogus")), VmBackend::Register);
+        assert_eq!(select_vm(None, Some("0")), VmBackend::Register);
+    }
+
+    /// The flag beats the environment.
+    #[test]
+    fn flag_wins_over_env() {
+        assert_eq!(
+            select_vm(Some(VmCli::Stack), Some("register")),
+            VmBackend::Stack
+        );
+        assert_eq!(
+            select_vm(Some(VmCli::Register), Some("stack")),
+            VmBackend::Register
+        );
+    }
+
+    /// `--vm` has no clap default, so leaving it out reaches `select_vm`
+    /// with `None` (and therefore honours `MAILANG_VM`).
+    #[test]
+    fn vm_flag_has_no_clap_default() {
+        let cli = Cli::try_parse_from(["mailang", "run", "x.mai"]).expect("parses");
+        match cli.command {
+            Some(Commands::Run { vm, .. }) => assert_eq!(vm, None),
+            _ => panic!("expected a run command"),
+        }
+    }
+
+    /// M5: `mailang disasm` defaults to the IR the default VM runs.
+    #[test]
+    fn disasm_defaults_to_the_register_lowering() {
+        let cli = Cli::try_parse_from(["mailang", "disasm", "x.mai"]).expect("parses");
+        match cli.command {
+            Some(Commands::Disasm { vm, .. }) => assert_eq!(vm, DisasmCli::Register),
+            _ => panic!("expected a disasm command"),
         }
     }
 }

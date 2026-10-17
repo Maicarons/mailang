@@ -1,11 +1,11 @@
 //! Human-readable dumps of compiled bytecode (`mailang disasm`).
 //!
 //! Two forms can be printed: the stack instruction stream the compiler emits
-//! (what the default VM runs) and the three-address register lowering that
-//! `--vm=register` executes. Operands are decoded exactly like the VMs decode
-//! them — constant-pool indices with their value, global slots with their
-//! name, jump targets as instruction indices, local slots as register numbers
-//! — so a dump can be read without counting bytes.
+//! (what `--vm=stack` runs) and the three-address register lowering the default
+//! VM runs (`--vm=register` names it explicitly). Operands are decoded exactly
+//! like the VMs decode them — constant-pool indices with their value, global
+//! slots with their name, jump targets as instruction indices, local slots as
+//! register numbers — so a dump can be read without counting bytes.
 //!
 //! This is the view that the Phase N work needed and did not have: `match`
 //! delivering its value through the wrong protocol and the register backend's

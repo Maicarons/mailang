@@ -85,7 +85,9 @@ foreach ($f in $files) {
 $mismatched = @()
 foreach ($f in $compared) {
     $rel = Get-RelPath $f.FullName
-    $stack = Invoke-Backend $exe @() $f.FullName
+    # M5: the register VM is the default, so name both sides explicitly rather
+    # than relying on the flagless run (which is register now).
+    $stack = Invoke-Backend $exe @("--vm=stack") $f.FullName
     $reg = Invoke-Backend $exe @("--vm=register") $f.FullName
     if ($stack -ne $reg) {
         $mismatched += $rel

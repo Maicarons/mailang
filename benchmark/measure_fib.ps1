@@ -25,8 +25,16 @@ function Measure-Backend($label, $argList) {
     return $min
 }
 
-$stackMs = Measure-Backend "stack" @("run")
+# M5: the register VM is the default, so BOTH compared sides name their
+# backend explicitly (`--vm=stack` / `--vm=register`). The flagless line just
+# reports what a plain `mailang run` costs today; the default itself is pinned
+# by Rust tests (`mailang-core` `test_default_backend_is_register` and the
+# `mailang-cli` `select_vm` unit tests), which is why this script does not try
+# to infer it from timings - both backends are within a few percent.
+$stackMs = Measure-Backend "stack" @("run", "--vm=stack")
 $registerMs = Measure-Backend "register" @("run", "--vm=register")
+$defaultMs = Measure-Backend "default" @("run")
 $ratio = if ($stackMs -gt 0) { $registerMs / $stackMs } else { 0 }
 Write-Host ("ratio    {0:N2}x  (v0.4 gate: <= 2.00x)" -f $ratio)
 if ($ratio -gt 2.0) { Write-Host "M1 NOT met" } else { Write-Host "M1 met" }
+Write-Host ("default run: {0} ms (should track the register line)" -f $defaultMs)

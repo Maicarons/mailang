@@ -40,10 +40,16 @@ pub struct MailangInterpreter {
 /// Which VM backend executes compiled bytecode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VmBackend {
-    /// Classic stack-based bytecode VM (default).
+    /// Classic stack-based bytecode VM (opt-in since M5).
     Stack,
-    /// Register (three-address) VM. Stack bytecode is lowered first.
+    /// Register (three-address) VM (default). Stack bytecode is lowered
+    /// to register IR before the run.
     Register,
+}
+
+impl VmBackend {
+    /// The backend used when the caller expresses no preference (M5).
+    pub const DEFAULT: VmBackend = VmBackend::Register;
 }
 
 impl MailangInterpreter {
@@ -55,7 +61,7 @@ impl MailangInterpreter {
             host_globals: HashMap::new(),
             fuel: None,
             max_call_depth: Vm::DEFAULT_MAX_CALL_DEPTH,
-            prefer_register: false,
+            prefer_register: VmBackend::DEFAULT == VmBackend::Register,
             last_register: None,
         }
     }
@@ -69,16 +75,29 @@ impl MailangInterpreter {
             host_globals: HashMap::new(),
             fuel: None,
             max_call_depth: Vm::DEFAULT_MAX_CALL_DEPTH,
-            prefer_register: false,
+            prefer_register: VmBackend::DEFAULT == VmBackend::Register,
             last_register: None,
         }
     }
 
     /// Select the VM backend used by [`eval`](Self::eval) / [`run_bytecode`](Self::run_bytecode).
-    /// Default is [`VmBackend::Stack`]; register mode is experimental and should
-    /// match stack semantics before becoming the default.
+    ///
+    /// The default is [`VmBackend::Register`] (M5). The stack VM stays
+    /// available with `--vm=stack` / `MAILANG_VM=stack`; both backends
+    /// execute the same `Bytecode` and agree on every shipped program
+    /// (`benchmark/compare_backends.ps1`).
     pub fn set_vm_backend(&mut self, backend: VmBackend) {
         self.prefer_register = backend == VmBackend::Register;
+    }
+
+    /// The backend [`eval`](Self::eval) / [`run_bytecode`](Self::run_bytecode)
+    /// will use.
+    pub fn vm_backend(&self) -> VmBackend {
+        if self.prefer_register {
+            VmBackend::Register
+        } else {
+            VmBackend::Stack
+        }
     }
 
     fn apply_sandbox(&self, vm: &mut Vm) {

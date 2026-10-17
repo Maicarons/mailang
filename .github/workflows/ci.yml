@@ -25,25 +25,35 @@ jobs:
       fail-fast: false
       matrix:
         # `test_*` asserts the pure-Mai simulation (the default, no host
-        # installed); `host_*` asserts that a real host backend took over. Both
-        # are crossed with the two VM backends: the packs are part of the
-        # dual-VM equivalence gate, so each suite must pass on the stack VM and
-        # the register VM alike.
+        # installed); `host_*` asserts that a real host backend took over. Each
+        # is crossed with the VM backends: `default` passes no `--vm` flag (the
+        # register VM since M5), `stack` / `register` name it explicitly. The
+        # packs are part of the dual-VM equivalence gate, so every suite must
+        # pass on both backends alike.
         include:
           - host: sim
-            vm: ""
+            vm: default
+            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
+          - host: sim
+            vm: stack
             tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
           - host: sim
             vm: register
             tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
           - host: tui
-            vm: ""
+            vm: default
+            tests: libs\tui\test\host_tui.mai
+          - host: tui
+            vm: stack
             tests: libs\tui\test\host_tui.mai
           - host: tui
             vm: register
             tests: libs\tui\test\host_tui.mai
           - host: gui
-            vm: ""
+            vm: default
+            tests: libs\gui\test\host_gui.mai
+          - host: gui
+            vm: stack
             tests: libs\gui\test\host_gui.mai
           - host: gui
             vm: register
@@ -56,7 +66,7 @@ jobs:
         shell: pwsh
         run: |
           $vmArgs = @()
-          if ("${{ matrix.vm }}" -ne "") { $vmArgs += "--vm=${{ matrix.vm }}" }
+          if ("${{ matrix.vm }}" -ne "default") { $vmArgs += "--vm=${{ matrix.vm }}" }
           foreach ($t in "${{ matrix.tests }}".Split(" ")) {
             Write-Host "== $t  (--host=${{ matrix.host }} $($vmArgs -join ' '))"
             & .\target\release\mailang.exe run @vmArgs --host=${{ matrix.host }} $t
@@ -69,12 +79,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Every test runs on both backends: `MAILANG_VM=register` switches the
-        # suite to the register VM, which is the equivalence gate required
-        # before any default-backend switch.
-        vm: [stack, register]
+        # `default` runs with `MAILANG_VM` unset, i.e. on the backend a user
+        # gets out of the box - the register VM since M5, asserted by
+        # `test_default_backend_is_register`. `stack` is the documented opt-out,
+        # so the two rows still cover both backends. The explicit
+        # `MAILANG_VM=register` spelling is covered by the CLI unit tests.
+        vm: [default, stack]
     env:
-      MAILANG_VM: ${{ matrix.vm == 'register' && 'register' || '' }}
+      MAILANG_VM: ${{ matrix.vm == 'stack' && 'stack' || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -86,7 +98,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vm: [stack, register]
+        # `default` is the flagless run (`MAILANG_VM` unset), `stack` /
+        # `register` name the backend explicitly.
+        vm: [default, stack, register]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -94,10 +108,10 @@ jobs:
       # Informational baseline for ROADMAP M1 (register VM <= 2x stack).
       - name: Time fib30
         run: |
-          if [ "${{ matrix.vm }}" = "register" ]; then
-            BIN="./target/release/mailang run --vm=register bench_fib30.mai"
-          else
+          if [ "${{ matrix.vm }}" = "default" ]; then
             BIN="./target/release/mailang run bench_fib30.mai"
+          else
+            BIN="./target/release/mailang run --vm=${{ matrix.vm }} bench_fib30.mai"
           fi
           START=$(date +%s%N)
           $BIN > /dev/null
@@ -108,7 +122,7 @@ jobs:
       # differ are listed in benchmark/known_backend_mismatches.txt (ROADMAP
       # Phase M 13.3 / 13.5); a mismatch outside that list fails the job.
       - name: Compare backends on real programs
-        if: matrix.vm == 'stack'
+        if: matrix.vm == 'default'
         run: pwsh benchmark/compare_backends.ps1
 
   fmt:
@@ -177,7 +191,12 @@ jobs:
         run: |
           cargo build -p mailang-cli
           ./target/debug/mailang build examples/hello.mai -o /tmp/hello.mailangbc
-          ./target/debug/mailang run /tmp/hello.mailangbc
+          # `.mailangbc` is backend-independent: the flagless run is the
+          # register VM (M5 default), and it must agree with `--vm=stack`.
+          ./target/debug/mailang run /tmp/hello.mailangbc > /tmp/hello.default.txt
+          ./target/debug/mailang run --vm=stack /tmp/hello.mailangbc > /tmp/hello.stack.txt
+          diff /tmp/hello.default.txt /tmp/hello.stack.txt
+          cat /tmp/hello.default.txt
 
   publish-dry-run:
     name: cargo publish --dry-run

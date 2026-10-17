@@ -1,13 +1,40 @@
 use mailang_core::{MailangInterpreter, VmBackend};
 
-/// Shared interpreter factory. `MAILANG_VM=register` runs the whole suite on
-/// the register VM (stack-VM equivalence gate before any default switch).
+/// Shared interpreter factory.
+///
+/// Since M5 the register VM is the default, so an unset `MAILANG_VM` runs the
+/// whole suite on the backend a user gets out of the box; `MAILANG_VM=stack`
+/// runs it on the stack VM instead. CI runs the matrix both ways.
 fn interp() -> MailangInterpreter {
     let mut interp = MailangInterpreter::new();
-    if std::env::var("MAILANG_VM").as_deref() == Ok("register") {
-        interp.set_vm_backend(VmBackend::Register);
+    match std::env::var("MAILANG_VM").ok().as_deref().map(str::trim) {
+        Some("stack") => interp.set_vm_backend(VmBackend::Stack),
+        Some("register") => interp.set_vm_backend(VmBackend::Register),
+        _ => {}
     }
     interp
+}
+
+/// M5: the out-of-the-box backend is the register VM, and it is the same one
+/// `MAILANG_VM`/`--vm` select explicitly.
+#[test]
+fn test_default_backend_is_register() {
+    assert_eq!(MailangInterpreter::new().vm_backend(), VmBackend::Register);
+    let mut interp = MailangInterpreter::new();
+    interp.set_vm_backend(VmBackend::Stack);
+    assert_eq!(interp.vm_backend(), VmBackend::Stack);
+}
+
+/// M5: the stack VM is still selectable and behaves identically on a program
+/// that exercises calls, matching and collections.
+#[test]
+fn test_stack_backend_is_still_selectable() {
+    let mut interp = MailangInterpreter::new();
+    interp.set_vm_backend(VmBackend::Stack);
+    let out = interp
+        .eval("fn sq(n) { return n * n }\nlet xs = [1, 2, 3]\nxs[0] + sq(4)")
+        .expect("stack VM eval");
+    assert_eq!(out, "17");
 }
 
 fn eval(code: &str) -> String {
