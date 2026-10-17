@@ -994,4 +994,38 @@ fn test_match_range_without_binding_still_selects_branch() {
     assert_eq!(eval("match 10 { 1..=10 => \"in\" _ => \"out\" }"), "in");
 }
 
+// ===== Phase N（N1）：寄存器后端的整型立即数必须符号扩展 =====
+//
+// 编译器用 `i32::try_from` 把折叠后的常量塞进 `operand: Option<u32>`
+// （compiler.rs），所以解码时必须 `as i32 as i64`。寄存器翻译器此前直接用
+// `as i64`，把 `-10` 读成 4294967286：所有"变量 与 负整型常量"的比较/算术
+// 都会静默算错。examples/iot_sensor.mai 的 `if c < -10` 就是它（该文件没有
+// match，两个后端却给出不同的分类）。
+
+#[test]
+fn test_negative_int_immediate_comparisons() {
+    assert_eq!(eval("let a = 1\na < -10"), "false");
+    assert_eq!(eval("let a = 1\na > -10"), "true");
+    assert_eq!(eval("let a = 1\na == -10"), "false");
+    assert_eq!(eval("let a = 1\na != -10"), "true");
+    assert_eq!(eval("let a = 1\na <= -10"), "false");
+    assert_eq!(eval("let a = 1\na >= -10"), "true");
+}
+
+#[test]
+fn test_negative_int_immediate_arithmetic() {
+    assert_eq!(eval("let a = 1\na + -10"), "-9");
+    assert_eq!(eval("let a = 1\na - -10"), "11");
+    assert_eq!(eval("let a = 3\na * -10"), "-30");
+}
+
+#[test]
+fn test_negative_int_immediate_inside_function() {
+    assert_eq!(eval("fn f(a) {\n    return a < -10\n}\nf(1)"), "false");
+    assert_eq!(eval("fn f(a) {\n    return a + -10\n}\nf(1)"), "-9");
+    // 浮点与负整型常量比较：立即数先变成 `Int(-10)` 再走混合比较。
+    assert_eq!(eval("let a = 23.5\na < -10"), "false");
+    assert_eq!(eval("let a = 23.5\na > -10"), "true");
+}
+
 // ---

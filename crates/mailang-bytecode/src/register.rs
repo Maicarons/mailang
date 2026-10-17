@@ -365,7 +365,12 @@ impl<'a> StackToRegister<'a> {
                 | Opcode::LeImm
                 | Opcode::GtImm
                 | Opcode::GeImm => {
-                    let imm = ins.operand.unwrap_or(0) as i64;
+                    // The compiler stores immediates as `i32` bit patterns in
+                    // `operand` (`i32::try_from` at emit time), so sign-extend
+                    // exactly like the stack VM does. Without this, `-10` is
+                    // read as `4294967286` and every `x < -10` / `x + -10`
+                    // silently computes the wrong value.
+                    let imm = ins.operand.unwrap_or(0) as i32 as i64;
                     let lhs = sp.saturating_sub(1);
                     let dst = lhs;
                     self.use_reg(dst);
