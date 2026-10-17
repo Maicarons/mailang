@@ -200,11 +200,21 @@ impl RegisterVm {
     /// instances, builtin results) rather than on every register write: the
     /// collector only ever sweeps tracked nodes, so tracking a node twice is
     /// harmless while tracking it late merely delays cycle collection.
+    ///
+    /// The node is passed to the collector as an **extra root**. At every call
+    /// site the new value is handed back to the caller *after* this returns, so
+    /// it is not in the register file yet; without the extra root a collection
+    /// triggered right here would sweep the newborn node and `clear_children`
+    /// would empty it before anyone could use it (`len([1, 2, 3])` returning 0
+    /// in an allocation loop).
     #[inline]
     fn track_new(&mut self, v: &Value) {
         if is_heap_node(v) {
             self.gc.track(v);
-            self.maybe_auto_collect();
+            if self.gc.should_collect() {
+                let extra = [v.clone()];
+                self.collect_with(&extra);
+            }
         }
     }
 
@@ -1152,14 +1162,22 @@ impl RegisterVm {
 
     fn maybe_auto_collect(&mut self) {
         if self.gc.should_collect() {
-            let mut roots = self.regs.clone();
-            roots.extend_from_slice(&self.globals);
-            roots.extend(self.upvalue_store.iter().cloned());
-            for v in roots.iter() {
-                self.gc.track(v);
-            }
-            self.gc.collect(&roots);
+            self.collect_with(&[]);
         }
+    }
+
+    /// Mark-sweep with the register file, the globals and the upvalue store as
+    /// roots, plus `extra` (values that are live but not in a register yet,
+    /// e.g. a heap node freshly returned by `track_new`).
+    fn collect_with(&mut self, extra: &[Value]) {
+        let mut roots = self.regs.clone();
+        roots.extend_from_slice(&self.globals);
+        roots.extend(self.upvalue_store.iter().cloned());
+        roots.extend_from_slice(extra);
+        for v in roots.iter() {
+            self.gc.track(v);
+        }
+        self.gc.collect(&roots);
     }
 }
 
