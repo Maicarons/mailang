@@ -579,7 +579,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 
 ### 13.3 双后端不一致：4 处 `match` 缺陷 + 4 处参数缺陷
 
-`benchmark\compare_backends.ps1` 对 `examples/` + `libs/` 下 66 个 `.mai` 程序做双后端逐字节比对，其中 2 个跳过（输出不确定或不终止，见 13.6）：`libs/time/example/basic.mai` 打印墙钟时间，`libs/gui/example/interactive.mai` 是无事件源的交互死循环。**当前 64 个比对中 56 一致 / 8 不一致**，8 个全部列在 `benchmark/known_backend_mismatches.txt`：脚本对「未列出的新不一致」失败，对「已修好的列项」只提示、不阻塞修复。Phase M 优化本身零回归（起点的 4 处 `match` 不一致至今未变）。
+`benchmark\compare_backends.ps1` 对 `examples/` + `libs/` 下 66 个 `.mai` 程序做双后端逐字节比对，其中 2 个跳过（输出不确定或不终止，见 13.6）：`libs/time/example/basic.mai` 打印墙钟时间，`libs/gui/example/interactive.mai` 是无事件源的交互死循环。**当前 64 个比对中 56 一致 / 8 不一致**，8 个全部列在 `benchmark/known_backend_mismatches.txt`：脚本对「未列出的新不一致」失败，对「已修好的列项」只提示、不阻塞修复。Phase M 优化本身零回归（起点的 4 处 `match` 不一致至今未变）。（**Phase N 复测，2026-10-17**：D1–D4 全部修好后 **64/64 一致**，`known_backend_mismatches.txt` 已清空，`compare_backends.ps1` 退出码 0、无 NOTE；8 处不一致的归因见下方各小节的更正。）
 
 #### 已修：寄存器 VM 缺少 Int/Float 混合运算（`wasm_demo.mai`）
 
@@ -587,7 +587,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 
 修复：任一侧为 `Float` 时把另一侧 `Int` 提升为 `f64`，语义与栈式 `add_values`/`mul_values`/`div_values`/`mod_values`/`pow_values` 逐项对齐（含除零错误）；同时补齐 `Str * Int` 重复与 `Array + Array` 拼接。`Int op Int` 仍走 i64 快路径（`wrapping_*`、整数除法），不受 f64 精度影响。
 
-#### 未修：`match` 编译缺陷（`match_demo` / `phase_b_check` / `iot_sensor` / `try_demo`）
+#### 已修（Phase N N2）：`match` 值协议缺陷（`match_demo` / `phase_b_check` / `try_demo`）
 
 **字节码级根因（已确认）**：
 
@@ -601,17 +601,17 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
    18: MulImm Some(2)      ← Null * 2 → 类型错误
    ```
 
-   最小复现：`let a = 1` 后接任意 `match`，即失效（`repro5` S2）。
+   **更正（Phase N）**：旧文把最小复现写成"`let a = 1` 后接任意 `match`，即失效"——**不成立**。实测 `let a = 1` + **字面量** scrutinee + 绑定模式完全正确；触发条件是**值协议**（下面第 2 点：绑定槽不写 / arm 结果不上栈），与前置局部变量无关。已随 N2 修好。
 
 2. **arm 的值没有压回操作数栈**。`end_scope_keeping_result` 把 arm 结果 `StoreLocal` 进局部槽后，match 结尾只有 fallthrough 路径补`PushNull`，导致外层 `let m = match {...}` 取到的是 match 之前的残留栈内容（表现为输出未解包的 `Ok(5)` 而非 `14`）。
 
 **为什么没有直接改**：两处修复都会改变指令序列，与 `mailang-bytecode/src/register.rs` 的 `compute_heights`（dataflow stack height）契约冲突。实测只改编译器后，寄存器后端的 `match [a, b]` 长度检查失效（`[1]` 错配到 `[a, b]` 分支，`test_match_array_destructure` 期望 99 实得 2）。修复必须**同时**调整寄存器翻译器，不能只改编译器。
 
-**顺带发现**：函数/块的最后一条是裸 `match` / `if` 表达式时，返回 `null` 而非该表达式的值（`examples/match_demo.mai` 前四行、`iot_sensor` 的分类分支）。这是同一处栈协议缺陷的第三种表现。
+**顺带发现（M7）**：函数/块的最后一条是裸 `match` 表达式时返回 `null`——已随 N2 的值协议一并修好（`match` 作为尾表达式给出 arm 的值，见 `crates/mailang-compiler/src/compiler.rs::compile_body_value`）。**仍存**：裸 **`if`** 作为块/函数尾表达式仍返回 `null`（N2 只让"表达式语句"携带尾值，`Stmt::If` 的尾值未做，是已知剩余缺口）。
 
-#### 未修：两个 UI 包在寄存器后端不一致（4 个程序）
+#### 已修（Phase N N3）：两个 UI 包在寄存器后端不一致（4 个程序）
 
-`libs/gui`、`libs/tui` 的 `test_gui.mai` / `test_tui.mai` 与各自的 example 在 `--vm=register` 下失败，根因是 13.5 的参数缺陷（参数算术 + 寄存器后端丢失参数类型），不是包本身的问题——这些程序在栈式后端全部通过。它们在 `known_backend_mismatches.txt` 的第二个分组里，修好 M8 后应自动转为一致。
+`libs/gui`、`libs/tui` 的 `test_gui.mai` / `test_tui.mai` 与各自的 example 在 `--vm=register` 下曾失败。此前把它归因于"13.5 的参数缺陷"是**错的**：真因是寄存器后端 `if … return` 汇合点的栈高错误（13.5 现已改写为该根因），与参数类型无关。Phase N N3 修好后这四个程序在两个后端逐字节一致，两个包的模拟套件在两个后端都通过（`test_tui` 78/78、`test_gui` 98/98），`known_backend_mismatches.txt` 清空。
 
 ### 13.4 Phase M 剩余项
 
@@ -621,44 +621,49 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 | M3 | 泛型类单态化 or 明确文档 | 待决（建议 v0.4 先写明「字段擦除」限制） |
 | M4 | async 决策 | 继续冻结（无 IoT 场景） |
 | M5 | 切换默认后端 | **前置条件已满足**（1.2x ≤ 2x + CI 双后端矩阵），但切换默认会影响 `.mailangbc` 兼容与 wasm/embedded 体积，建议单独做 v0.5 决策 |
-| M6 | 修 13.3 的双后端不一致 | 8 处待修（4 处 `match` 编译缺陷 + 4 处参数缺陷）；已修 1 处（float 混合运算）。`match` 修复需连带调整 `register.rs` 的 `compute_heights`，v0.4 P0 |
-| M7（新增） | 裸 `match`/`if` 作为块尾表达式返回 `null` | 与 M6 同源，一并修 |
-| M8（新增） | **函数参数参与算术运算结果错误** | v0.4 P0，见 13.5 |
-| M9（新增） | **分配密集的循环不回收堆内存** | v0.4 P1，两个后端同源，见 13.6 |
+| M6 | 修 13.3 的双后端不一致 | ✅ **Phase N 已修**：D1（N1）、D2（N2）、D3（N3）全部落地 + 索引对齐，`compare_backends.ps1` 64/64 一致、manifest 清空。旧"参数缺陷"归因见 13.5 更正 |
+| M7（新增） | 裸 `match`/`if` 作为块尾表达式返回 `null` | `match` 尾值已随 N2 修好；**裸 `if` 尾值仍返回 `null`**（剩余缺口） |
+| M8（新增） | 函数参数在部分形状下仍出错 | **部分证伪**：\"两个后端都算错参数算术\"不成立——寄存器后端在这些例子算对，栈式后端也不是全错。**仍存**：栈式后端 5 参数的 `y + h - 1` 抛 `Cannot add these types`、参数继续下传报 `len expects …`；寄存器后端不接管 `libs/tui`+`libs/gui` 的宿主钩子。见 13.5 |
+| M9（新增） | ~~分配密集的循环不回收堆内存~~ | ✅ **Phase N N4 已修**（阈值策略 + census 强引用）；复测栈式 4.9 MB / 寄存器 5.1 MB 平坦，见 13.6 |
 
-### 13.5 参数算术缺陷（v0.4 P0，实测证据）
+### 13.5 寄存器后端：`if … return` 汇合点的栈高错误（v0.4 P1；Phase N N3 已修）
 
-为实现 `libs/gui` 时发现，**两个后端都会算错「操作数来自函数参数」的表达式**，与 `match` 缺陷同源（都属于参数/槽位模型问题）。
+> **更正（Phase N 复测，2026-10-17）**：本节原名「参数算术缺陷」，并称"**两个后端**都会算错操作数来自函数参数的表达式"。实测证伪：`fn f(w, s) { return w - len(s) }`、`fn f2(w, s) { var lw = w  var ls = s  return lw - len(ls) }`、`fn f3(rect) { return rect[0] + rect[2] }` 在**栈式后端**都给出正确值（7 / 7 / 7）。原表是用**打补丁后未重建的 CLI 二进制**测出来的（见 §1 的教训）。真因只在**寄存器后端**。
 
-实测对照（栈式后端，`libs/gui/test/`）：
+**根因**：`crates/mailang-bytecode/src/register.rs::compute_heights` 把 `Return`/`Halt`/`TailCall`/`Throw` 的高度继续传播到 `ip+1`，而这四条指令都不会顺序落到下一条。当早期 `return` 的下一条恰好又是外层 `if` 的跳转目标（`if c { return x } var total = …`）时，这个伪造的高度赢得 join，使参数槽之上的每个寄存器整体偏移一格：函数自身的局部量随后从错误的寄存器读出——先算错值，再变成类型错误。
 
-| 写法 | 结果 |
-|------|------|
-| `fn f(w, s) { return w - len(s) }` | 错误（返回空值） |
-| `fn f(w, s) { var lw = w  var ls = s  return lw - len(ls) }` | 正确 |
-| `fn f(w, s) { var r = rect  return r[0] + r[2] }` | 报`Cannot add these types` |
-| 3 参数函数内做算术（如 `slider_ratio`） | 正确 |
-| ≥5 参数函数内做算术（如 `draw_rect_outline`） | 报类型错误 |
+最小复现（`rep(ch, n)` 是循环拼接；失败点在 `pad_center` 内部，不在 `repeat`）：
 
-对库设计的影响（已在两个包的 README「Honest limits」标注）：
-- `libs/gui` 无法提供 `draw_rect_outline` / `progress_bar`——算远边坐标必须做参数算术。调用方自己发四条 `draw_rect` 即可。
-- 控件API 被迫改成接收矩形数组（`panel(handle, rect, fill)`）而不是四个坐标参数。
-- 寄存器后端还会**丢失参数类型**（数组字面量传进来后 `len()` 报 "expects a string, array, map, or tuple"），因此两个包在 `--vm=register` 下无法通过测试。
+| 函数 | 栈式 | 寄存器（修前） |
+|------|------|----------------|
+| `a`: `if want<=have { return text } return text` | `ab` | `ab` ✓ |
+| `b`: 上面 + `var total = want-have` + `return rep(" ", total)+text` | `    ab` | `ab` ✗（total 被读成 0） |
+| `c1`: 同 b，但 `rep(" ", total/2)` | `  ab` | `Type error: Cannot apply binary op` |
+| `c`: 同 c1，多一个局部 `var left = total/2` | `  ab` | 同上，报错 |
 
-修复方向（与 M6 合并处理）：编译器为函数参数分配槽位时保证「参数槽 + 操作数栈」的不变量，与 M6 的 `compile_bindings_from_stack` 修复一并做；随后同步 `register.rs` 的 `compute_heights`。**必须双后端一起验证**，因为单独改编译器会破坏寄存器后端的数组模式长度检查。
+**受影响程序**：`libs/tui/test/test_tui.mai`、`libs/tui/example/basic.mai`、`libs/gui/test/test_gui.mai`、`libs/gui/example/dashboard.mai`——都在栈式后端通过；寄存器后端此前分别在 20 / 21 个断言后失败。
 
-### 13.6 新发现：分配密集的循环不回收堆内存（两个后端，v0.4 P1）
+**修复（Phase N N3）**：① 帧退出指令不再有后继（`compute_heights`）；② 帧布局契约拆成 `n_regs`（窗口大小）/ `param_slots`（参数 + 隐式 `this` 预留）/ `arity` + `required`（声明的形参个数）三个概念，`start_sp` 不再一词三用。修后四个程序在两个后端逐字节一致，`test_tui` 78/78、`test_gui` 98/98 在两个后端都通过；`benchmark/known_backend_mismatches.txt` 已清空。
 
-实测（Windows release，`mailang run`，进程峰值工作集）：
+**仍存（Phase M M8，不在 Phase N 范围）**：① **寄存器后端不接管 `gui_draw_rect` / `gui_draw_text` / `tui_write` 这些宿主钩子**——包装函数返回桩值（`Ok("sim")` / `sim`）而非宿主值 `"win32"` / `"tty"`，所以 `host_*` 套件在 `--vm=register` 下各有 1–2 项失败；② **栈式后端在若干参数形状下仍会报错**：5 参数函数里的 `y + h - 1` 抛 `Cannot add these types`，把参数继续传进更深一层调用（`to_rgba(color)`）报 `len expects a string, array, map, or tuple`，而寄存器后端在这些形状上算对；③ **栈式后端**在 `println(f(x))`（`f` 体以 `return g(a)` 尾调用收尾）时报 `Internal VM error: Stack underflow in Call`。三者都在 `a063f14`（Phase N 之前）已复现，边界尚未完全刻画；因为没有 shipped 程序命中，`compare_backends.ps1` 仍是 64/64。详见 AGENTS.md「Remaining gaps」。
 
-| 循环体 | 迭代次数 | 栈式 VM 峰值 | 寄存器 VM 峰值 |
-|--------|----------|--------------|----------------|
-| `var x = i`（只有局部量，无堆分配） | 2000 万 | ~5 MB | — |
-| `s = s + len([1, 2, 3])`（每轮一个数组字面量） | 200 万 | **159 MB** | **159 MB** |
-| 同上 | 400 万 | **336 MB** | — |
+### 13.6 GC：阈值无上限增长 + census 持强引用（v0.4 P1；Phase N N4 已修）
 
-即每轮堆分配约保留 80 字节，**从不出现平台期**（400 万次是 200 万次的两倍；两个后端数值一致，说明不是寄存器后端的 translate 问题）。局部量本身不泄漏（2000 万次迭代只涨到 5 MB），所以也不是 13.5 的槽位模型问题，而在堆回收路径：`Vm::push` 每压栈一次就 `MarkSweepHeap::track` + `maybe_auto_collect`，`should_collect()` 阈值从 256 起按 1.5× 增长，但内存随分配量线性增长，说明 sweep 几乎没有释放任何节点。
+> **更正（Phase N 复测，2026-10-17）**：本节原名「分配密集的循环不回收堆内存」，并称"`sweep` 几乎没有释放任何节点"。census 实测证伪：`while` 每轮分配一个 `[1,2,3]` 时，20 万次分配实际 `freed_total = 148,940`——sweep 是有效的，问题不在"不释放"，而在**阈值增长策略 + census 自身持强引用**。
 
-**根因尚未定位到具体一行**：可疑点是 `collect(&roots)` 的 roots 取整个 `self.stack`（含当前帧所有槽位），而标记表 `MarkSweepHeap::nodes` 自身对每个节点持有强 `Rc`；确认需要 `freed_total` 的观测出口。相关代码：`crates/mailang-gc/src/lib.rs`（`track` / `should_collect` / `collect`）、`crates/mailang-vm/src/vm.rs::maybe_auto_collect`、`crates/mailang-vm/src/register_vm.rs::track_heap`。
+**根因**：`MarkSweepHeap::collect` 把新阈值设为**旧阈值 ×1.5**（无上限），而 census 表对每个被跟踪节点持一个强 `Rc`，垃圾只能在**下次**收集时释放 → 驻留峰值 ≈ 当前收集区间的长度 ≈ 累计分配量的一半，于是内存随迭代数线性增长。
 
-影响：新加的 `libs/gui/example/interactive.mai` 在 sim 模式下每帧重绘且永不退出，一秒内即撞 `memory allocation of 134217728 bytes failed`（128 MiB）并 abort——这就是它被排除在双后端比对之外的原因（它不终止）。任何「长期运行 + 频繁分配」的 IoT 场景都会命中，优先级高于 13.3 的表现层缺陷。
+实测 census（栈式，`while` 每轮分配一个 `[1,2,3]`）：
+
+| 迭代数 | tracked（结束时） | collections | freed_total |
+|--------|------------------|-------------|-------------|
+| 50,000 | 6,228 | 11 | 43,772 |
+| 100,000 | 876 | 13 | 99,124 |
+| 200,000 | 51,060 | 14 | 148,940 |
+| 400,000 | 64,250 | 16 | 335,750 |
+
+进程工作集（release，15 ms 采样峰值）：2,000,000 次 = **151 MB**，4,000,000 次 = **333 MB**（与本节旧记录的 159/336 MB 一致，我用采样独立复现）。`libs/gui/example/interactive.mai` 在 sim 模式下每帧重绘且永不退出，一秒内即撞 128 MiB 并 abort——这就是它被排除在双后端比对之外的原因（它不终止）。
+
+**修复（Phase N N4）**：`MarkSweepHeap::collect` 返回活对象数，阈值改成 `max(MIN, live * 2)` 并加硬上限；`vm.rs::maybe_auto_collect` 相应调整；顺带修了**寄存器 VM 的新生节点不是 GC 根**的问题。新增 `.mai` 可调的 `gc_stats()` 内建（`tracked` / `collections` / `freed`）以便观测。
+
+**复测（Phase N N7，Windows release）**：两个后端在同一条分配循环上都不再随迭代数增长——栈式 200 万次 **4.9 MB**、400 万次 **4.9 MB**；寄存器 **5.1 / 5.1 MB**。门禁：`benchmark/measure_memory.ps1`（上限 64 MB，退出码 0）。

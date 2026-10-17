@@ -201,8 +201,8 @@ cargo run -p mailang-cli --release -- run --host=gui libs/gui/test/host_gui.mai
 ## Honest limits
 
 - 未经 host 注册前不创建真实窗口；绘制只是内存里的命令列表。
-- **寄存器后端（`--vm=register`）目前跑不全本库**：栈式后端 98/98 通过；寄存器后端在 `to_rgba()` 处理数组参数时抛 `len expects a string, array, map, or tuple`——这是项目既有的寄存器缺陷（参数传递的类型信息丢失，见 `ROADMAP.md` Phase M），不是本库逻辑问题。库内已尽量避免依赖该缺陷的写法，但参数数组的场景仍会触发。
-- **没有 `draw_rect_outline` / `progress_bar` 助手**：计算矩形远边需要坐标算术，而两个 VM 目前会算错"操作数来自函数参数"的表达式（见 `ROADMAP.md` Phase M 的参数缺陷）。边框请自己发四条 `draw_rect`，进度条请按已算好的像素宽度发 `draw_rect`。
+- **测试状态（Phase N N3）**：模拟套件 `test_gui.mai` 在两个后端都 **98/98** 通过（CI 矩阵）；`host_gui.mai` 在栈式后端 7/7 通过，寄存器后端下 `gui.draw_rect` / `gui.draw_text` 的宿主钩子不被接管（返回桩值 `Ok("sim")` 而非宿主值 `"win32"`）——这是先于 Phase N 存在的问题（Phase M M8，见 `ROADMAP.md` 13.5），不是本库的逻辑问题。
+- **没有 `draw_rect_outline` / `progress_bar` 助手**：历史上是因为寄存器后端在 `if … return` 汇合点的栈高错误（Phase N N3 已修）。栈式后端在"把参数继续下传"的形状（如 `to_rgba(color)`）下仍会报错，所以需要边框时请直接发四条 `draw_rect`（颜色用字面量），进度条按已算好的像素宽度发 `draw_rect`。
 - 颜色只接受**名称或数组**两种形式：语言没有 `type_of`，而`len()` / 索引 / 算术在类型不符时都是**抛错**而非返回 false，无法在无 `try/catch` 的前提下安全区分标量颜色（如 `0xFF0000`）与容器，故不支持标量。
 - 控件都是即时模式绘制助手，不做布局、不处理交互状态、不做主题。命中判断请用 `hit_test`。
 - 字体只是不透明句柄 + 固定单元格尺寸，没有字形度量、没有换行、没有富文本。

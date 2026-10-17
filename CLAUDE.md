@@ -72,7 +72,7 @@ Source (.mai) → Lexer → Parser → Compiler → VM
 
 ### Key Design Decisions
 
-- **Stack VM by default, register VM as a peer backend**: both execute the same `Bytecode` (the register VM via `StackToRegister` lowering) and pass the same 108 integration tests. Switch with `MAILANG_VM=register` or `--vm=register`; CI runs the whole suite on both.
+- **Stack VM by default, register VM as a peer backend**: both execute the same `Bytecode` (the register VM via `StackToRegister` lowering) and pass the same 125 integration tests. Switch with `MAILANG_VM=register` or `--vm=register`; CI runs the whole suite on both. `benchmark/compare_backends.ps1` is the byte-for-byte equivalence gate over every `.mai` program in `examples/` + `libs/` (currently 64/64 identical).
 - **Value enum** in mailang-bytecode is the universal runtime type: `Null`, `Bool`, `Int(i64)`, `Float(f64)`, `Str`, `Char`, `Array`, `Map`, `Tuple`, `Function`, `Closure`, `Class`, `Instance`, `Ok`, `Err`, `Some`.
 - **Local vs global variable resolution**: Compiler resolves locals by stack index, globals by constant-pool name. Closures capture via upvalues.
 - **Chunk-based bytecode**: Each function gets its own `Chunk` with independent instruction and constant lists. Main code is chunk 0.
@@ -92,6 +92,6 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-v0.3.1 (Phase L shipped). The pipeline is complete: OOP with inheritance/`super`, traits, pattern matching, closures, error handling (`Result`/`Option`/`?`), TCO, generics with turbofish monomorphization, a filesystem/HTTP package registry, bundled Win32 `--host=tui|gui` backends for the `libs/tui` + `libs/gui` packs, and dual stack/register VMs with feature parity (108 integration tests on each).
+v0.3.1 (Phase N shipped). The pipeline is complete: OOP with inheritance/`super`, traits, pattern matching, closures, error handling (`Result`/`Option`/`?`), TCO, generics with turbofish monomorphization, a filesystem/HTTP package registry, bundled Win32 `--host=tui|gui` backends for the `libs/tui` + `libs/gui` packs, and dual stack/register VMs that agree on every shipped program (125 integration tests on each, plus `compare_backends.ps1` 64/64).
 
 Known gaps are listed in `AGENTS.md` ("Remaining gaps") and tracked in `ROADMAP.md` Phase M: generic *classes* erase their fields, `async` is not supported, the IoT HAL is simulated by default, `mailang-macros` is a passthrough stub, heap memory is not reclaimed in allocation-heavy loops, and eight programs still behave differently on the register VM than on the stack VM (`benchmark\compare_backends.ps1` reproduces them and fails on any mismatch outside `benchmark/known_backend_mismatches.txt`).

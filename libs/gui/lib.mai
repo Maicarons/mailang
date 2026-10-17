@@ -409,11 +409,12 @@ fn draw_pixel(handle, x, y, color) {
     return draw_rect(handle, x, y, 1, 1, color)
 }
 
-// NOTE: there is deliberately no `draw_rect_outline` helper. Computing the far
-// edges of a rectangle needs arithmetic on coordinates, and the VMs currently
-// miscompute expressions whose operands come from parameters (or from indexing
-// a parameter array) - see ROADMAP Phase M. Callers that need a border should
-// emit the four edge rects themselves, or walk the pixels with draw_pixel().
+// NOTE: there is deliberately no `draw_rect_outline` helper. It was left out
+// while the register backend miscomputed `if … return` joins (fixed in Phase
+// N N3); the stack VM still errors when a parameter is forwarded into a deeper
+// call - see ROADMAP Phase M M8. Callers that need a border should emit the
+// four edge rects themselves (with literal colours), or walk the pixels with
+// draw_pixel().
 
 fn draw_text(handle, x, y, text, color) {
     var c = to_rgba(color)
@@ -759,8 +760,8 @@ fn label(handle, x, y, text, color) {
 
 // Button: filled background plus a label, no border arithmetic. `rect` is
 // [x, y, w, h]; the caption is drawn at the rect origin. All rect fields are
-// read before any call, because a parameter array becomes unusable once the
-// frame has made another call (see ROADMAP Phase M notes).
+// read up front: the stack VM still mishandles forwarding a parameter into a
+// deeper call (see ROADMAP Phase M M8).
 fn button(handle, rect, text, color) {
     var x = rect[0]
     var y = rect[1]
@@ -772,8 +773,9 @@ fn button(handle, rect, text, color) {
 }
 
 // NOTE: there is no progress-bar helper. Sizing a fill from a ratio needs
-// arithmetic on values derived from parameters, which the VMs currently
-// miscompute (see ROADMAP Phase M). Draw the bar yourself with draw_rect().
+// arithmetic on values derived from parameters, which the stack VM still
+// mishandles in some shapes (see ROADMAP Phase M M8). Draw the bar yourself
+// with draw_rect().
 
 fn slider_ratio(x, press_x, w) {
     var left = x

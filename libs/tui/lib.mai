@@ -329,8 +329,9 @@ fn puts(text) {
 // Repeat a single-character string n times.
 fn repeat(ch, n) {
     var out = ""
-    // Parameters are copied into locals before any arithmetic: the register
-    // backend miscomputes `n` when an operand is a bare parameter.
+    // An explicit local loop bound. The register backend used to miscompute a
+    // bare parameter here via the old `if … return` height bug (Phase N N3
+    // fixed it); kept as harmless clarity.
     var limit = n
     var i = 0
     while i < limit {
@@ -403,8 +404,8 @@ fn truncate(s, w) {
     var out = ""
     var i = 0
     while i < want {
-        // to_string(): indexing yields a Char, and Char + Str is not a
-        // supported operand pair on the register backend.
+        // to_string() keeps this explicit; string indexing now yields a Char
+        // on both backends (aligned in Phase N N3).
         out = out + to_string(src[i])
         i = i + 1
     }

@@ -294,4 +294,4 @@ cargo run -p mailang-cli --release -- run --host=tui libs/tui/test/host_tui.mai
 - 模拟永不阻塞：`read_key()` 在队列空时返回 `Err`，而不是等待输入。
 - 没有光标位置查询、没有滚动区（scroll region）、没有鼠标上报，也没有真宽字符（wcwidth）表。
 - `Ok("sim")` 只是"已写入模拟缓冲"，**不是**真实终端已渲染的确认。
-- **寄存器后端（`--vm=register`）尚未跑通本库全部功能。** 栈式后端 78/78 通过；寄存器后端在`pad(text, width, align)` 这类"字符串 + 整数 + 字符串"混合参数调用上报 `Type error: Cannot apply binary op`，而`kv(label, value, label_width)`（字符串 + 字符串 + 整数）正常。这是项目既有的寄存器后端缺陷（参数寄存器分配与参数类型顺序相关，见 `ROADMAP.md` Phase M），不是本库的逻辑问题。库内所有涉及算术的参数都已先复制到局部变量以规避该缺陷，剩余问题需等寄存器后端修复。 
+- **模拟套件 `test_tui.mai` 在两个后端都 78/78 通过**（Phase N N3 修好寄存器后端 `if … return` 汇合点的栈高错误后）；`host_tui.mai` 在栈式后端 7/7 通过，寄存器后端下 `write()` 不被宿主接管（返回桩值而非 `"tty"`）——先于 Phase N 存在的问题（Phase M M8，见 `ROADMAP.md` 13.5），不是本库的逻辑问题。
