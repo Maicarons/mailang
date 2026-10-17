@@ -3,13 +3,13 @@
 [![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.3.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.3.0)
+[![Version](https://img.shields.io/badge/version-0.3.1-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.3.1)
 
 一个为 IoT 和跨平台开发设计的现代编程语言，使用 Rust 编写。
 
 **仓库地址**：[github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
 **在线文档**：[Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
-**版本发布**：[v0.3.0](https://github.com/Maicarons/mailang/releases/tag/v0.3.0)
+**版本发布**：[v0.3.1](https://github.com/Maicarons/mailang/releases/tag/v0.3.1)
 
 ## 特性
 
@@ -94,7 +94,7 @@ cargo build --no-default-features --target thumbv7em-none-eabihf
 
 ## 测试
 
-集成测试：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）均为 **102/102**。
+集成测试：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）均为 **108/108**。
 
 ## 当前限制
 

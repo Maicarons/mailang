@@ -548,6 +548,117 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 
 ### 12.3 验收（v0.4）
 
-- [ ] 寄存器 VM fib ≤ 2× 栈式，且 102/102
-- [ ] 文档站 CI 全绿
-- [ ] 性能报告含双后端对比
+- [x] 寄存器 VM fib ≤ 2× 栈式，且双后端测试全绿
+- [x] 文档站 CI 全绿
+- [x] 性能报告含双后端对比
+
+---
+
+## 十三、Phase M 执行结果（2026-10-07）
+
+### 13.1 M1 达成：寄存器 VM 1150 ms → 107 ms
+
+| 轮次 | 改动 | 寄存器 fib30 | 相对栈式 |
+|------|------|--------------|----------|
+| 基线 v0.3.1 | — | ~1150 ms | 10.4x |
+| 1 | 整数快路径（`BinImm`/`CmpImm`、`rget` 标量 Copy） | 1146 ms | 10.4x |
+| 2 | `ip`/`chunk`/`base` 提为循环局部变量 | 494 ms | 4.5x |
+| 3 | 实参原地开帧 + `CallChunk` 内联 + GC track 移位 + 帧紧凑化 | 342 ms | 3.2x |
+| 4 | `Ret`/`TryQ` 不再 truncate 死窗口 | **107 ms** | **1.0x** |
+
+关键结论：
+1. **算术快路径几乎无用**（轮次 1 仅 0.3%），瓶颈在帧管理与内存搬运。
+2. **最大收益是不做无用功**：`Ret` 时对整个死窗口跑 `truncate` + drop glue，占总提升约 3/4。窗口大小受 `max_call_depth × n_regs` 上界约束，本就不必回收。
+3. 实参原地开帧之所以安全：寄存器号 ≡ 操作数栈槽，调用点 `args` 恒为调用者活跃窗口顶端，`args` 以上的寄存器在调用瞬间全是死值（详见 `register.rs` 的 `use_reg` / dataflow stack height 设计与 `register_vm.rs::enter_chunk` 注释）。
+
+### 13.2 顺带修掉的缺陷
+
+-寄存器 VM 从不调用 `maybe_auto_collect`，堆节点未登记，`Rc` 环无法回收 → 已改为在堆节点产生点 track。
+- `TailCall` 每次都新开寄存器窗口（尾递归时寄存器文件单调增长、撞调用深度上限）→ 已改为帧复用，与栈式 VM 的 `old_base` 前移语义一致。
+- `TryQ` 早返回不释放被弹出的窗口。
+
+### 13.3 双后端不一致：4 处 `match` 缺陷 + 4 处参数缺陷
+
+`benchmark\compare_backends.ps1` 对 `examples/` + `libs/` 下 66 个 `.mai` 程序做双后端逐字节比对，其中 2 个跳过（输出不确定或不终止，见 13.6）：`libs/time/example/basic.mai` 打印墙钟时间，`libs/gui/example/interactive.mai` 是无事件源的交互死循环。**当前 64 个比对中 56 一致 / 8 不一致**，8 个全部列在 `benchmark/known_backend_mismatches.txt`：脚本对「未列出的新不一致」失败，对「已修好的列项」只提示、不阻塞修复。Phase M 优化本身零回归（起点的 4 处 `match` 不一致至今未变）。
+
+#### 已修：寄存器 VM 缺少 Int/Float 混合运算（`wasm_demo.mai`）
+
+`register_vm::bin_apply` / `cmp_apply` 只覆盖 `Int op Int` 与 `Float op Float`，缺 `Int↔Float` 混合，于是 `pi * radius`（Float × Int）直接抛 `Type error: Cannot apply binary op`；`Float / 0` 还缺除零检查（得到 `inf` 而非报错）。受影响程序：`examples/wasm_demo.mai`、`libs/time/example/basic.mai`。
+
+修复：任一侧为 `Float` 时把另一侧 `Int` 提升为 `f64`，语义与栈式 `add_values`/`mul_values`/`div_values`/`mod_values`/`pow_values` 逐项对齐（含除零错误）；同时补齐 `Str * Int` 重复与 `Array + Array` 拼接。`Int op Int` 仍走 i64 快路径（`wrapping_*`、整数除法），不受 f64 精度影响。
+
+#### 未修：`match` 编译缺陷（`match_demo` / `phase_b_check` / `iot_sensor` / `try_demo`）
+
+**字节码级根因（已确认）**：
+
+1. **`compile_bindings_from_stack` 的 `Identifier` 分支不发射 `StoreLocal`**（compiler.rs:1213）。它只调用 `define_variable` 声明槽位，依赖「绑定值已经位于自己的槽位」这一隐式不变量；而实际值停在操作数栈顶 `locats.len()` 位置，比槽位大1。字节码实证：
+
+   ```
+   14: LoadLocal Some(0)   ← $match（scrutinee）
+   15: UnwrapOkNone      ← 栈: [7, true]
+   16: Pop              ← 栈: [7]
+   17: LoadLocal Some(1)   ← 读v，但7 在栈顶、槽 1 未初始化 → Null
+   18: MulImm Some(2)      ← Null * 2 → 类型错误
+   ```
+
+   最小复现：`let a = 1` 后接任意 `match`，即失效（`repro5` S2）。
+
+2. **arm 的值没有压回操作数栈**。`end_scope_keeping_result` 把 arm 结果 `StoreLocal` 进局部槽后，match 结尾只有 fallthrough 路径补`PushNull`，导致外层 `let m = match {...}` 取到的是 match 之前的残留栈内容（表现为输出未解包的 `Ok(5)` 而非 `14`）。
+
+**为什么没有直接改**：两处修复都会改变指令序列，与 `mailang-bytecode/src/register.rs` 的 `compute_heights`（dataflow stack height）契约冲突。实测只改编译器后，寄存器后端的 `match [a, b]` 长度检查失效（`[1]` 错配到 `[a, b]` 分支，`test_match_array_destructure` 期望 99 实得 2）。修复必须**同时**调整寄存器翻译器，不能只改编译器。
+
+**顺带发现**：函数/块的最后一条是裸 `match` / `if` 表达式时，返回 `null` 而非该表达式的值（`examples/match_demo.mai` 前四行、`iot_sensor` 的分类分支）。这是同一处栈协议缺陷的第三种表现。
+
+#### 未修：两个 UI 包在寄存器后端不一致（4 个程序）
+
+`libs/gui`、`libs/tui` 的 `test_gui.mai` / `test_tui.mai` 与各自的 example 在 `--vm=register` 下失败，根因是 13.5 的参数缺陷（参数算术 + 寄存器后端丢失参数类型），不是包本身的问题——这些程序在栈式后端全部通过。它们在 `known_backend_mismatches.txt` 的第二个分组里，修好 M8 后应自动转为一致。
+
+### 13.4 Phase M 剩余项
+
+| ID | 项 | 状态 |
+|----|----|------|
+| M2 | 文档站部署 | ✅ 已上线（`https://maicarons.github.io/mailang/`） |
+| M3 | 泛型类单态化 or 明确文档 | 待决（建议 v0.4 先写明「字段擦除」限制） |
+| M4 | async 决策 | 继续冻结（无 IoT 场景） |
+| M5 | 切换默认后端 | **前置条件已满足**（1.2x ≤ 2x + CI 双后端矩阵），但切换默认会影响 `.mailangbc` 兼容与 wasm/embedded 体积，建议单独做 v0.5 决策 |
+| M6 | 修 13.3 的双后端不一致 | 8 处待修（4 处 `match` 编译缺陷 + 4 处参数缺陷）；已修 1 处（float 混合运算）。`match` 修复需连带调整 `register.rs` 的 `compute_heights`，v0.4 P0 |
+| M7（新增） | 裸 `match`/`if` 作为块尾表达式返回 `null` | 与 M6 同源，一并修 |
+| M8（新增） | **函数参数参与算术运算结果错误** | v0.4 P0，见 13.5 |
+| M9（新增） | **分配密集的循环不回收堆内存** | v0.4 P1，两个后端同源，见 13.6 |
+
+### 13.5 参数算术缺陷（v0.4 P0，实测证据）
+
+为实现 `libs/gui` 时发现，**两个后端都会算错「操作数来自函数参数」的表达式**，与 `match` 缺陷同源（都属于参数/槽位模型问题）。
+
+实测对照（栈式后端，`libs/gui/test/`）：
+
+| 写法 | 结果 |
+|------|------|
+| `fn f(w, s) { return w - len(s) }` | 错误（返回空值） |
+| `fn f(w, s) { var lw = w  var ls = s  return lw - len(ls) }` | 正确 |
+| `fn f(w, s) { var r = rect  return r[0] + r[2] }` | 报`Cannot add these types` |
+| 3 参数函数内做算术（如 `slider_ratio`） | 正确 |
+| ≥5 参数函数内做算术（如 `draw_rect_outline`） | 报类型错误 |
+
+对库设计的影响（已在两个包的 README「Honest limits」标注）：
+- `libs/gui` 无法提供 `draw_rect_outline` / `progress_bar`——算远边坐标必须做参数算术。调用方自己发四条 `draw_rect` 即可。
+- 控件API 被迫改成接收矩形数组（`panel(handle, rect, fill)`）而不是四个坐标参数。
+- 寄存器后端还会**丢失参数类型**（数组字面量传进来后 `len()` 报 "expects a string, array, map, or tuple"），因此两个包在 `--vm=register` 下无法通过测试。
+
+修复方向（与 M6 合并处理）：编译器为函数参数分配槽位时保证「参数槽 + 操作数栈」的不变量，与 M6 的 `compile_bindings_from_stack` 修复一并做；随后同步 `register.rs` 的 `compute_heights`。**必须双后端一起验证**，因为单独改编译器会破坏寄存器后端的数组模式长度检查。
+
+### 13.6 新发现：分配密集的循环不回收堆内存（两个后端，v0.4 P1）
+
+实测（Windows release，`mailang run`，进程峰值工作集）：
+
+| 循环体 | 迭代次数 | 栈式 VM 峰值 | 寄存器 VM 峰值 |
+|--------|----------|--------------|----------------|
+| `var x = i`（只有局部量，无堆分配） | 2000 万 | ~5 MB | — |
+| `s = s + len([1, 2, 3])`（每轮一个数组字面量） | 200 万 | **159 MB** | **159 MB** |
+| 同上 | 400 万 | **336 MB** | — |
+
+即每轮堆分配约保留 80 字节，**从不出现平台期**（400 万次是 200 万次的两倍；两个后端数值一致，说明不是寄存器后端的 translate 问题）。局部量本身不泄漏（2000 万次迭代只涨到 5 MB），所以也不是 13.5 的槽位模型问题，而在堆回收路径：`Vm::push` 每压栈一次就 `MarkSweepHeap::track` + `maybe_auto_collect`，`should_collect()` 阈值从 256 起按 1.5× 增长，但内存随分配量线性增长，说明 sweep 几乎没有释放任何节点。
+
+**根因尚未定位到具体一行**：可疑点是 `collect(&roots)` 的 roots 取整个 `self.stack`（含当前帧所有槽位），而标记表 `MarkSweepHeap::nodes` 自身对每个节点持有强 `Rc`；确认需要 `freed_total` 的观测出口。相关代码：`crates/mailang-gc/src/lib.rs`（`track` / `should_collect` / `collect`）、`crates/mailang-vm/src/vm.rs::maybe_auto_collect`、`crates/mailang-vm/src/register_vm.rs::track_heap`。
+
+影响：新加的 `libs/gui/example/interactive.mai` 在 sim 模式下每帧重绘且永不退出，一秒内即撞 `memory allocation of 134217728 bytes failed`（128 MiB）并 abort——这就是它被排除在双后端比对之外的原因（它不终止）。任何「长期运行 + 频繁分配」的 IoT 场景都会命中，优先级高于 13.3 的表现层缺陷。

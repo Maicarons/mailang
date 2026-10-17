@@ -56,22 +56,23 @@ Source (.mai) → Lexer → Parser → Compiler → VM
 - **mailang-lexer**: Unicode-aware tokenizer. Source → `Vec<Token>`. Exports `Token`, `Lexer`, `LexerError`.
 - **mailang-ast**: Shared AST type definitions (`Program`, `Stmt`, `Expr`, `Pattern`, `Literal`, etc.). No logic, just data structures with serde support.
 - **mailang-parser**: Recursive descent + Pratt parsing. Tokens → `Program` (AST). Depends on mailang-ast.
-- **mailang-analyzer**: Semantic analysis and type checking (stub/in-progress). Depends on mailang-ast.
+- **mailang-analyzer**: Semantic analysis and type checking (wired into the pipeline; `analyze()` + diagnostics). Depends on mailang-ast.
 - **mailang-compiler**: Bytecode compiler. AST (`Program`) → `Bytecode`. Depends on mailang-ast, mailang-bytecode.
-- **mailang-bytecode**: Bytecode IR definitions (`Opcode`, `Value`, `Instruction`, `Chunk`, `Bytecode`). Shared between compiler and VM.
-- **mailang-vm**: Register-based bytecode virtual machine. Executes `Bytecode`, returns `Value`.
+- **mailang-bytecode**: Bytecode IR definitions (`Opcode`, `Value`, `Instruction`, `Chunk`, `Bytecode`) plus the register IR (`RegChunk`, `RegOp`) and the `StackToRegister` translator. Shared between compiler and VM.
+- **mailang-vm**: Two interchangeable backends over the same `Bytecode`: the stack `Vm` (default) and `RegisterVm` (opt-in via `MAILANG_VM=register` / `--vm=register`). Executes and returns `Value`.
 - **mailang-stdlib**: Built-in functions (`println`, `sqrt`, `len`, `parse_int`, etc.) operating on `mailang_bytecode::Value`.
-- **mailang-core**: Glue crate. Re-exports all above. Contains `MailangInterpreter` which orchestrates Parser → Compiler → VM pipeline. This is the main integration point.
-- **mailang-cli**: CLI binary. Uses `clap` for subcommands (`run`, `eval`) and provides an interactive REPL.
+- **mailang-core**: Glue crate. Re-exports all above. Contains `MailangInterpreter` which orchestrates Parser → Compiler → VM pipeline, plus the `mailang fmt` formatter. This is the main integration point.
+- **mailang-cli**: CLI binary. Uses `clap` for subcommands (`run`, `eval`, `build`, `fmt`, `deps`, `publish`, `install`, `registry`, `lsp`) and provides an interactive REPL. On Windows it also bundles real UI backends selected with `--host=sim|tui|gui` (`hostwin.rs`): `tui` drives the console (stdout, `GetConsoleScreenBufferInfo`, non-blocking `ReadConsoleInputW`), `gui` opens a real window and paints with GDI. `sim` is the default and installs nothing.
 - **mailang-ffi**: C ABI layer (`extern "C"` functions). Uses `cbindgen` to generate `mailang.h`. Wraps `mailang-core`.
 - **mailang-wasm**: WebAssembly bindings via `wasm-bindgen`. Wraps `mailang-core`.
-- **mailang-lsp**: Language Server Protocol server (skeleton). Uses `tower-lsp`.
-- **mailang-gc**: Garbage collector (stub).
-- **mailang-macros**: Procedural macros (stub).
+- **mailang-lsp**: Language Server Protocol server (diagnostics via parser error recovery, completions). Uses `tower-lsp`.
+- **mailang-gc**: Garbage collector: `collect_cycles()` edge-cut plus `MarkSweepHeap`, used by both VM backends.
+- **mailang-module**: Package registry (filesystem / HTTP static mirror) and `mailang.toml` path dependencies.
+- **mailang-macros**: Procedural macros (passthrough stub, no call sites yet).
 
 ### Key Design Decisions
 
-- **Register-based bytecode VM** (not stack-based) for better performance on IoT devices.
+- **Stack VM by default, register VM as a peer backend**: both execute the same `Bytecode` (the register VM via `StackToRegister` lowering) and pass the same 108 integration tests. Switch with `MAILANG_VM=register` or `--vm=register`; CI runs the whole suite on both.
 - **Value enum** in mailang-bytecode is the universal runtime type: `Null`, `Bool`, `Int(i64)`, `Float(f64)`, `Str`, `Char`, `Array`, `Map`, `Tuple`, `Function`, `Closure`, `Class`, `Instance`, `Ok`, `Err`, `Some`.
 - **Local vs global variable resolution**: Compiler resolves locals by stack index, globals by constant-pool name. Closures capture via upvalues.
 - **Chunk-based bytecode**: Each function gets its own `Chunk` with independent instruction and constant lists. Main code is chunk 0.
@@ -91,4 +92,6 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-Early development (Phase 1). The lexer, parser, compiler, and VM are functional for basic arithmetic, variables, functions, and control flow. OOP (class/trait) compilation is skeletal. Analyzer and GC are stubs.
+v0.3.1 (Phase L shipped). The pipeline is complete: OOP with inheritance/`super`, traits, pattern matching, closures, error handling (`Result`/`Option`/`?`), TCO, generics with turbofish monomorphization, a filesystem/HTTP package registry, bundled Win32 `--host=tui|gui` backends for the `libs/tui` + `libs/gui` packs, and dual stack/register VMs with feature parity (108 integration tests on each).
+
+Known gaps are listed in `AGENTS.md` ("Remaining gaps") and tracked in `ROADMAP.md` Phase M: generic *classes* erase their fields, `async` is not supported, the IoT HAL is simulated by default, `mailang-macros` is a passthrough stub, heap memory is not reclaimed in allocation-heavy loops, and eight programs still behave differently on the register VM than on the stack VM (`benchmark\compare_backends.ps1` reproduces them and fails on any mismatch outside `benchmark/known_backend_mismatches.txt`).

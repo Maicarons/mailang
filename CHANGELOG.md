@@ -6,11 +6,57 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 
 ## [Unreleased]
 
+### Added
+- **Bundled Win32 backends for the UI packs.** `mailang run --host=sim|tui|gui` (Windows only, `sim` is the default and installs nothing):
+  - `--host=tui` replaces `tui_write` / `tui_term_size` / `tui_is_tty` / `tui_read_key` with real console calls — stdout writes, `GetConsoleScreenBufferInfo` for size, and non-blocking `ReadConsoleInputW` key decoding into the escape sequences the pack expects (`↑`→`ESC [ A`, Enter→`\r`, …).
+  - `--host=gui` replaces the `gui_*` hooks with a real window: `CreateWindowExW` (never shown, so it also works on a build agent without a visible desktop), a 32-bit top-down DIB per window, GDI drawing (`FillRect`, `TextOutW`, `MoveToEx`/`LineTo`, `Ellipse`), `BitBlet` + `UpdateWindow` on present, and `PeekMessageW` event polling.
+  - Backends live in `crates/mailang-cli/src/hostwin.rs`, gated by `cfg(windows)` plus a target-specific `windows-sys` dependency; other targets are unaffected.
+  - Verified on Windows: `libs/tui/test/host_tui.mai` 7/7 and `libs/gui/test/host_gui.mai` 7/7, plus both example programs end-to-end.
+- **`libs/gui`** — graphical UI pack (window / canvas / widgets / events). Host-function contract (`gui_create_window`, `gui_draw_rect`, `gui_draw_text`, `gui_draw_line`, `gui_draw_circle`, `gui_poll_event`, `gui_present`, `gui_load_font`) plus a pure-Mai simulation that records draw calls into an inspectable display list and serves events from an injected queue. Ships `example/dashboard.mai` and `test/test_gui.mai` (98 assertions, all passing on the stack VM).
+- **`libs/tui`** — terminal UI pack, renamed from the earlier `libs/ui` draft: ANSI sequences, text layout, progress/table/box widgets, terminal size and key input. Host contract `tui_write` / `tui_term_size` / `tui_is_tty` / `tui_read_key` plus simulation; 78 assertions passing on the stack VM.
+- CI job `host-packs` (windows-latest) that builds the CLI and runs each pack suite against the backend it asserts — `test_tui.mai` / `test_gui.mai` under `--host=sim` (they assert the simulation), `host_tui.mai` / `host_gui.mai` under `--host=tui` / `--host=gui` (they assert the real backend took over).
+
+### Fixed
+- **Host functions can now actually override a pack's stubs.** Both VMs resolve `host_fns` by `FunctionObj.name` at call time (`Call`, `TailCall`, and the register VM's `call_value`). Previously the hooks were installed as globals *before* the module body ran, so a module's own `fn` definitions overwrote them at runtime and the documented "host overrides stub" contract silently did not hold.
+- `VmError` now implements `From<String>`, so a host function can report failure with `?`.
+
+### Changed
+- A registered host function reports "nothing available" (no key pending, no event, unknown window) as a **MaìLang `Err` value** rather than a host error, matching the packs' stub behaviour — the script can `match` on it instead of the program aborting.
+
+### Fixed
+- **Register VM**: `Int`↔`Float` mixed arithmetic and comparison. `bin_apply` / `cmp_apply` only covered `Int`op`Int` and `Float`op`Float`, so `Float * Int`, `Int - Float`, `2.5 / 10`, `7.5 % 2.0`, `t > 20.0` and friends failed with `Type error: Cannot apply binary op` / `Cannot add these types`, while the stack VM handled them. Mixed pairs now promote to `f64` (with the same division-by-zero errors and integer semantics for `Int`op`Int`); string repetition and array concatenation were added to match the stack VM as well. This is what `examples/wasm_demo.mai` and `libs/time/example/basic.mai` were hitting.
+- **Register VM**: heap nodes (arrays / maps / instances / builtin results) are now registered with the mark-sweep census. Previously `maybe_auto_collect` was defined but never called, so reference cycles were never collected on this backend.
+- **Register VM**: `TailCall` now reuses the current frame instead of pushing a new register window, so a tail-recursive loop runs in constant register footprint instead of growing the register file (and no longer hits the call-depth limit).
+- **Register VM**: `?` (`TryQ`) early return releases the callee register window like `Ret` does.
+
+### Changed
+- **Register VM performance (ROADMAP M1 met)**: `bench_fib30` went from ~1150 ms to ~150 ms on Windows release — from ~10.4x slower than the stack VM to ~1.2x. Main changes: instruction pointer / chunk / frame base cached in loop locals instead of re-read from the frame stack per instruction; arguments taken over in place as the callee window (no per-call `resize` + argument clone); `RegFrame` shrunk (dead `n_regs` field removed, 72 B -> 40 B); `CallChunk` hot path inlined; GC tracking moved from every register write to heap-allocation points; `Ret`/`TryQ` no longer truncate the register file (bounded by `max_call_depth`), which removes ~19 drop-glue runs per return. Details and per-round measurements in `benchmark/REPORT.md`.
+- **CI**: the test job now runs the whole suite on both backends (`MAILANG_VM` matrix: `stack`, `register`), so the dual-VM equivalence claim is machine-checked instead of manual.
+- `RegChunk` carries `start_sp` (parameter/`this` slot count) so the VM can tell real parameters from locals for calls that carry no `FunctionObj`.
+
+### Added
+- `benchmark/measure_fib.ps1` — measures both backends on `bench_fib30.mai` and prints the ratio (the M1 gate).
+- `benchmark/compare_backends.ps1` — runs every `.mai` program under `examples/` and `libs/` on both backends and compares output byte for byte. Programs known to differ are listed in `benchmark/known_backend_mismatches.txt`; a mismatch outside that list fails the run. Of 66 programs it compares 64 (2 cannot be compared: one prints wall-clock time, one is an interactive loop that never terminates), 56 match and 8 differ — 4 `match` compiler defects and 4 UI-pack programs that hit the parameter defects below. Both numbers are higher than the earlier 52/5 because `libs/tui` and `libs/gui` are now included.
+- Regression tests for mixed `Int`/`Float` arithmetic and comparison, and a baseline test pinning range-pattern behaviour.
+- CI job that times `bench_fib30` on both backends and prints the numbers.
+
+### Known issues (pre-existing, not introduced here)
+- **Language / VM defects that shape what a library can do.** Both VMs miscompute expressions whose operands come from function parameters, and the register VM can lose the type of a parameter (so a list literal arrives as something else). Consequences: arithmetic on ≥4 parameters fails, so `libs/gui` has no `draw_rect_outline` / `progress_bar` helper (callers emit the rects themselves), and `libs/gui` only accepts a colour *name* or an *[r, g, b] array* because the language has no `type_of` and every type probe raises instead of returning false. Both libraries pass fully on the stack VM but hit these defects under `--vm=register`.
+- `match` mis-compiles in two ways, both reproduced by `examples/match_demo.mai`, `examples/phase_b_check.mai` and `examples/iot_sensor.mai`:
+  1. `compile_bindings_from_stack`'s `Identifier` arm declares the slot but emits no `StoreLocal`, relying on "the bound value already sits at its slot index". The value actually sits one slot lower (on top of the operand stack), so any local declared before the `match` makes the arm read an uninitialised slot.
+  2. An arm's value is parked in a local by `end_scope_keeping_result` and never pushed back, so the enclosing `let m = match {...}` picks up leftover stack content.
+  Fixing both requires changing the compiler *and* `mailang-bytecode/src/register.rs`'s `compute_heights` dataflow contract together — patching the compiler alone regresses the register VM's array-pattern length check. See ROADMAP Phase M 13.3 for the bytecode-level evidence.
+- A function or block whose last statement is a bare `match` / `if` expression yields `null` instead of that expression's value.
+- **Heap memory is not reclaimed in allocation-heavy loops** (both backends): allocating one array per `while` iteration retains ~80 bytes per iteration with no plateau — 159 MB peak at 2M iterations and 336 MB at 4M, on the stack VM and the register VM alike, while a loop with no heap allocation stays at ~5 MB over 20M iterations. The mark-sweep census never frees them; the exact line is not identified yet. `libs/gui/example/interactive.mai` aborts at 128 MiB because of it, which is why that program is excluded from the backend comparison. Evidence in ROADMAP Phase M 13.6.
+
+### Removed
+- `tests/basic.rs`: an orphan test file at the workspace root, which has no `[package]` and was therefore never compiled by `cargo test`. Its five cases were already covered by `crates/mailang-core/tests/integration.rs`.
+
 ## [0.3.1] - Docs site, CI green, register VM perf
 
 ### Changed
-- **Register VM** faster on call-heavy integer code: truncate callee registers on Ret (~2x), Int fast paths for Bin/Cmp, skip urn_fuel when unset. fib still ~10x stack (target 2x) — stack remains default.
-- **Docs site is versioned** under docs/v0.3/ with a nav version switcher (ersions.json); language-version prose removed from doc bodies.
+- **Register VM** faster on call-heavy integer code: truncate callee registers on Ret (~2x), Int fast paths for Bin/Cmp, skip `burn_fuel` when unset. fib still ~10x stack (target 2x) — stack remains default.
+- **Docs site is versioned** under docs/v0.3/ with a nav version switcher (`versions.json`); language-version prose removed from doc bodies.
 - **i18n**: Chinese and English guide+reference pages aligned (20 each), including registry, footprint, types, operators, builtins, errors.
 
 ### Fixed

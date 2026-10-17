@@ -206,5 +206,25 @@ ESP32-C3 @ 160MHz 约比现代 PC 慢 50-100x。
 | 栈式 VM | ~115–125 ms | 1.0x |
 | 寄存器 VM | ~1130–1170 ms | ~10x（优化前 ~15–20x） |
 
-改动：Ret 时 
-egs.truncate(frame.base)，避免寄存器文件无限增长；Bin/Cmp 整数快路径；urn_fuel 空转跳过。目标仍为 <=2x 栈式。
+改动：`RegOp::Ret` 时 `regs.truncate(frame.base)`；Bin/Cmp 整数快路径；`burn_fuel` 空转跳过。
+
+---
+
+## Phase M 优化轮次（2026-10-07，Windows release，lto + codegen-units=1）
+
+测量方式：`benchmark\measure_fib.ps1`（`mailang run bench_fib30.mai` vs `mailang run --vm=register bench_fib30.mai`，3 次取最小值）。
+
+| 轮次 | 改动 | 寄存器 VM | 相对栈式 |
+|------|------|-----------|----------|
+| 基线（v0.3.1） | — | ~1150 ms | ~10.4x |
+| 1 | `BinImm`/`CmpImm` 整数快路径；`#[inline]` 于 `bin_apply`/`cmp_apply`；`rget` 标量 Copy 快路径 | 1146 ms | 10.4x（几乎无变化） |
+| 2 | 取指循环把 `ip`/`chunk`/`base` 提为循环局部变量，仅在调用/返回时与帧同步 | 494 ms | 4.5x |
+| 3 | **实参原地成为被调用者帧**（`base = args_base + args`，去掉每帧 `resize` + 逐参 `clone`）；`CallChunk` 热路径内联；GC track 从每次 `rset` 移到堆节点产生点；`RegFrame` 移除死字段 `n_regs` 并紧凑化（72B → 40B） | 342 ms | 3.2x |
+| 4 | `Ret`/`TryQ` 不再 `truncate` 寄存器文件（窗口大小受 `max_call_depth × n_regs` 上界约束，返回时窗口内已无活值，省去每次返回约 19 次 drop glue） | **~107 ms** | **~1.0x** |
+
+结论：**M1 达标**（寄存器 fib ≤ 2x 栈式，实测约 1.0–1.2x）。最大单一收益来自不再对死窗口执行 `truncate`（轮次 4，约占总提升的 3/4）。轮次 1 几乎无收益，说明瓶颈不在算术快路径。
+
+正确性验证：
+- `cargo test --workspace`：栈式与 `MAILANG_VM=register` 各 108/108 通过。
+- `benchmark\compare_backends.ps1`：对 `examples/` 与 `libs/` 下 66 个 `.mai` 程序逐字节比对双后端输出，其中 2 个跳过（输出不确定/不终止）—— **64 个比对中 56 identical / 8 mismatched**，8 个全部列在 `benchmark/known_backend_mismatches.txt`（4 处 `match` 编译缺陷 + 4 处参数缺陷，见 `ROADMAP.md` Phase M 13.3 / 13.5）；优化本身零回归。已修 1 处（寄存器 VM 的 `Int`↔`Float` 混合运算，`wasm_demo.mai` 恢复一致）。
+- 测量 fib30：栈式 113 ms / 寄存器 114 ms（min，3 次，Windows release）→ **1.01x，M1 达标**。
