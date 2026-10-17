@@ -517,7 +517,7 @@ Fibonacci(30)（v0.4 默认后端） & \textbf{$\approx$116--119} & — & — & 
 
 \subsection{产物体积}
 
-字节码以 \texttt{.mailangbc} 形式持久化，便于嵌入宿主免源码分发；该产物与执行后端无关，同一份文件在两种后端下输出一致（CI 对同一 \texttt{.mailangbc} 的无参数运行与 \texttt{--vm=stack} 运行做 \texttt{diff} 断言）。体积最敏感的目标是 WebAssembly：\texttt{wasm32-unknown-unknown} 的 release 产物（\texttt{cargo build --release -p mailang-wasm}，未经 wasm-pack/wasm-opt 后处理）为 975{,}309 字节，而默认后端从栈式换成寄存器只增加 4 字节——两种后端始终一起编译，默认值本身不引入新代码，代价仅是每次运行多付一次栈到寄存器的降级。\texttt{mailang build examples/hello.mai} 产出的 \texttt{.mailangbc} 为 116 字节（1 个 chunk）。两个嵌入式目标 \texttt{thumbv7em-none-eabihf} 与 \texttt{riscv32imc-unknown-none-elf} 在 CI 中做 \texttt{no\_std} 构建并报告 \texttt{mailang-bytecode} 的 rlib 体积（446.1\,KiB / 447.3\,KiB，含元数据，并非最终链接足迹）；目前只有构建检查，没有体积门限，也未在真实硬件上验证。
+字节码以 \texttt{.mailangbc} 形式持久化，便于嵌入宿主免源码分发；该产物与执行后端无关，同一份文件在两种后端下输出一致（CI 对同一 \texttt{.mailangbc} 的无参数运行与 \texttt{--vm=stack} 运行做 \texttt{diff} 断言）。体积最敏感的目标是 WebAssembly：\texttt{wasm32-unknown-unknown} 的 release 产物（\texttt{cargo build --release -p mailang-wasm}，未经 wasm-pack/wasm-opt 后处理）在 v0.4.0 源码上为 975{,}196 字节。默认后端从栈式换成寄存器并不引入新代码——两种后端始终一起编译——在切换发生的 0.3.1 源码上实测只增加 4 字节，代价仅是每次运行多付一次栈到寄存器的降级。这类字节级数字有一处需要注意：产物内嵌的版本字符串本身就带来百字节量级的布局差异（同一份 v0.4.0 源码把版本号改回 0.3.1 即得 975{,}309 字节），因此只在同一版本号下可比。\texttt{mailang build examples/hello.mai} 产出的 \texttt{.mailangbc} 为 116 字节（1 个 chunk）。两个嵌入式目标 \texttt{thumbv7em-none-eabihf} 与 \texttt{riscv32imc-unknown-none-elf} 在 CI 中做 \texttt{no\_std} 构建并报告 \texttt{mailang-bytecode} 的 rlib 体积（446.1\,KiB / 447.3\,KiB，含元数据，并非最终链接足迹）；目前只有构建检查，没有体积门限，也未在真实硬件上验证。
 
 % ══════════════════════════════════════════════════════════════════
 \section{讨论与局限}
