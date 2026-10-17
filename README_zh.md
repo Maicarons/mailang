@@ -3,13 +3,13 @@
 [![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.3.1-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.3.1)
+[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.4.0)
 
 一个为 IoT 和跨平台开发设计的现代编程语言，使用 Rust 编写。
 
 **仓库地址**：[github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
 **在线文档**：[Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
-**版本发布**：[v0.3.1](https://github.com/Maicarons/mailang/releases/tag/v0.3.1)
+**版本发布**：[v0.4.0](https://github.com/Maicarons/mailang/releases/tag/v0.4.0)
 
 ## 特性
 

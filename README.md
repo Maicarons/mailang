@@ -3,13 +3,13 @@
 [![CI](https://github.com/Maicarons/mailang/actions/workflows/ci.yml/badge.svg)](https://github.com/Maicarons/mailang/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE-APACHE)
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.3.1-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.3.1)
+[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](https://github.com/Maicarons/mailang/releases/tag/v0.4.0)
 
 A modern programming language designed for IoT and cross-platform development, written in Rust.
 
 **Repository**: [github.com/Maicarons/mailang](https://github.com/Maicarons/mailang)
 **Documentation**: [Maicarons.github.io/mailang](https://maicarons.github.io/mailang/)
-**Releases**: [v0.3.1](https://github.com/Maicarons/mailang/releases/tag/v0.3.1)
+**Releases**: [v0.4.0](https://github.com/Maicarons/mailang/releases/tag/v0.4.0)
 
 ## Features
 

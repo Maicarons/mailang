@@ -2,7 +2,7 @@
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 >
-> **状态：Phase N + M5（寄存器 VM 已成为默认后端；默认后端与 `--vm=stack` 均 137/137；`benchmark/compare_backends.ps1` 64/64 一致）**
+> **状态：v0.4.0 — Phase N + M5（寄存器 VM 已成为默认后端；默认后端与 `--vm=stack` 均 137/137；`benchmark/compare_backends.ps1` 64/64 一致）**
 >
 > 本报告如实反映项目实际状态。阶段规划见 [ROADMAP.md](ROADMAP.md)，变更见 [CHANGELOG.md](CHANGELOG.md)。
 

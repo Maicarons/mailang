@@ -45,7 +45,7 @@ println("bar(4,4,10)  = {tui.progress_bar(4, 4, 10)}")
 println("labeled      = {tui.progress_labeled(1, 4, 10)}")
 println("task         = {tui.progress_task(compile_label, 7, 10, 8, 30)}")
 
-var info = [["语言", "MaìLang"], ["版本", "0.3.1"], ["后端", "stack / register"]]
+var info = [["语言", "MaìLang"], ["版本", "0.4.0"], ["后端", "stack / register"]]
 var t = tui.table(info, [10, 12])
 var i = 0
 while i < len(t) {

@@ -525,7 +525,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 
 ## 十二、Phase M 下一步（v0.3.x → v0.4）
 
-> 更新：v0.3.0 已发布（GitHub Release + crates.io 14 crates）。栈/寄存器 VM 均 **102/102**。
+> 更新：v0.3.0 已发布（GitHub Release + crates.io 14 crates）；v0.4.0 已发布（默认后端切到寄存器 VM + Phase N 四个缺陷修复，见 13.10）。栈/寄存器 VM 在 64 个 `.mai` 程序上逐字节一致，137/137 集成测试两种配置全绿。
 
 ### 12.1 性能实测（release，bench_fib30）
 
@@ -551,6 +551,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 - [x] 寄存器 VM fib ≤ 2× 栈式，且双后端测试全绿
 - [x] 文档站 CI 全绿
 - [x] 性能报告含双后端对比
+- [x] v0.4.0 发布准备：版本号 → 0.4.0、CHANGELOG `[0.4.0]`、`docs/v0.4/` 成为最新文档树（`docs/v0.3/` 冻结在 0.3 状态）、论文修订到 v0.4、基准与门禁在发布树上复测；推送 `v0.4.0` tag 触发 GitHub Release + crates.io
 
 ---
 
