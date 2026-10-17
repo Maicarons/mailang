@@ -42,6 +42,9 @@ pub struct RegisterVm {
     max_call_depth: usize,
     class_table: Vec<RegClass>,
     gc: mailang_gc::MarkSweepHeap,
+    /// Snapshot of `gc` published for the `gc_stats()` script builtin (a
+    /// builtin is a plain `fn` pointer and cannot read the VM itself).
+    gc_counters: crate::GcCounters,
 }
 
 #[derive(Clone)]
@@ -52,42 +55,12 @@ struct RegClass {
     properties: Vec<(String, Value)>,
 }
 
-/// Parameter / `this` slot count for each chunk (used as the translator's
-/// starting stack height so `let` locals land on their local registers).
-fn chunk_start_sp(bytecode: &Bytecode, chunk_idx: usize) -> u16 {
-    if chunk_idx == bytecode.main_chunk {
-        return 0;
-    }
-    let mut best: Option<usize> = None;
-    for ch in &bytecode.chunks {
-        for c in &ch.constants {
-            if let Value::Function(f) = c {
-                if f.chunk_index == chunk_idx {
-                    best = Some(best.map_or(f.arity, |b: usize| b.max(f.arity)));
-                }
-            }
-            if let Value::Class(cls) = c {
-                for (_, ci) in cls.methods.iter() {
-                    if *ci == chunk_idx {
-                        // Method chunk without a self-describing FunctionObj:
-                        // at least `this`.
-                        if best.is_none() {
-                            best = Some(1);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    best.unwrap_or(0) as u16
-}
-
 impl RegisterVm {
     /// Lower every chunk of `bytecode` and prepare to run chunk 0.
     pub fn new(bytecode: Bytecode) -> Self {
         let mut chunks = Vec::with_capacity(bytecode.chunks.len());
         for (i, ch) in bytecode.chunks.iter().enumerate() {
-            let start = chunk_start_sp(&bytecode, i);
+            let start = mailang_bytecode::parameter_slots(&bytecode, i);
             let reg =
                 mailang_bytecode::StackToRegister::new(&ch.name, &ch.instructions, &ch.constants)
                     .with_start_sp(start)
@@ -119,7 +92,16 @@ impl RegisterVm {
             max_call_depth: 512,
             class_table: Vec::new(),
             gc: mailang_gc::MarkSweepHeap::new(),
+            gc_counters: crate::new_counters(),
         }
+        .with_gc_stats()
+    }
+
+    /// Bind `gc_stats()` (a host function, so it can read the census cell).
+    fn with_gc_stats(mut self) -> Self {
+        let counters = Rc::clone(&self.gc_counters);
+        self.register_host_fn("gc_stats", crate::gc_stats_host_fn(counters));
+        self
     }
 
     pub fn set_fuel(&mut self, fuel: Option<u64>) {
@@ -908,6 +890,7 @@ impl RegisterVm {
                 for i in 0..argc as u16 {
                     vals.push(self.rget(args_base, args + i));
                 }
+                self.refresh_gc_counters_if_stats(name.as_ref());
                 let out = if let Some(host) = self.host_fns.get(name.as_ref()) {
                     host(&vals)
                 } else if let Some(b) = self.builtins.get(name.as_ref()) {
@@ -1139,6 +1122,7 @@ impl RegisterVm {
             self.gc.track(v);
         }
         let freed = self.gc.collect(&roots);
+        self.publish_gc_counters();
         if broken > 0 {
             broken
         } else {
@@ -1153,6 +1137,24 @@ impl RegisterVm {
             self.gc.collections,
             self.gc.freed_total,
         )
+    }
+
+    /// Copy the census counters into the cell `gc_stats()` reads.
+    fn publish_gc_counters(&self) {
+        self.gc_counters.set((
+            self.gc.tracked_count(),
+            self.gc.collections,
+            self.gc.freed_total,
+        ));
+    }
+
+    /// `gc_stats()` reads the census through the published snapshot; refresh it
+    /// just before the call so the report is live. Any other builtin name
+    /// fails the length check immediately.
+    fn refresh_gc_counters_if_stats(&self, name: &str) {
+        if name == "gc_stats" {
+            self.publish_gc_counters();
+        }
     }
 
     /// Track a newly allocated heap node with the mark-sweep census.
@@ -1178,6 +1180,7 @@ impl RegisterVm {
             self.gc.track(v);
         }
         self.gc.collect(&roots);
+        self.publish_gc_counters();
     }
 }
 

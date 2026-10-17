@@ -64,6 +64,17 @@ impl From<VmCli> for VmBackend {
     }
 }
 
+/// IR form selected by `mailang disasm`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum DisasmCli {
+    /// Stack bytecode the compiler emits (what the default VM runs)
+    Stack,
+    /// Three-address register lowering (what `--vm=register` runs)
+    Register,
+    /// Both forms, one after the other
+    Both,
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Run a .mai source file or a .mailangbc bytecode file
@@ -92,6 +103,18 @@ enum Commands {
         /// Output path (default: <file> with .mailangbc extension)
         #[arg(short, long)]
         output: Option<PathBuf>,
+    },
+    /// Disassemble a .mai (or .mailangbc) file: stack bytecode, the register
+    /// lowering, or both
+    Disasm {
+        file: String,
+        /// Which IR to print: stack (what the default VM runs), register (what
+        /// --vm=register runs), or both
+        #[arg(long, value_enum, default_value_t = DisasmCli::Stack)]
+        vm: DisasmCli,
+        /// Print only this chunk (default: every chunk)
+        #[arg(long)]
+        chunk: Option<usize>,
     },
     /// Format a .mai source file in place (or print with --check)
     Fmt {
@@ -590,6 +613,40 @@ fn main() {
                         bytes.len(),
                         bc.chunks.len()
                     );
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some(Commands::Disasm { file, vm, chunk }) => {
+            let is_bc = Path::new(&file)
+                .extension()
+                .map(|e| e == "mailangbc")
+                .unwrap_or(false);
+            let bytecode = if is_bc {
+                match std::fs::read(&file) {
+                    Ok(bytes) => mailang_core::bytecode::decode(&bytes)
+                        .map_err(|e| format!("Invalid bytecode file '{}': {:?}", file, e)),
+                    Err(e) => Err(format!("Failed to read '{}': {}", file, e)),
+                }
+            } else {
+                let base_dir = Path::new(&file).parent().unwrap_or(Path::new("."));
+                let mut interp = MailangInterpreter::with_modules(base_dir);
+                interp.compile_file(&file)
+            };
+            match bytecode {
+                Ok(bc) => {
+                    if matches!(vm, DisasmCli::Stack | DisasmCli::Both) {
+                        print!("{}", mailang_core::bytecode::disassemble_stack(&bc, chunk));
+                    }
+                    if matches!(vm, DisasmCli::Register | DisasmCli::Both) {
+                        print!(
+                            "{}",
+                            mailang_core::bytecode::disassemble_register(&bc, chunk)
+                        );
+                    }
                 }
                 Err(e) => {
                     eprintln!("Error: {}", e);

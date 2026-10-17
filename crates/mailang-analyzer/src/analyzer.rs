@@ -381,6 +381,7 @@ impl Analyzer {
             "process_exit",
             "json_parse",
             "json_stringify",
+            "gc_stats",
         ];
         for name in BUILTINS {
             self.register_builtin(name);

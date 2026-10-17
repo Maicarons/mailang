@@ -48,6 +48,9 @@ pub struct Vm {
     max_call_depth: usize,
     /// Mark-sweep heap census (cycle collection).
     gc: mailang_gc::MarkSweepHeap,
+    /// Snapshot of `gc` published for the `gc_stats()` script builtin (a
+    /// builtin is a plain `fn` pointer and cannot read the VM itself).
+    gc_counters: crate::GcCounters,
 }
 
 impl Vm {
@@ -183,7 +186,7 @@ impl Vm {
             }
         }
 
-        Self {
+        let mut vm = Self {
             bytecode,
             stack: Vec::with_capacity(256),
             globals,
@@ -197,7 +200,12 @@ impl Vm {
             fuel: None,
             max_call_depth: Self::DEFAULT_MAX_CALL_DEPTH,
             gc: mailang_gc::MarkSweepHeap::new(),
-        }
+            gc_counters: crate::new_counters(),
+        };
+        // `gc_stats()` is a host function so it can read the census cell.
+        let counters = Rc::clone(&vm.gc_counters);
+        vm.register_host_fn("gc_stats", crate::gc_stats_host_fn(counters));
+        vm
     }
 
     /// Register a host callback callable from MaìLang as `name(...)`.
@@ -253,6 +261,7 @@ impl Vm {
             self.gc.track(v);
         }
         let freed = self.gc.collect(&roots);
+        self.publish_gc_counters();
         if broken > 0 {
             broken
         } else {
@@ -274,6 +283,24 @@ impl Vm {
         )
     }
 
+    /// Copy the census counters into the cell `gc_stats()` reads.
+    fn publish_gc_counters(&self) {
+        self.gc_counters.set((
+            self.gc.tracked_count(),
+            self.gc.collections,
+            self.gc.freed_total,
+        ));
+    }
+
+    /// `gc_stats()` reads the census through the published snapshot, so refresh
+    /// it just before the call: otherwise the report would only move when a
+    /// collection happened. Every other builtin name fails the length check.
+    fn refresh_gc_counters_if_stats(&self, name: &str) {
+        if name == "gc_stats" {
+            self.publish_gc_counters();
+        }
+    }
+
     fn maybe_auto_collect(&mut self) {
         if self.gc.should_collect() {
             let mut roots = self.stack.clone();
@@ -283,6 +310,7 @@ impl Vm {
                 self.gc.track(v);
             }
             self.gc.collect(&roots);
+            self.publish_gc_counters();
         }
     }
 
@@ -865,6 +893,7 @@ impl Vm {
                         Value::Builtin { name, .. } => {
                             let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
                             self.stack.truncate(func_index);
+                            self.refresh_gc_counters_if_stats(name.as_ref());
                             let call_result = if let Some(host) = self.host_fns.get(name.as_ref()) {
                                 host(&args)
                             } else if let Some(builtin_fn) = self.builtins.get(name.as_ref()) {
@@ -1077,6 +1106,7 @@ impl Vm {
                         Value::Builtin { name, .. } => {
                             let args: Vec<Value> = self.stack[func_index + 1..].to_vec();
                             self.stack.truncate(func_index);
+                            self.refresh_gc_counters_if_stats(name.as_ref());
                             let result = if let Some(builtin_fn) = self.builtins.get(name.as_ref())
                             {
                                 match builtin_fn(&args) {

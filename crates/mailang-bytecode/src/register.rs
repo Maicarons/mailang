@@ -6,7 +6,7 @@
 //! register bytecode by simulating the operand stack and assigning each stack
 //! slot a virtual register.
 
-use crate::{Opcode, Value};
+use crate::{Bytecode, Opcode, Value};
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -173,6 +173,41 @@ pub enum WrapKind {
     Ok,
     Err,
     Some,
+}
+
+/// Parameter / `this` slot count for a chunk: the translator's starting stack
+/// height, so `let` locals land on their own registers.
+///
+/// The register VM and the disassembler must agree on this, so it lives next
+/// to the translator. `arity` on a `RegChunk` stays 0 for chunks reached
+/// through `CallDirect` (a deep call has no `FunctionObj` to read), which is
+/// why the count is recovered from the constant pool instead.
+pub fn parameter_slots(bytecode: &Bytecode, chunk_idx: usize) -> u16 {
+    if chunk_idx == bytecode.main_chunk {
+        return 0;
+    }
+    let mut best: Option<usize> = None;
+    for ch in &bytecode.chunks {
+        for c in &ch.constants {
+            if let Value::Function(f) = c {
+                if f.chunk_index == chunk_idx {
+                    best = Some(best.map_or(f.arity, |b: usize| b.max(f.arity)));
+                }
+            }
+            if let Value::Class(cls) = c {
+                for (_, ci) in cls.methods.iter() {
+                    if *ci == chunk_idx {
+                        // Method chunk without a self-describing FunctionObj:
+                        // at least `this`.
+                        if best.is_none() {
+                            best = Some(1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    best.unwrap_or(0) as u16
 }
 
 /// A register-mode chunk (function body).

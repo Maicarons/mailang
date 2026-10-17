@@ -13,10 +13,12 @@ use core::cell::RefCell;
 #[cfg(all(feature = "serde", feature = "std"))]
 use serde::{Deserialize, Serialize};
 
+pub mod disasm;
 pub mod format;
 pub mod register;
+pub use disasm::{disassemble_register, disassemble_stack};
 pub use format::{decode, encode, BytecodeFormatError, FORMAT_MAGIC, FORMAT_VERSION};
-pub use register::{RegChunk, RegOp, StackToRegister};
+pub use register::{parameter_slots, RegChunk, RegOp, StackToRegister};
 
 /// Opcode is `Copy` and serialized as a single byte in the binary format.
 /// Keep variants in a stable order; append-only.
