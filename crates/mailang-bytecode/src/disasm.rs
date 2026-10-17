@@ -119,6 +119,7 @@ fn stack_note(bytecode: &Bytecode, ch: &Chunk, ins: &Instruction) -> String {
         | Opcode::TryBegin
         | Opcode::TryEnd => format!("; -> {}", k),
         Opcode::LoadLocal | Opcode::StoreLocal => format!("; local r{}", k),
+        Opcode::Slide => format!("; keep top, drop {} below", k),
         Opcode::LoadUpvalue | Opcode::StoreUpvalue => format!("; upvalue {}", k),
         Opcode::Call | Opcode::TailCall | Opcode::BuildArray | Opcode::BuildMap => {
             format!("; {} operands", k)

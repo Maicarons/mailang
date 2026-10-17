@@ -767,6 +767,97 @@ fn test_match_bind_not_global() {
     );
 }
 
+// ===== Phase N / D2: the `match` value protocol =====
+//
+// The arm's value is the `match` expression's value and it stays on the operand
+// stack. The old protocol stored it into a binding slot and left the residue
+// underneath, so a program's *final* value could look right by accident: every
+// test here reads the result back instead.
+
+#[test]
+fn test_match_value_survives_a_read_back() {
+    assert_eq!(
+        eval("let r = match Ok(5) {\n    Ok(v) => v * 2\n    Err(e) => 0\n}\nr + 1"),
+        "11"
+    );
+    assert_eq!(
+        eval("let r = match Err(\"boom\") {\n    Ok(v) => v\n    Err(e) => e\n}\nlet s = r\ns"),
+        "boom"
+    );
+    // A binding arm behind a failing arm: the fail path must not disturb it.
+    assert_eq!(
+        eval("let r = match Ok(9) {\n    Err(e) => 0\n    Ok(v) => v + 1\n}\nr"),
+        "10"
+    );
+}
+
+#[test]
+fn test_match_tail_expression_is_function_result() {
+    let src = "fn classify(n) {\n    match n {\n        0 => \"zero\"\n        1 => \"one\"\n        _ => \"many\"\n    }\n}\nclassify(0)";
+    assert_eq!(eval(src), "zero");
+    assert_eq!(eval(&src.replace("classify(0)", "classify(1)")), "one");
+    assert_eq!(eval(&src.replace("classify(0)", "classify(42)")), "many");
+
+    // A binding arm at the tail: this is where the old protocol dropped the
+    // value the caller read.
+    let binding = "fn label(r) {\n    match r {\n        Ok(v) => v + 100\n        Err(e) => 0\n    }\n}\nlabel(Ok(1))";
+    assert_eq!(eval(binding), "101");
+}
+
+#[test]
+fn test_match_binding_participates_in_arithmetic() {
+    assert_eq!(
+        eval("let r = match Some(10) {\n    Some(v) => v / 2 + 1\n    None => 0\n}\nr * 3"),
+        "18"
+    );
+}
+
+#[test]
+fn test_match_guard_falls_through_to_a_later_binding_arm() {
+    assert_eq!(
+        eval("let r = match 5 {\n    n if n > 10 => 100\n    n => n * 2\n}\nr"),
+        "10"
+    );
+    assert_eq!(
+        eval("let r = match 50 {\n    n if n > 10 => 100\n    n => n * 2\n}\nr"),
+        "100"
+    );
+}
+
+#[test]
+fn test_match_destructuring_value_read_back() {
+    assert_eq!(
+        eval("let p = (3, 4)\nlet r = match p {\n    (a, b) => a * b\n    _ => 0\n}\nr + 1"),
+        "13"
+    );
+    assert_eq!(
+        eval("let v = [5, 6]\nlet r = match v {\n    [a, b] => a - b\n    _ => 0\n}\nr"),
+        "-1"
+    );
+    assert_eq!(
+        eval("let r = match Ok(Some(7)) {\n    Ok(v) => v\n    _ => None\n}\nr"),
+        "Some(7)"
+    );
+}
+
+#[test]
+fn test_match_or_pattern_value_read_back() {
+    assert_eq!(
+        eval("let r = match 2 {\n    1 | 2 | 3 => \"low\"\n    _ => \"high\"\n}\nr"),
+        "low"
+    );
+}
+
+#[test]
+fn test_match_without_a_matching_arm_is_null() {
+    // A lone *guarded* arm is accepted by the analyzer, so the no-arm-matched
+    // fallthrough is reachable: the scrutinee temp must still be dropped.
+    assert_eq!(
+        eval("let r = match 5 {\n    n if n > 10 => 1\n}\nr"),
+        "null"
+    );
+}
+
 #[test]
 fn test_let_destructure() {
     assert_eq!(eval("let (a, b) = (1, 2)\na + b"), "3");

@@ -838,6 +838,18 @@ impl Compiler {
                 self.patch_jump(jump_end)?;
             }
             Expr::Match { scrutinee, arms } => {
+                // A `match` is an expression: like every other expression it
+                // must leave exactly one value — the selected arm's — on the
+                // operand stack.
+                //
+                // Layout: the scrutinee lives in one scope temporary below the
+                // arm, and the pattern's bindings are locals above it, so at
+                // the end of an arm the stack is [scrut, bindings…, result].
+                // `Slide(bindings + 1)` keeps the result and drops exactly
+                // those; the old code stored the result into a binding slot
+                // instead, so the enclosing expression read the residue left
+                // underneath (the scrutinee on the stack VM, a stale slot on
+                // the register VM).
                 self.begin_scope();
                 self.compile_expression(scrutinee)?;
                 let scrut_slot = self.current.locals.len() as u32;
@@ -855,35 +867,56 @@ impl Compiler {
                     self.emit(Opcode::Pop, None, 0);
 
                     let n_bind = self.compile_pattern_bindings(&arm.pattern, scrut_slot)?;
+                    // The arm's result sits on top of the bindings and the
+                    // scrutinee temporary.
+                    let drop = (n_bind + 1) as u32;
+                    // Guard-fail edges must skip the pattern-fail `Pop` below.
+                    let mut past_fail_pop = Vec::new();
 
                     if let Some(guard) = &arm.guard {
                         self.compile_expression(guard)?;
                         let jump_guard_fail = self.emit_jump(Opcode::JumpIfFalse, 0);
                         self.emit(Opcode::Pop, None, 0);
                         self.compile_expression(&arm.body)?;
-                        self.end_scope_keeping_result(n_bind);
+                        self.emit(Opcode::Slide, Some(drop), 0);
                         end_jumps.push(self.emit_jump(Opcode::Jump, 0));
+                        // Guard false: drop the flag and this arm's bindings,
+                        // then hand over to the next arm with the scrutinee
+                        // still on the stack.
                         self.patch_jump(jump_guard_fail)?;
                         self.emit(Opcode::Pop, None, 0);
                         for _ in 0..n_bind {
                             self.emit(Opcode::Pop, None, 0);
                         }
-                        for _ in 0..n_bind {
-                            self.current.locals.pop();
-                        }
-                        self.current.scope_depth = self.current.scope_depth.saturating_sub(1);
+                        past_fail_pop.push(self.emit_jump(Opcode::Jump, 0));
                     } else {
                         self.compile_expression(&arm.body)?;
-                        self.end_scope_keeping_result(n_bind);
+                        self.emit(Opcode::Slide, Some(drop), 0);
                         end_jumps.push(self.emit_jump(Opcode::Jump, 0));
                     }
 
+                    // Compile-time scope bookkeeping for the arm: once, after
+                    // both the matched and the not-matched paths were emitted.
+                    for _ in 0..n_bind {
+                        self.current.locals.pop();
+                    }
+                    self.current.scope_depth = self.current.scope_depth.saturating_sub(1);
+
+                    // Pattern did not match: drop its flag and go on. A failed
+                    // guard continues *after* this `Pop` (it already dropped
+                    // its own values) so it keeps the scrutinee.
                     self.patch_jump(jump_next)?;
                     self.emit(Opcode::Pop, None, 0);
-                    self.current.scope_depth = self.current.scope_depth.saturating_sub(1);
+                    for jump in past_fail_pop {
+                        self.patch_jump(jump)?;
+                    }
                 }
+
+                // No arm matched: `match` yields `null`.
                 self.emit_push_constant(Value::Null, 0)?;
-                self.end_scope_keeping_result(1);
+                self.emit(Opcode::Slide, Some(1), 0);
+                self.current.locals.pop();
+                self.current.scope_depth = self.current.scope_depth.saturating_sub(1);
                 for jump in end_jumps {
                     self.patch_jump(jump)?;
                 }
@@ -1343,23 +1376,38 @@ impl Compiler {
         Ok(())
     }
 
-    /// Keep `result` on the stack while popping `n` locals introduced by the
-    /// current scope (used by match arms that bind pattern names).
-    fn end_scope_keeping_result(&mut self, n: usize) {
-        if n == 0 {
-            self.current.scope_depth = self.current.scope_depth.saturating_sub(1);
-            return;
+    /// Compile a function body so that it leaves exactly one value on the
+    /// operand stack: the trailing expression's value when the last statement
+    /// is an expression statement, `null` otherwise.
+    ///
+    /// This is what makes `fn classify(n) { match n { ... } }` yield the
+    /// selected arm (a body's trailing expression is its result; there is no
+    /// `return` requirement) and what `Expr::Match` counts on to deliver its
+    /// arm value — the statement form would otherwise `Pop` it.
+    fn compile_body_value(&mut self, body: &[Stmt]) -> Result<(), CompilerError> {
+        let Some((last, rest)) = body.split_last() else {
+            self.emit_push_constant(Value::Null, 0)?;
+            return Ok(());
+        };
+        for stmt in rest {
+            self.compile_statement(stmt)?;
         }
-        // Move result into the first binding slot, then drop the remaining bindings.
-        let first = self.current.locals.len().saturating_sub(n);
-        self.emit(Opcode::StoreLocal, Some(first as u32), 0);
-        for _ in 1..n {
-            self.emit(Opcode::Pop, None, 0);
+        match last {
+            Stmt::Expression(expr) => {
+                self.compile_expression(expr)?;
+                // Assignments leave nothing behind, but the body still owes a value.
+                if matches!(expr, Expr::Assign { .. } | Expr::CompoundAssign { .. }) {
+                    self.emit_push_constant(Value::Null, 0)?;
+                }
+            }
+            // Only an expression statement carries a value: a bare `if`/`while`
+            // block as the last statement still yields `null`.
+            _ => {
+                self.compile_statement(last)?;
+                self.emit_push_constant(Value::Null, 0)?;
+            }
         }
-        for _ in 0..n {
-            self.current.locals.pop();
-        }
-        self.current.scope_depth = self.current.scope_depth.saturating_sub(1);
+        Ok(())
     }
 
     fn emit_jump(&mut self, opcode: Opcode, target: usize) -> usize {
@@ -1419,10 +1467,7 @@ impl Compiler {
             self.define_variable(&param.name)?;
         }
         self.emit_default_prologue(params)?;
-        for stmt in body {
-            self.compile_statement(stmt)?;
-        }
-        self.emit_push_constant(Value::Null, 0)?;
+        self.compile_body_value(body)?;
         self.emit(Opcode::Return, None, 0);
 
         let upvalues = self.current.upvalues.clone();

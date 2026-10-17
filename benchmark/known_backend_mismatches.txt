@@ -12,16 +12,12 @@
 #       for examples/iot_sensor.mai was removed.
 #   D2  `match` value protocol: a bound pattern is never stored into its slot
 #       and an arm's value is not delivered on the operand stack, so the value
-#       read back after the match is residue. See ROADMAP.md Phase M 13.3 and
-#       Phase N N2.
+#       read back after the match is residue. FIXED in N2; the three lines
+#       below were removed (`examples/match_demo.mai`, `examples/phase_b_check.mai`,
+#       `examples/try_demo.mai` now agree).
 #   D3  register backend dataflow stack heights are wrong at an `if ... return`
 #       join, so expression temps overwrite live locals (wrong values first,
 #       then a type error). See ROADMAP.md Phase N N3.
-
-# D2 - match value protocol.
-examples/match_demo.mai
-examples/phase_b_check.mai
-examples/try_demo.mai
 
 # D3 - if/return join heights (both UI packs' own suites and examples).
 libs/gui/example/dashboard.mai

@@ -133,6 +133,11 @@ pub enum Opcode {
     CallDirect,
     /// Push the number of arguments actually passed to the current frame.
     Argc,
+    /// Keep the top value, drop the `operand` values directly below it.
+    /// Used by `match` arms to discard the scrutinee temporary and the
+    /// pattern bindings under the arm's result. Appended last so the
+    /// discriminants of every earlier opcode stay stable.
+    Slide,
 }
 
 impl Opcode {
@@ -215,6 +220,7 @@ impl Opcode {
             69 => Opcode::Halt,
             70 => Opcode::CallDirect,
             71 => Opcode::Argc,
+            72 => Opcode::Slide,
             _ => return None,
         })
     }

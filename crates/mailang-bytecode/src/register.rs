@@ -691,6 +691,19 @@ impl<'a> StackToRegister<'a> {
                     self.emit(RegOp::Argc { dst });
                     sp += 1;
                 }
+                Opcode::Slide => {
+                    // Keep the top of the window, drop the `n` values below it
+                    // (`match` arm cleanup: the scrutinee temp and the pattern
+                    // bindings sit under the arm's result).
+                    let n = ins.operand.unwrap_or(0) as u16;
+                    if n > 0 {
+                        let src = sp.saturating_sub(1);
+                        let dst = src.saturating_sub(n);
+                        self.use_reg(src.max(dst));
+                        self.emit(RegOp::Mov { dst, src });
+                        sp = sp.saturating_sub(n);
+                    }
+                }
                 Opcode::Halt => {
                     let src = sp.saturating_sub(1);
                     self.use_reg(src);
@@ -824,6 +837,7 @@ fn stack_out(op: Opcode, h: u16, operand: Option<u32>) -> u16 {
         Opcode::Pop | Opcode::StoreGlobal | Opcode::StoreUpvalue | Opcode::Throw => {
             h.saturating_sub(1)
         }
+        Opcode::Slide => h.saturating_sub(operand.unwrap_or(0) as u16),
         Opcode::StoreLocal => {
             let idx = operand.unwrap_or(0) as u16;
             let after = h.saturating_sub(1);

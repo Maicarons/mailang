@@ -422,6 +422,22 @@ impl Vm {
                     let value = self.peek()?.clone();
                     self.push(value)?;
                 }
+                Opcode::Slide => {
+                    // Keep the top value, drop the `n` values directly below it
+                    // (`match` arm cleanup: the scrutinee temp and the pattern
+                    // bindings sit under the arm's result).
+                    let n = operand.unwrap_or(0) as usize;
+                    if n > 0 {
+                        let top = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                        let keep = self
+                            .stack
+                            .len()
+                            .checked_sub(n)
+                            .ok_or(VmError::StackUnderflow)?;
+                        self.stack.truncate(keep);
+                        self.stack.push(top);
+                    }
+                }
                 Opcode::LoadLocal => {
                     let index = operand.unwrap_or(0) as usize;
                     let base = self.call_stack.last().map(|f| f.stack_base).unwrap_or(0);
