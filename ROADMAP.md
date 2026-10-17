@@ -623,7 +623,8 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 | M5 | 切换默认后端 | **前置条件已满足**（1.2x ≤ 2x + CI 双后端矩阵），但切换默认会影响 `.mailangbc` 兼容与 wasm/embedded 体积，建议单独做 v0.5 决策 |
 | M6 | 修 13.3 的双后端不一致 | ✅ **Phase N 已修**：D1（N1）、D2（N2）、D3（N3）全部落地 + 索引对齐，`compare_backends.ps1` 64/64 一致、manifest 清空。旧"参数缺陷"归因见 13.5 更正 |
 | M7（新增） | 裸 `match`/`if` 作为块尾表达式返回 `null` | ✅ **已修**：`match` 尾值随 N2（值协议）；裸 `if`/`elif`/`else` 尾值随 13.7（值模式 + `Slide` 收尾），并顺带修掉 `elif` 分支落空死循环 |
-| M8（新增） | 函数参数在部分形状下仍出错 | **部分证伪**：\"两个后端都算错参数算术\"不成立——寄存器后端在这些例子算对，栈式后端也不是全错。**仍存**：栈式后端 5 参数的 `y + h - 1` 抛 `Cannot add these types`、参数继续下传报 `len expects …`；寄存器后端不接管 `libs/tui`+`libs/gui` 的宿主钩子。见 13.5 |
+| M8a（新增） | 寄存器后端不接管 UI 宿主钩子 | ✅ **已修**（Phase N 之后）：`RegOp::TailCall` 命中 `host_fns` 时如 `Ret` 般交回结果，`host_tui` / `host_gui` 两后端 7/7，见 13.8 |
+| M8b（新增） | 栈式后端若干参数形状报错 | **部分证伪**：\"两个后端都算错参数算术\"不成立——寄存器后端在这些例子算对，栈式后端也不是全错。**仍存**：栈式后端 5 参数的 `y + h - 1` 抛 `Cannot add these types`、参数继续下传报 `len expects …`、`println(f(x))` 尾调用报栈下溢；寄存器后端全部算对。见 13.5 |
 | M9（新增） | ~~分配密集的循环不回收堆内存~~ | ✅ **Phase N N4 已修**（阈值策略 + census 强引用）；复测栈式 4.9 MB / 寄存器 5.1 MB 平坦，见 13.6 |
 
 ### 13.5 寄存器后端：`if … return` 汇合点的栈高错误（v0.4 P1；Phase N N3 已修）
@@ -645,7 +646,9 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 
 **修复（Phase N N3）**：① 帧退出指令不再有后继（`compute_heights`）；② 帧布局契约拆成 `n_regs`（窗口大小）/ `param_slots`（参数 + 隐式 `this` 预留）/ `arity` + `required`（声明的形参个数）三个概念，`start_sp` 不再一词三用。修后四个程序在两个后端逐字节一致，`test_tui` 78/78、`test_gui` 98/98 在两个后端都通过；`benchmark/known_backend_mismatches.txt` 已清空。
 
-**仍存（Phase M M8，不在 Phase N 范围）**：① **寄存器后端不接管 `gui_draw_rect` / `gui_draw_text` / `tui_write` 这些宿主钩子**——包装函数返回桩值（`Ok("sim")` / `sim`）而非宿主值 `"win32"` / `"tty"`，所以 `host_*` 套件在 `--vm=register` 下各有 1–2 项失败；② **栈式后端在若干参数形状下仍会报错**：5 参数函数里的 `y + h - 1` 抛 `Cannot add these types`，把参数继续传进更深一层调用（`to_rgba(color)`）报 `len expects a string, array, map, or tuple`，而寄存器后端在这些形状上算对；③ **栈式后端**在 `println(f(x))`（`f` 体以 `return g(a)` 尾调用收尾）时报 `Internal VM error: Stack underflow in Call`。三者都在 `a063f14`（Phase N 之前）已复现，边界尚未完全刻画；因为没有 shipped 程序命中，`compare_backends.ps1` 仍是 64/64。详见 AGENTS.md「Remaining gaps」。
+**仍存（Phase M M8b，不在 Phase N 范围）**：① **栈式后端在若干参数形状下仍会报错**：5 参数函数里的 `y + h - 1` 抛 `Cannot add these types`，把参数继续传进更深一层调用（`to_rgba(color)`）报 `len expects a string, array, map, or tuple`，而寄存器后端在这些形状上算对；② **栈式后端**在 `println(f(x))`（`f` 体以 `return g(a)` 尾调用收尾）时报 `Internal VM error: Stack underflow in Call`。两者都在 `a063f14`（Phase N 之前）已复现，边界尚未完全刻画；因为没有 shipped 程序命中，`compare_backends.ps1` 仍是 64/64。详见 AGENTS.md「Remaining gaps」。
+
+**已修（Phase M M8a，Phase N 之后）**：**寄存器后端不接管 `gui_draw_rect` / `gui_draw_text` / `tui_write` 这些宿主钩子**——见 13.8。
 
 ### 13.6 GC：阈值无上限增长 + census 持强引用（v0.4 P1；Phase N N4 已修）
 
@@ -697,6 +700,23 @@ fn f(n) {
 
 只要 `elif` 体不以 `return` 收尾就会无限循环（`probe_elif.mai` 在旧二进制 `a063f14` 上 10 秒超时）。修复：`if`/`elif`/`else` 共用一个 `compile_if`，收齐所有分支结尾的 `Jump`，最后统一 patch 到同一个汇合点。
 
-**回归测试**（`crates/mailang-core/tests/integration.rs`，4 个）：尾 `if` 值、尾 `elif` 链值、含局部量的分支不吞结果、`elif` 落空。集成套件栈式与寄存器各 **129/129**，`compare_backends.ps1` 仍 64/64 一致。
+**回归测试**（`crates/mailang-core/tests/integration.rs`，4 个）：尾 `if` 值、尾 `elif` 链值、含局部量的分支不吞结果、`elif` 落空。集成套件栈式与寄存器各 **130/130**，`compare_backends.ps1` 仍 64/64 一致。
 
-**仍未修（M8）**：见 13.4 / 13.5 的 M8 行——寄存器后端不接管 UI 宿主钩子、栈式后端若干参数形状仍报错。
+**仍未修（M8b）**：见 13.4 / 13.5——栈式后端若干参数形状仍报错。原 M8 的另一半（寄存器后端不接管 UI 宿主钩子）已在 13.8 修好。
+
+### 13.8 寄存器后端 `TailCall` 绕过宿主函数覆盖（v0.4 P1；Phase N 之后已修）
+
+一个 MaìLang 顶层函数与已注册宿主函数同名时，宿主必须接管——模块体在宿主钩子安装之后运行，否则模块自己的桩会盖掉钩子。这是 `--host=tui|gui` 能工作的前提。
+
+**根因**：模块里的 `return hook(x)` 编译成 `LoadGlobal hook` + `TailCall`，两个后端共用同一份字节码，但两条 TailCall 路径不一致：
+
+- 栈式 `Opcode::TailCall` 先查 `host_fns`，命中就调用宿主，再按 `Return` 的方式把结果交回调用者 → `tui_write` / `gui_draw_rect` 得到宿主值 `"tty"` / `"win32"`。
+- 寄存器 `RegOp::TailCall` 对 `Value::Function` 直接 `reuse_frame_for_tail` 进入**模块自己的桩 chunk**，跳过了宿主检查（只有 `Call` / `call_value` 查）→ 返回桩值 `Ok("sim")`。
+
+症状：`host_tui.mai` 在 `--vm=register` 下 6/7（`write` 返回 `sim`），`host_gui.mai` 5/7（`draw_rect` / `draw_text` 返回 `sim`）；`test_*` 模拟套件不受影响（它们本就不期望宿主接管）。`a063f14` 已复现。
+
+**修复**：`RegOp::TailCall` 的 `Value::Function` 分支先查 `host_fns`；命中时调用宿主，然后像 `RegOp::Ret` 一样弹出当前帧、把结果写回调用者的 `ret_dst`、恢复 `ip` / `chunk` / `base`，与栈式 VM 的 TailCall 宿主分支逐条对应。
+
+**回归测试**：`test_host_fn_overrides_a_tail_called_function`（非模块路径下的同一形状；去掉修复即失败 `left: "stub" right: "42"`）。`host_tui` / `host_gui` 两个后端都 7/7；CI 的 `host-packs` 矩阵把 `host_*` 也交叉到两个后端。集成套件栈式与寄存器各 **130/130**，`compare_backends.ps1` 仍 64/64。
+
+**仍未修**：M8b（栈式后端若干参数形状），见 13.5。

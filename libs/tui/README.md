@@ -294,4 +294,4 @@ cargo run -p mailang-cli --release -- run --host=tui libs/tui/test/host_tui.mai
 - 模拟永不阻塞：`read_key()` 在队列空时返回 `Err`，而不是等待输入。
 - 没有光标位置查询、没有滚动区（scroll region）、没有鼠标上报，也没有真宽字符（wcwidth）表。
 - `Ok("sim")` 只是"已写入模拟缓冲"，**不是**真实终端已渲染的确认。
-- **模拟套件 `test_tui.mai` 在两个后端都 78/78 通过**（Phase N N3 修好寄存器后端 `if … return` 汇合点的栈高错误后）；`host_tui.mai` 在栈式后端 7/7 通过，寄存器后端下 `write()` 不被宿主接管（返回桩值而非 `"tty"`）——先于 Phase N 存在的问题（Phase M M8，见 `ROADMAP.md` 13.5），不是本库的逻辑问题。
+- **模拟套件 `test_tui.mai` 在两个后端都 78/78 通过**（Phase N N3 修好寄存器后端 `if … return` 汇合点的栈高错误后）；**宿主套件 `host_tui.mai` 在两个后端都 7/7 通过**（Phase N 之后修好寄存器后端 `TailCall` 绕过宿主覆盖的问题，见 `ROADMAP.md` 13.8）。

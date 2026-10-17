@@ -25,12 +25,10 @@ jobs:
       fail-fast: false
       matrix:
         # `test_*` asserts the pure-Mai simulation (the default, no host
-        # installed); it is crossed with both VM backends because it must pass
-        # on the stack VM and the register VM alike (the backend gate for the
-        # `libs/tui` + `libs/gui` packs). `host_*` asserts that a real host
-        # backend took over and is only run on the default stack VM: the host
-        # wrappers still hit the parameter-arithmetic defect (ROADMAP Phase M
-        # 13.5 / M8) under `--vm=register`, which is out of Phase N's scope.
+        # installed); `host_*` asserts that a real host backend took over. Both
+        # are crossed with the two VM backends: the packs are part of the
+        # dual-VM equivalence gate, so each suite must pass on the stack VM and
+        # the register VM alike.
         include:
           - host: sim
             vm: ""
@@ -41,8 +39,14 @@ jobs:
           - host: tui
             vm: ""
             tests: libs\tui\test\host_tui.mai
+          - host: tui
+            vm: register
+            tests: libs\tui\test\host_tui.mai
           - host: gui
             vm: ""
+            tests: libs\gui\test\host_gui.mai
+          - host: gui
+            vm: register
             tests: libs\gui\test\host_gui.mai
     steps:
       - uses: actions/checkout@v7
