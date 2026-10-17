@@ -6,6 +6,8 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 
 ## [Unreleased]
 
+## [0.4.0] - Register VM as the default backend, dual-backend parity, versioned docs
+
 ### Changed (M5 — the register VM is now the default backend)
 - **Default backend switched to the register VM** (ROADMAP M5). `MailangInterpreter::new()` / `with_modules()` start on `VmBackend::Register` (new `VmBackend::DEFAULT`), and the CLI resolves the backend as **`--vm` flag > `MAILANG_VM` environment variable > register**. The flag now has no clap default, so leaving it out reaches the environment; an unset, empty or unrecognised `MAILANG_VM` means "default" and can never break a run. `--vm=register` is therefore an alias of the default; `--vm=stack` / `MAILANG_VM=stack` are the opt-out. `mailang repl` (and bare `mailang`) gained the same `--vm` selector.
 - **`.mailangbc` is unaffected**: the compiler still emits the stack bytecode and both backends execute it, so `mailang build` output round-trips identically on either backend (the CI `bytecode-format` job now diffs the flagless and `--vm=stack` runs of one `.mailangbc`). Binary size is essentially unchanged too — `RegisterVm` was always compiled in (`wasm32-unknown-unknown` release artifact: 975,305 → 975,309 bytes). The only added cost is the one-time `StackToRegister` lowering per `run`/`eval`, which every `--vm=register` run already paid.
@@ -74,6 +76,12 @@ The stack VM's shape-dependent parameter errors, previously listed here, are the
 
 ### Removed
 - `tests/basic.rs`: an orphan test file at the workspace root, which has no `[package]` and was therefore never compiled by `cargo test`. Its five cases were already covered by `crates/mailang-core/tests/integration.rs`.
+
+### Release v0.4.0
+- **Version bumped to 0.4.0** in the workspace `[workspace.package]`, every in-tree `mailang-* = { path, version }` pin, and the generated wasm package manifests (`docs/wasm`, `playground/public/wasm`, `docs/.vitepress/public/wasm`). `v0.3.1` was a patch release; the default-backend switch (M5) plus the Phase N defect fixes make this a minor release.
+- **Docs site**: `docs/v0.3/` is frozen at the v0.3.x state (stack VM default, `--vm=register` opt-in) and `docs/v0.4/` is the new latest tree, retargeted to its own `/v0.4/` internal links. `versions.json` and the nav version switcher now list `0.4` (latest) and `0.3`, and every published version gets its own sidebar keys rather than only the latest one.
+- **Paper** (`paper/main.tex`) brought from its Phase L snapshot to v0.4: register default, 137/137 and 261 test counts, `compare_backends.ps1` 64/64, the re-measured fib and memory numbers, the bounded GC threshold, and measured artifact sizes; `main.pdf` and the page previews were rebuilt with `latexmk -xelatex`.
+- **Benchmarks re-run on the release tree** (same machine; absolute numbers drift with load, the backends' relative order does not): fib stack 119 / register 116 / default 116 ms (ratio 0.94–0.97x, gate ≤2.0x), allocation loop 5.1 MB peak at 2M and 4M iterations (gate 64 MB), `compare_backends.ps1` 64/64 identical.
 
 ## [0.3.1] - Docs site, CI green, register VM perf
 
