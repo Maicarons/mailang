@@ -607,7 +607,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 
 **为什么没有直接改**：两处修复都会改变指令序列，与 `mailang-bytecode/src/register.rs` 的 `compute_heights`（dataflow stack height）契约冲突。实测只改编译器后，寄存器后端的 `match [a, b]` 长度检查失效（`[1]` 错配到 `[a, b]` 分支，`test_match_array_destructure` 期望 99 实得 2）。修复必须**同时**调整寄存器翻译器，不能只改编译器。
 
-**顺带发现（M7）**：函数/块的最后一条是裸 `match` 表达式时返回 `null`——已随 N2 的值协议一并修好（`match` 作为尾表达式给出 arm 的值，见 `crates/mailang-compiler/src/compiler.rs::compile_body_value`）。**仍存**：裸 **`if`** 作为块/函数尾表达式仍返回 `null`（N2 只让"表达式语句"携带尾值，`Stmt::If` 的尾值未做，是已知剩余缺口）。
+**顺带发现（M7）**：函数/块的最后一条是裸 `match` 表达式时返回 `null`——已随 N2 的值协议一并修好（`match` 作为尾表达式给出 arm 的值，见 `crates/mailang-compiler/src/compiler.rs::compile_body_value`）。**裸 `if`** 尾值当时仍未做（N2 只让"表达式语句"携带尾值），已在 13.7 修好。
 
 #### 已修（Phase N N3）：两个 UI 包在寄存器后端不一致（4 个程序）
 
@@ -622,7 +622,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 | M4 | async 决策 | 继续冻结（无 IoT 场景） |
 | M5 | 切换默认后端 | **前置条件已满足**（1.2x ≤ 2x + CI 双后端矩阵），但切换默认会影响 `.mailangbc` 兼容与 wasm/embedded 体积，建议单独做 v0.5 决策 |
 | M6 | 修 13.3 的双后端不一致 | ✅ **Phase N 已修**：D1（N1）、D2（N2）、D3（N3）全部落地 + 索引对齐，`compare_backends.ps1` 64/64 一致、manifest 清空。旧"参数缺陷"归因见 13.5 更正 |
-| M7（新增） | 裸 `match`/`if` 作为块尾表达式返回 `null` | `match` 尾值已随 N2 修好；**裸 `if` 尾值仍返回 `null`**（剩余缺口） |
+| M7（新增） | 裸 `match`/`if` 作为块尾表达式返回 `null` | ✅ **已修**：`match` 尾值随 N2（值协议）；裸 `if`/`elif`/`else` 尾值随 13.7（值模式 + `Slide` 收尾），并顺带修掉 `elif` 分支落空死循环 |
 | M8（新增） | 函数参数在部分形状下仍出错 | **部分证伪**：\"两个后端都算错参数算术\"不成立——寄存器后端在这些例子算对，栈式后端也不是全错。**仍存**：栈式后端 5 参数的 `y + h - 1` 抛 `Cannot add these types`、参数继续下传报 `len expects …`；寄存器后端不接管 `libs/tui`+`libs/gui` 的宿主钩子。见 13.5 |
 | M9（新增） | ~~分配密集的循环不回收堆内存~~ | ✅ **Phase N N4 已修**（阈值策略 + census 强引用）；复测栈式 4.9 MB / 寄存器 5.1 MB 平坦，见 13.6 |
 
@@ -667,3 +667,36 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 **修复（Phase N N4）**：`MarkSweepHeap::collect` 返回活对象数，阈值改成 `max(MIN, live * 2)` 并加硬上限；`vm.rs::maybe_auto_collect` 相应调整；顺带修了**寄存器 VM 的新生节点不是 GC 根**的问题。新增 `.mai` 可调的 `gc_stats()` 内建（`tracked` / `collections` / `freed`）以便观测。
 
 **复测（Phase N N7，Windows release）**：两个后端在同一条分配循环上都不再随迭代数增长——栈式 200 万次 **4.9 MB**、400 万次 **4.9 MB**；寄存器 **5.1 / 5.1 MB**。门禁：`benchmark/measure_memory.ps1`（上限 64 MB，退出码 0）。
+
+### 13.7 裸 `if` 尾值与 `elif` 分支落空（v0.4 P1；Phase N N7 之后已修）
+
+这一节补上 13.3 里"仍存"的 M7，并记录同一段代码里的第二个缺陷。两者都在 `a063f14`（Phase N 之前）可复现，且两个后端一致地错。
+
+**① 裸 `if` 不产生尾值。** `compile_body_value` 只把"尾表达式"当值，裸 `if` 落到 `_` 分支推 `null`：
+
+```mailang
+fn f(n) { if n > 0 { 1 } else { 2 } }
+f(1)   // 从前：null（应为 1）
+```
+
+修复：把 `Stmt::If` 与 `compile_body_value` 统一到一个 `compile_if(..., want_value)`；尾 `if`/`elif`/`else` 以"值模式"编译——每个分支的**尾语句本身就是该分支的值**，无 `else` 的值模式 `if` 补 `null`。
+
+值模式还有一个栈布局要点：栈式 VM 里局部量就是栈槽，分支体算出的结果压在分支局部量**之上**，收尾若沿用 `end_scope()` 的逐条 `Pop`，弹出的就是结果本身。因此新增 `end_scope_keeping_value()`，用一次 `Slide(n)` 从结果下方抽掉 `n` 个局部量（`Expr::Match` 自 N2 起就是这么收尾的）。没有这一步时 `fn multi(n) { if n > 0 { var a = n + 1  var b = a * 2  b } else { 0 - n } }` 的 `multi(3)` 会返回 4 而不是 8。
+
+**② `elif` 分支落空 → 落到指令 0。** 原 `Stmt::If` 为每个 `elif` 分支结尾发了一条 `Jump`，但只 patch 了 then 分支那条（`let _jump_end = ...` 之后没有 `patch_jump`），其操作数停留在 `0`：
+
+```mailang
+fn f(n) {
+    var out = ""
+    if n == 0 { out = out + "a" }
+    elif n == 1 { out = out + "b" }   // 退回到指令 0 → 死循环
+    else { out = out + "c" }
+    return out
+}
+```
+
+只要 `elif` 体不以 `return` 收尾就会无限循环（`probe_elif.mai` 在旧二进制 `a063f14` 上 10 秒超时）。修复：`if`/`elif`/`else` 共用一个 `compile_if`，收齐所有分支结尾的 `Jump`，最后统一 patch 到同一个汇合点。
+
+**回归测试**（`crates/mailang-core/tests/integration.rs`，4 个）：尾 `if` 值、尾 `elif` 链值、含局部量的分支不吞结果、`elif` 落空。集成套件栈式与寄存器各 **129/129**，`compare_backends.ps1` 仍 64/64 一致。
+
+**仍未修（M8）**：见 13.4 / 13.5 的 M8 行——寄存器后端不接管 UI 宿主钩子、栈式后端若干参数形状仍报错。

@@ -46,10 +46,11 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 - **D3 — register VM `if … return` join height**: `compute_heights` propagated a height past `Return` / `Halt` / `TailCall` / `Throw`, so an early `return` whose successor was the outer `if`'s jump target corrupted the frame layout (locals read from the wrong register). Frame-exit instructions now have no successor, and the frame-layout contract was split into `n_regs` (window) / `param_slots` (parameters + implicit `this`) / `arity` + `required`. `libs/tui/test/test_tui.mai` (78/78) and `libs/gui/test/test_gui.mai` (98/98) now pass on the register backend too.
 - **Register VM index read/write parity**: `index_get` / `index_set` now mirror the stack VM arm for arm (string index → `Char` with `IndexOutOfBounds`, absent map key → `null`, `values_equal` keys, identical error text).
 - **D4 — GC threshold and roots**: the mark-sweep threshold is now `max(MIN, live * 2)` (was an unbounded `×1.5`), and a newborn heap node is kept alive through the collection it triggers. An allocation-per-iteration loop peaks at **4.9 MB** (stack) / **5.1 MB** (register) at 2M and 4M iterations, instead of 151 / 333 MB.
+- **D5 — bare `if`/`elif`/`else` tail value and `elif` fall-through** (both pre-existing, reproduced at `a063f14`): a bare `if` as a body's last statement returned `null` because `compile_body_value` only recognised a trailing *expression*; tail `if`/`elif`/`else` is now compiled in value mode, so each branch's trailing statement is the branch's value (an `else`-less value-mode `if` yields `null`). Value mode closes a branch scope with `Slide` instead of `Pop` so the branch's locals — which sit *below* the result — do not eat it. In the same arm, the `Jump` at the end of each `elif` branch had never been patched (`let _jump_end`), so its operand stayed `0` and the branch fell through to instruction 0: any `if`/`elif` chain whose `elif` body does not end in `return` looped forever. All branch ends now patch to one join. 4 new regression tests.
 
 ### Added (Phase N)
 - `mailang disasm [--vm=stack|register] file.mai` and a script-level `gc_stats()` builtin (`tracked` / `collections` / `freed`).
-- `benchmark/measure_memory.ps1` (allocation-loop memory gate) and regression tests for every defect above; the integration suite is now 125/125 on both backends.
+- `benchmark/measure_memory.ps1` (allocation-loop memory gate) and regression tests for every defect above; the integration suite is now 129/129 on both backends.
 
 ### Changed (Phase N)
 - `benchmark/known_backend_mismatches.txt` is **empty**: `compare_backends.ps1` reports 64/64 identical. `bench_fib30` on Windows release: stack ~138 ms, register ~147 ms (~1.07x).
@@ -57,7 +58,6 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 ### Known issues (pre-existing, still open after Phase N)
 - **Register VM does not take over the UI host hooks**: under `--vm=register` the pack wrappers return the stub's value (`Ok("sim")` / `sim`) instead of the host's (`"win32"` / `"tty"`), so `host_tui.mai` / `host_gui.mai` have 1–2 failing checks. Pre-dates Phase N (reproduced at `a063f14`); tracked as ROADMAP Phase M M8.
 - **Parameter handling still has shape-dependent gaps** (stack VM, pre-existing, reproduced at `a063f14`): `y + h - 1` inside a 5-parameter function raises `Cannot add these types`, forwarding a parameter into a deeper call (`to_rgba(color)`) raises `len expects a string, array, map, or tuple`, and `println(f(x))` where `f` ends in `return g(a)` (a tail call) raises `Internal VM error: Stack underflow in Call`. The register VM computes those correctly. No shipped program has these shapes, so `compare_backends.ps1` stays green.
-- A function or block whose last statement is a bare **`if`** expression yields `null` instead of that expression's value (a bare `match` tail is fixed).
 - `libs/gui` only accepts a colour *name* or an *[r, g, b] array* because the language has no `type_of`, and every type probe raises instead of returning false.
 
 ### Removed

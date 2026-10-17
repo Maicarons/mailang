@@ -94,7 +94,7 @@ cargo build --no-default-features --target thumbv7em-none-eabihf
 
 ## 测试
 
-集成测试：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）均为 **125/125**；两个后端还在 `examples/` + `libs/` 的全部 64 个 `.mai` 程序上逐字节一致（`benchmark/compare_backends.ps1`）。
+集成测试：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）均为 **129/129**；两个后端还在 `examples/` + `libs/` 的全部 64 个 `.mai` 程序上逐字节一致（`benchmark/compare_backends.ps1`）。
 
 ## 当前限制
 
@@ -103,7 +103,7 @@ cargo build --no-default-features --target thumbv7em-none-eabihf
 - **不支持 `async`** — 无 async/await 运行时或语法。
 - **GC 为 Rc + mark-sweep** — 引用计数、`collect_cycles()` 断环，以及接入栈式 VM 的 `MarkSweepHeap`（见 `gc_stats()`）。尚无增量/并发 GC。
 - **IoT HAL 默认为模拟实现** — `gpio_*` / `adc_read` / `delay_ms` 在未通过 FFI 注册真实 HAL 时使用宿主模拟；不声称真实硬件验证。
-- **寄存器 VM 为可选后端** — 默认仍为栈式 VM；`MAILANG_VM=register` / `--vm=register` 通过同一套 125 项集成测试，并在每个 shipped 程序上与栈式 VM 一致（`benchmark/compare_backends.ps1` 64/64）。
+- **寄存器 VM 为可选后端** — 默认仍为栈式 VM；`MAILANG_VM=register` / `--vm=register` 通过同一套 129 项集成测试，并在每个 shipped 程序上与栈式 VM 一致（`benchmark/compare_backends.ps1` 64/64）。
 - **`mailang-macros` 仍为 passthrough 桩** — 尚无真实过程宏。
 - **crates.io 发布需要 `CARGO_REGISTRY_TOKEN`** — secret 未配置时 CI 跳过 crates.io（本地/HTTP 注册表可离线使用）。
 

@@ -151,7 +151,7 @@ cargo build --no-default-features --target thumbv7em-none-eabihf
 
 ## Testing
 
-Integration suite: **125/125** on both the stack VM (default) and the register VM (`MAILANG_VM=register` / `--vm=register`). The two backends are also compared on every `.mai` program in `examples/` and `libs/` by `benchmark/compare_backends.ps1` (currently 64/64 identical).
+Integration suite: **129/129** on both the stack VM (default) and the register VM (`MAILANG_VM=register` / `--vm=register`). The two backends are also compared on every `.mai` program in `examples/` and `libs/` by `benchmark/compare_backends.ps1` (currently 64/64 identical).
 
 ## Current limitations
 

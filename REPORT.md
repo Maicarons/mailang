@@ -2,7 +2,7 @@
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 >
-> **状态：Phase N（栈式 VM 与寄存器 VM 均 125/125；`benchmark/compare_backends.ps1` 64/64 一致）**
+> **状态：Phase N（栈式 VM 与寄存器 VM 均 129/129；`benchmark/compare_backends.ps1` 64/64 一致）**
 >
 > 本报告如实反映项目实际状态。阶段规划见 [ROADMAP.md](ROADMAP.md)，变更见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -33,12 +33,12 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 - ✅ C FFI / WASM / CLI(run/eval/build/fmt/deps/registry/lsp) / LSP / 格式化器；CLI 在 Windows 上内置 `--host=sim|tui|gui` 真实后端（`libs/tui`、`libs/gui` 两个 UI 包）
 - ✅ UTF-8 标识符；十六进制/八进制/二进制字面量；块注释
 
-**测试**：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）集成均为 **125/125**；全工作区 **243** 项测试全绿；`benchmark/compare_backends.ps1` 64/64 一致，`benchmark/known_backend_mismatches.txt` 为空。
+**测试**：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）集成均为 **129/129**；全工作区 **247** 项测试全绿；`benchmark/compare_backends.ps1` 64/64 一致，`benchmark/known_backend_mismatches.txt` 为空。
 
 ## 三、已知限制
 
 - ❌ **`async`** — 无 async/await 运行时或语法
-- ⚠️ **寄存器 VM**（`MAILANG_VM=register` / `--vm=register`）— 与栈式 VM 在每个 shipped 程序上一致（125/125 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁），但默认后端仍为栈式 VM
+- ⚠️ **寄存器 VM**（`MAILANG_VM=register` / `--vm=register`）— 与栈式 VM 在每个 shipped 程序上一致（129/129 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁），但默认后端仍为栈式 VM
 - ⚠️ **泛型类** — 字段擦除布局，无按类型 monomorphization
 - ⚠️ **IoT HAL** — 默认模拟实现；真实硬件需通过 FFI 注册 HAL（不声称真实硬件验证）
 - ⚠️ **公共托管注册表** — 仅本地目录 / 静态 HTTP 镜像
@@ -55,7 +55,7 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 | mailang-parser | ✅ 完整 | 递归下降 + Pratt；**含错误恢复**（`parse_program_recovering`） |
 | mailang-bytecode | ✅ 完整 | 栈 IR + 寄存器 IR |
 | mailang-compiler | ✅ 完整 | 含泛型 monomorphization |
-| mailang-vm | ✅ 完整 | 栈式（默认）+ 寄存器后端，均 125/125 |
+| mailang-vm | ✅ 完整 | 栈式（默认）+ 寄存器后端，均 129/129 |
 | mailang-stdlib | ✅ 可用 | io/math/string/collections/json/time/HAL/sys |
 | mailang-core | ✅ 管道集成 | Parser → Compiler → VM |
 | mailang-cli | ✅ 完整 | run/eval/build/fmt/deps/registry/lsp |
@@ -94,4 +94,4 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 
 ---
 
-**当前状态：栈式 VM 与寄存器 VM 均通过 125/125 集成测试，且在 `examples/`+`libs/` 的全部 64 个 `.mai` 程序上逐字节一致；IoT 默认模拟 HAL。**
+**当前状态：栈式 VM 与寄存器 VM 均通过 129/129 集成测试，且在 `examples/`+`libs/` 的全部 64 个 `.mai` 程序上逐字节一致；IoT 默认模拟 HAL。**
