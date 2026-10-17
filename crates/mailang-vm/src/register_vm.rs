@@ -1399,6 +1399,30 @@ fn set_prop(o: &Value, key: &str, v: Value) -> Result<(), VmError> {
     }
 }
 
+/// Primitive value equality with the same cases (and `Char`/`Str` coercion) the
+/// stack VM's `values_equal` admits, so map-key lookup agrees across backends.
+/// The stack VM's `IndexGet` compares map keys with `values_equal`, not with
+/// `Value`'s derived `PartialEq`, and the two differ for `'a'` vs `"a"`.
+#[inline]
+fn values_equal(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Null, Value::Null) => true,
+        (Value::Bool(x), Value::Bool(y)) => x == y,
+        (Value::Int(x), Value::Int(y)) => x == y,
+        (Value::Float(x), Value::Float(y)) => x == y,
+        (Value::Str(x), Value::Str(y)) => x == y,
+        (Value::Char(x), Value::Char(y)) => x == y,
+        (Value::Char(x), Value::Str(y)) => x.to_string().as_str() == y.as_ref(),
+        (Value::Str(x), Value::Char(y)) => x.as_ref() == y.to_string().as_str(),
+        _ => false,
+    }
+}
+
+/// Index read, mirroring the stack VM's `Opcode::IndexGet` arm for arm: arrays
+/// and strings share the `IndexOutOfBounds { index, length }` check, an absent
+/// map key yields `Value::Null` (not an error), and every other type raises the
+/// same `TypeError` text. There is deliberately no tuple arm: the stack VM has
+/// none, so indexing a tuple must fail identically on both backends.
 fn index_get(o: &Value, i: &Value) -> Result<Value, VmError> {
     match (o, i) {
         (Value::Array(a), Value::Int(n)) => {
@@ -1412,27 +1436,30 @@ fn index_get(o: &Value, i: &Value) -> Result<Value, VmError> {
                 Ok(a[*n as usize].clone())
             }
         }
-        (Value::Map(m), k) => m
+        (Value::Map(m), k) => Ok(m
             .borrow()
             .iter()
-            .find(|(key, _)| key == k)
+            .find(|(key, _)| values_equal(key, k))
             .map(|(_, v)| v.clone())
-            .ok_or_else(|| VmError::UndefinedProperty("key".into())),
-        (Value::Tuple(t), Value::Int(n)) => {
-            let t = t.borrow();
-            if *n < 0 || *n as usize >= t.len() {
+            .unwrap_or(Value::Null)),
+        (Value::Str(s), Value::Int(n)) => {
+            let char_count = s.chars().count();
+            if *n < 0 || *n as usize >= char_count {
                 Err(VmError::IndexOutOfBounds {
                     index: *n,
-                    length: t.len(),
+                    length: char_count,
                 })
             } else {
-                Ok(t[*n as usize].clone())
+                Ok(Value::Char(s.chars().nth(*n as usize).unwrap()))
             }
         }
-        _ => Err(VmError::TypeError("Cannot index".into())),
+        _ => Err(VmError::TypeError("Cannot index this type".into())),
     }
 }
 
+/// Index write, mirroring the stack VM's `Opcode::IndexSet`: arrays bounds-check
+/// first, maps replace by `values_equal` key (dropping any duplicate) and then
+/// append, and everything else raises the same `TypeError` text.
 fn index_set(o: &Value, i: &Value, v: Value) -> Result<(), VmError> {
     match (o, i) {
         (Value::Array(a), Value::Int(n)) => {
@@ -1449,14 +1476,11 @@ fn index_set(o: &Value, i: &Value, v: Value) -> Result<(), VmError> {
         }
         (Value::Map(m), k) => {
             let mut m = m.borrow_mut();
-            if let Some(slot) = m.iter_mut().find(|(key, _)| key == k) {
-                slot.1 = v;
-            } else {
-                m.push((k.clone(), v));
-            }
+            m.retain(|(key, _)| !values_equal(key, k));
+            m.push((k.clone(), v));
             Ok(())
         }
-        _ => Err(VmError::TypeError("Cannot index-assign".into())),
+        _ => Err(VmError::TypeError("Cannot index-assign this type".into())),
     }
 }
 

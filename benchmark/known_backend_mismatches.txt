@@ -13,14 +13,13 @@
 #   D2  `match` value protocol: a bound pattern is never stored into its slot
 #       and an arm's value is not delivered on the operand stack, so the value
 #       read back after the match is residue. FIXED in N2; the three lines
-#       below were removed (`examples/match_demo.mai`, `examples/phase_b_check.mai`,
+#       were removed (`examples/match_demo.mai`, `examples/phase_b_check.mai`,
 #       `examples/try_demo.mai` now agree).
-#   D3  register backend dataflow stack heights are wrong at an `if ... return`
-#       join, so expression temps overwrite live locals (wrong values first,
-#       then a type error). See ROADMAP.md Phase N N3.
-
-# D3 - if/return join heights (both UI packs' own suites and examples).
-libs/gui/example/dashboard.mai
-libs/gui/test/test_gui.mai
-libs/tui/example/basic.mai
-libs/tui/test/test_tui.mai
+#   D3  register backend dataflow stack heights were wrong at an `if ... return`
+#       join, so expression temps overwrote live locals (wrong values first,
+#       then a type error). FIXED in N3 step 2 (`compute_heights` no longer
+#       propagates a height past a frame-exiting instruction); the four lines
+#       for libs/gui/example/dashboard.mai, libs/gui/test/test_gui.mai,
+#       libs/tui/example/basic.mai and libs/tui/test/test_tui.mai were removed.
+#
+# The list is currently empty: every compared program agrees.

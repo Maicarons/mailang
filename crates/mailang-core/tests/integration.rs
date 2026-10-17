@@ -1084,6 +1084,48 @@ fn test_early_return_then_string_local() {
     assert_eq!(eval(src), "abab");
 }
 
+// ===== Phase N / N3: register indexing matches the stack VM =====
+//
+// The register VM's `index_get` / `index_set` had drifted from the stack VM's
+// `Opcode::IndexGet` / `IndexSet`: no `Str`-indexed-by-`Int` arm (`s[0]`
+// raised "Cannot index"), an absent map key raised instead of yielding
+// `null`, and the `TypeError` text differed — which the backend gate compares
+// byte for byte.
+
+#[test]
+fn test_string_index_is_a_char() {
+    assert_eq!(eval("let s = \"abcd\"\ns[0]"), "a");
+    assert_eq!(eval("let s = \"abcd\"\ns[3]"), "d");
+    assert_eq!(eval("\"abc\"[1]"), "b");
+}
+
+#[test]
+fn test_missing_map_key_is_null() {
+    assert_eq!(eval("let m = {\"a\": 1}\nm[\"zzz\"]"), "null");
+    assert_eq!(eval("let m = {\"a\": 1}\nm[\"zzz\"] == null"), "true");
+}
+
+#[test]
+fn test_index_error_text_matches_the_stack_vm() {
+    let err = interp().eval("let s = \"abc\"\ns[5]").unwrap_err();
+    assert!(
+        err.contains("Index out of bounds") && err.contains("index 5"),
+        "unexpected error: {err}"
+    );
+    let err = interp().eval("let a = [1, 2]\na[9] = 0").unwrap_err();
+    assert!(
+        err.contains("Index out of bounds") && err.contains("index 9"),
+        "unexpected error: {err}"
+    );
+    let err = interp().eval("let a = [1, 2]\na[true]").unwrap_err();
+    assert!(err.contains("Cannot index this type"), "unexpected: {err}");
+    let err = interp().eval("let x = true\nx[0] = 1").unwrap_err();
+    assert!(
+        err.contains("Cannot index-assign this type"),
+        "unexpected: {err}"
+    );
+}
+
 // ===== 回归测试：Int/Float 混合算术（ROADMAP Phase M 13.3） =====
 // 寄存器 VM 的 bin_apply 此前只覆盖 Int-Int 与 Float-Float，`Float * Int`
 // 这类混合运算会抛 "Cannot apply binary op"。examples/wasm_demo.mai 与
