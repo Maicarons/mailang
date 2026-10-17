@@ -16,8 +16,8 @@ MaìLang is a modern programming language designed for **IoT and cross-platform 
 | Default Params / Destructuring | `fn f(a, b = 10)`; `let (x, y) = …` | ✅ Implemented |
 | Generics | Generic-function monomorphization (turbofish); field-erased generic classes | ✅ Implemented |
 | UTF-8 Native | Identifiers support any Unicode script | ✅ Implemented |
-| Stack-based Bytecode VM | Slot locals, high-performance execution | ✅ Implemented |
-| Register VM (opt-in) | `--vm=register`, feature-parity with the stack VM | ✅ Implemented |
+| Bytecode VM | Stack bytecode with slot locals, or lowered to three-address register IR | ✅ Implemented |
+| Default backend (since M5) | Register VM; `--vm=stack` / `MAILANG_VM=stack` selects the stack VM | ✅ Implemented |
 | GC | Rc + `collect_cycles()` + mark-sweep heap | ✅ Implemented |
 | Package Registry | Filesystem / static HTTP: `publish`/`install`/`search`/`yank` | ✅ Implemented |
 | C FFI | 12-language binding support | ✅ Implemented |
@@ -42,7 +42,7 @@ MaìLang uses a hybrid syntax style, borrowing from Rust, Python, and JavaScript
 - JavaScript-like object operations
 
 ### High Performance
-Uses a **stack-based bytecode virtual machine** with slot locals, faster than tree-walk interpreters (like Rhai):
+The default backend is the **register VM** (stack bytecode is lowered to three-address IR at run time); the stack VM with slot locals is still selectable with `--vm=stack`. Both are faster than tree-walk interpreters (like Rhai):
 - Bytecode can be serialized and cached for faster startup
 - Locals use slot indices (no hash lookup), suitable for IoT scenarios
 - Hot-path specialization and CallDirect calls
@@ -73,7 +73,7 @@ let 🔥 = "支持emoji"
 
 | Feature | MaìLang | Rhai | Rune | RustPython |
 |---------|---------|------|------|------------|
-| Execution Model | Stack VM + slot locals | Tree Walk | Stack VM | Stack VM |
+| Execution Model | Register VM (default) + stack VM | Tree Walk | Stack VM | Stack VM |
 | OOP Support | ✅ Full | ❌ Limited | ❌ Limited | ✅ Full |
 | Embedded Support | ✅ 64KB+ | ✅ | ❌ | ❌ |
 | FFI | ✅ 12 Languages | ✅ Rust | ❌ | ✅ Python |

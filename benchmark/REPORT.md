@@ -229,4 +229,18 @@ ESP32-C3 @ 160MHz 约比现代 PC 慢 50-100x。
 - `benchmark\compare_backends.ps1`：对 `examples/` 与 `libs/` 下 66 个 `.mai` 程序逐字节比对双后端输出，其中 2 个跳过（输出不确定/不终止）—— **64 个比对中 56 identical / 8 mismatched**，8 个全部列在 `benchmark/known_backend_mismatches.txt`（4 处 `match` 编译缺陷 + 4 处参数缺陷，见 `ROADMAP.md` Phase M 13.3 / 13.5）；优化本身零回归。已修 1 处（寄存器 VM 的 `Int`↔`Float` 混合运算，`wasm_demo.mai` 恢复一致）。
 - 测量 fib30：栈式 113 ms / 寄存器 114 ms（min，3 次，Windows release）→ **1.01x，M1 达标**。
 
-> **注（Phase N 之后）**：上面这条 `108/108` 与 `56 identical / 8 mismatched` 是 **Phase M 当时**的数字。Phase N 及其后续已把差异全部收敛：集成测试栈式与寄存器各 **135/135**，`compare_backends.ps1` **64/64 identical**，`known_backend_mismatches.txt` 为空——本节列出的 4 处 `match` 编译缺陷（13.3）与 4 处参数缺陷（即 M8b，见 `ROADMAP.md` 13.9）都已修掉。本节的耗时数字仍是当时的实测记录。
+> **注（Phase N 之后）**：上面这条 `108/108` 与 `56 identical / 8 mismatched` 是 **Phase M 当时**的数字。Phase N 及其后续已把差异全部收敛：集成测试栈式与寄存器各 **137/137**，`compare_backends.ps1` **64/64 identical**，`known_backend_mismatches.txt` 为空——本节列出的 4 处 `match` 编译缺陷（13.3）与 4 处参数缺陷（即 M8b，见 `ROADMAP.md` 13.9）都已修掉。本节的耗时数字仍是当时的实测记录。
+
+## M5：默认后端切换后的复测（Windows release）
+
+`benchmark/measure_fib.ps1` 现在三条线都显式指定后端（`--vm=stack` / `--vm=register` / 无 flag），3 次取最小值：
+
+| 后端 | bench_fib30 (min) | 相对栈式 |
+|------|-------------------|----------|
+| 栈式 VM（`--vm=stack`） | 119 ms（二次 188 ms） | 1.00x |
+| 寄存器 VM（`--vm=register`） | 116 ms（二次 176 ms） | 0.97x（二次 0.94x） |
+| **默认（无 flag，M5 起 = 寄存器 VM）** | 116 ms（二次 174 ms） | 0.97x（二次 0.94x） |
+
+括号里是同一台机器在负载较重时重跑一遍的结果：两条线一起上浮（栈式更明显），默认始终跟随寄存器线。`benchmark/compare_backends.ps1`（显式双后端）仍 **64/64 identical**，退出码 0。`benchmark/measure_memory.ps1` 分配循环 200 万/400 万次峰值 **5.1 MB**（默认=寄存器）与 **4.9 / 5.1 MB**（`--vm=stack`），上限 64 MB。
+
+结论：M1 门禁（≤2.0x）保持达标，切换默认后端没有带来性能或内存回归；脚本不再依赖「无 flag 就是栈式」这一假设。

@@ -326,9 +326,9 @@ Chunk "add":
 
 ## 虚拟机 (VM)
 
-### 栈式 VM
+### 栈式 VM（可选后端）
 
-MaìLang 默认使用**栈式虚拟机 + slot 局部变量**（可选寄存器后端 `--vm=register`，特性与栈式 VM 对齐）。操作数走栈，局部变量通过帧内 slot 索引访问：
+编译器始终生成栈式字节码。自 M5 起**默认后端是寄存器 VM**（`StackToRegister` 每次运行时把同一份字节码降到三地址 IR，见下节）；`--vm=stack` / `MAILANG_VM=stack` 可切回栈式 VM。栈式 VM 的操作数走栈，局部变量通过帧内 slot 索引访问：
 
 ```rust
 pub struct Vm {

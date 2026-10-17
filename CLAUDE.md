@@ -59,7 +59,7 @@ Source (.mai) → Lexer → Parser → Compiler → VM
 - **mailang-analyzer**: Semantic analysis and type checking (wired into the pipeline; `analyze()` + diagnostics). Depends on mailang-ast.
 - **mailang-compiler**: Bytecode compiler. AST (`Program`) → `Bytecode`. Depends on mailang-ast, mailang-bytecode.
 - **mailang-bytecode**: Bytecode IR definitions (`Opcode`, `Value`, `Instruction`, `Chunk`, `Bytecode`) plus the register IR (`RegChunk`, `RegOp`) and the `StackToRegister` translator. Shared between compiler and VM.
-- **mailang-vm**: Two interchangeable backends over the same `Bytecode`: the stack `Vm` (default) and `RegisterVm` (opt-in via `MAILANG_VM=register` / `--vm=register`). Executes and returns `Value`.
+- **mailang-vm**: Two interchangeable backends over the same `Bytecode`: the register (three-address) `RegisterVm` (the default since M5, stack bytecode is lowered via `StackToRegister`) and the stack `Vm` (opt-in via `--vm=stack` / `MAILANG_VM=stack`). Executes and returns `Value`.
 - **mailang-stdlib**: Built-in functions (`println`, `sqrt`, `len`, `parse_int`, etc.) operating on `mailang_bytecode::Value`.
 - **mailang-core**: Glue crate. Re-exports all above. Contains `MailangInterpreter` which orchestrates Parser → Compiler → VM pipeline, plus the `mailang fmt` formatter. This is the main integration point.
 - **mailang-cli**: CLI binary. Uses `clap` for subcommands (`run`, `eval`, `build`, `fmt`, `deps`, `publish`, `install`, `registry`, `lsp`) and provides an interactive REPL. On Windows it also bundles real UI backends selected with `--host=sim|tui|gui` (`hostwin.rs`): `tui` drives the console (stdout, `GetConsoleScreenBufferInfo`, non-blocking `ReadConsoleInputW`), `gui` opens a real window and paints with GDI. `sim` is the default and installs nothing.
@@ -72,7 +72,7 @@ Source (.mai) → Lexer → Parser → Compiler → VM
 
 ### Key Design Decisions
 
-- **Stack VM by default, register VM as a peer backend**: both execute the same `Bytecode` (the register VM via `StackToRegister` lowering) and pass the same 135 integration tests. Switch with `MAILANG_VM=register` or `--vm=register`; CI runs the whole suite on both. `benchmark/compare_backends.ps1` is the byte-for-byte equivalence gate over every `.mai` program in `examples/` + `libs/` (currently 64/64 identical).
+- **Register VM by default, stack VM as the opt-out (M5)**: both execute the same `Bytecode` (the register VM via `StackToRegister` lowering) and pass the same 137 integration tests. `MAILANG_VM` / `--vm` selects the backend with the flag winning over the environment; `stack` is the only supported opt-out value, everything else (including unset/empty) means the register default. CI runs the whole suite both ways. `benchmark/compare_backends.ps1` is the byte-for-byte equivalence gate over every `.mai` program in `examples/` + `libs/` (currently 64/64 identical).
 - **Value enum** in mailang-bytecode is the universal runtime type: `Null`, `Bool`, `Int(i64)`, `Float(f64)`, `Str`, `Char`, `Array`, `Map`, `Tuple`, `Function`, `Closure`, `Class`, `Instance`, `Ok`, `Err`, `Some`.
 - **Local vs global variable resolution**: Compiler resolves locals by stack index, globals by constant-pool name. Closures capture via upvalues.
 - **Chunk-based bytecode**: Each function gets its own `Chunk` with independent instruction and constant lists. Main code is chunk 0.
@@ -92,6 +92,6 @@ Defined in `rust-toolchain.toml`:
 
 ## Current Status
 
-v0.3.1 (Phase N shipped). The pipeline is complete: OOP with inheritance/`super`, traits, pattern matching, closures, error handling (`Result`/`Option`/`?`), TCO, generics with turbofish monomorphization, a filesystem/HTTP package registry, bundled Win32 `--host=tui|gui` backends for the `libs/tui` + `libs/gui` packs, and dual stack/register VMs that agree on every shipped program (135 integration tests on each, plus `compare_backends.ps1` 64/64).
+v0.3.1 (Phase N + M5 shipped). The pipeline is complete: OOP with inheritance/`super`, traits, pattern matching, closures, error handling (`Result`/`Option`/`?`), TCO, generics with turbofish monomorphization, a filesystem/HTTP package registry, bundled Win32 `--host=tui|gui` backends for the `libs/tui` + `libs/gui` packs, and dual stack/register VMs that agree on every shipped program (137 integration tests, 261 workspace tests, green both ways, plus `compare_backends.ps1` 64/64). **The register VM is the default backend**; `--vm=stack` / `MAILANG_VM=stack` opt back out.
 
-Known gaps are listed in `AGENTS.md` ("Remaining gaps") and tracked in `ROADMAP.md` Phase M: generic *classes* erase their fields, `async` is not supported, the IoT HAL is simulated by default, `mailang-macros` is a passthrough stub, heap memory is not reclaimed in allocation-heavy loops, and eight programs still behave differently on the register VM than on the stack VM (`benchmark\compare_backends.ps1` reproduces them and fails on any mismatch outside `benchmark/known_backend_mismatches.txt`).
+Known gaps are listed in `AGENTS.md` ("Remaining gaps") and tracked in `ROADMAP.md` Phase M: generic *classes* erase their fields, `async` is not supported, the IoT HAL is simulated by default, `mailang-macros` is a passthrough stub, and allocation-heavy loops keep a bounded working set rather than being fully reclaimed between collections (`benchmark\measure_memory.ps1` gates it).

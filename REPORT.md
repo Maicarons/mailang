@@ -2,7 +2,7 @@
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 >
-> **状态：Phase N（栈式 VM 与寄存器 VM 均 135/135；`benchmark/compare_backends.ps1` 64/64 一致）**
+> **状态：Phase N + M5（寄存器 VM 已成为默认后端；默认后端与 `--vm=stack` 均 137/137；`benchmark/compare_backends.ps1` 64/64 一致）**
 >
 > 本报告如实反映项目实际状态。阶段规划见 [ROADMAP.md](ROADMAP.md)，变更见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -27,25 +27,25 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 - ✅ **泛型函数 monomorphization**（turbofish `id::<int>` → `id$int`）；泛型类字段擦除
 - ✅ 模块系统 v2 + `mailang.toml` 路径依赖（`mailang deps`）
 - ✅ **包注册表**（FS / 静态 HTTP）：`publish` / `install` / `search` / `yank` / `registry`
-- ✅ GC：Rc + `collect_cycles()` + **MarkSweepHeap**（栈 VM；`gc_stats()`）
+- ✅ GC：Rc + `collect_cycles()` + **MarkSweepHeap**（两个 VM 后端；`gc_stats()`）
 - ✅ **解析器错误恢复**（`recover_from_error` / `parse_program_recovering`；LSP 多语法错误）
 - ✅ 字节码 `.mailangbc`；模拟 HAL（gpio/delay/adc）
 - ✅ C FFI / WASM / CLI(run/eval/build/fmt/deps/registry/lsp) / LSP / 格式化器；CLI 在 Windows 上内置 `--host=sim|tui|gui` 真实后端（`libs/tui`、`libs/gui` 两个 UI 包）
 - ✅ UTF-8 标识符；十六进制/八进制/二进制字面量；块注释
 
-**测试**：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）集成均为 **135/135**；全工作区 **253** 项测试全绿；`benchmark/compare_backends.ps1` 64/64 一致，`benchmark/known_backend_mismatches.txt` 为空。
+**测试**：默认后端（寄存器 VM）与栈式 VM（`MAILANG_VM=stack` / `--vm=stack`）集成均为 **137/137**；全工作区 **261** 项测试全绿；`benchmark/compare_backends.ps1` 64/64 一致，`benchmark/known_backend_mismatches.txt` 为空。
 
 ## 三、已知限制
 
 - ❌ **`async`** — 无 async/await 运行时或语法
-- ⚠️ **寄存器 VM**（`MAILANG_VM=register` / `--vm=register`）— 与栈式 VM 在每个 shipped 程序上一致（135/135 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁），但默认后端仍为栈式 VM
+- ✅ **寄存器 VM 于 M5 成为默认后端** — 与栈式 VM 在每个 shipped 程序上一致（137/137 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁）；`--vm=stack` / `MAILANG_VM=stack` 可切回栈式 VM；`.mailangbc` 与二进制体积不受影响（寄存器后端本就一直编入）
 - ⚠️ **泛型类** — 字段擦除布局，无按类型 monomorphization
 - ⚠️ **IoT HAL** — 默认模拟实现；真实硬件需通过 FFI 注册 HAL（不声称真实硬件验证）
 - ⚠️ **公共托管注册表** — 仅本地目录 / 静态 HTTP 镜像
 - ⚠️ **mailang-macros** — 仍为 passthrough 桩（无调用方）
 - ✅ **栈式后端若干参数形状报错（M8b）已修**（Phase N 之后）：`CallDirect` 帧没有 callee 槽位，而 `Opcode::TailCall` 一律按 `Call` 布局把 `callee + 实参` 搬到 `stack_base - 1`，压到调用者的活槽位；内建尾调用的收尾还直接 `truncate(stack_base - 1)` 多丢一格。此前表现为 5 参函数里 `y + h - 1` 抛 `Cannot add these types`、把参数继续下传报 `len expects …`、`println(f(x))`（`f` 以尾调用收尾）报 `Stack underflow in Call`，以及同一形状两后端算出不同的值。现两个后端在全部四种形状上一致，5 个回归测试，见 `ROADMAP.md` 13.9
 - ✅ **寄存器后端不接管 `libs/tui`+`libs/gui` 宿主钩子（M8a）已修**（Phase N 之后）：`RegOp::TailCall` 对同名函数跳过了 `host_fns`，`host_*` 套件在 `--vm=register` 下失败；现两个后端都 7/7，见 `ROADMAP.md` 13.8
-- ✅ **分配密集的循环不再泄漏** — Phase N N4 把 census 阈值改为 `max(MIN, live*2)`（原为无上限 ×1.5）并修好寄存器 VM 的新生节点不是 GC 根的问题；同一分配循环 200 万/400 万次峰值 4.9 MB（栈式）/ 5.1 MB（寄存器），不再是 151/333 MB。门禁 `benchmark/measure_memory.ps1`
+- ✅ **分配密集的循环不再泄漏** — Phase N N4 把 census 阈值改为 `max(MIN, live*2)`（原为无上限 ×1.5）并修好寄存器 VM 的新生节点不是 GC 根的问题；同一分配循环 200 万/400 万次峰值 5.1 MB（默认=寄存器）/ 4.9–5.1 MB（`--vm=stack`），不再是 151/333 MB。门禁 `benchmark/measure_memory.ps1`
 
 ## 四、Crate 状态
 
@@ -56,7 +56,7 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 | mailang-parser | ✅ 完整 | 递归下降 + Pratt；**含错误恢复**（`parse_program_recovering`） |
 | mailang-bytecode | ✅ 完整 | 栈 IR + 寄存器 IR |
 | mailang-compiler | ✅ 完整 | 含泛型 monomorphization |
-| mailang-vm | ✅ 完整 | 栈式（默认）+ 寄存器后端，均 135/135 |
+| mailang-vm | ✅ 完整 | 寄存器（默认）+ 栈式后端，均 137/137 |
 | mailang-stdlib | ✅ 可用 | io/math/string/collections/json/time/HAL/sys |
 | mailang-core | ✅ 管道集成 | Parser → Compiler → VM |
 | mailang-cli | ✅ 完整 | run/eval/build/fmt/deps/registry/lsp |
@@ -72,7 +72,7 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 
 | 指标 | 结果 |
 |------|------|
-| Fibonacci(30) | ~137 ms（约 4.25× Phase A 基线加速） |
+| Fibonacci(30)（`bench_fib30`，Windows release） | 116–188 ms（M5 实测：默认后端 116 / 174 ms，两后端相差几个百分点；寄存器 VM 在 Phase M 优化前约 1150 ms） |
 
 详见 [benchmark/REPORT.md](benchmark/REPORT.md)。
 
@@ -81,7 +81,7 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 | 决策 | 选择 | 说明 |
 |------|------|------|
 | 实现语言 | Rust | 性能、安全、跨平台 |
-| 默认执行模型 | 栈式 VM + slot locals | 寄存器 VM 为可选后端（特性对齐，默认栈式） |
+| 默认执行模型 | 寄存器 VM（M5 起）+ 栈式 VM 可选 | 两者同跑同一份栈字节码，特性对齐 |
 | 内存管理 | Rc + mark-sweep | 增量 GC 未实现 |
 | 泛型 | 函数 monomorphization | 类字段擦除 |
 | 错误处理 | Result + `?` | Rust 风格 |
@@ -91,8 +91,8 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 
 ## 七、下一步
 
-见 [ROADMAP.md](ROADMAP.md) **Phase N**：双后端一致基线已落地（D1–D4 全修，`compare_backends.ps1` 64/64）；后续为 IoT 真实路径与足迹数据、寄存器 VM 的长期维护与默认后端切换评估。
+见 [ROADMAP.md](ROADMAP.md) **Phase N / M5**：双后端一致基线已落地（D1–D4 全修，`compare_backends.ps1` 64/64），默认后端已于 M5 切到寄存器 VM；后续为 IoT 真实路径与足迹数据。
 
 ---
 
-**当前状态：栈式 VM 与寄存器 VM 均通过 135/135 集成测试，且在 `examples/`+`libs/` 的全部 64 个 `.mai` 程序上逐字节一致；IoT 默认模拟 HAL。**
+**当前状态：寄存器 VM（默认）与栈式 VM 均通过 137/137 集成测试，且在 `examples/`+`libs/` 的全部 64 个 `.mai` 程序上逐字节一致；IoT 默认模拟 HAL。**

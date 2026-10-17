@@ -18,7 +18,7 @@
 - **集合** - 数组/字典/字符串方法（`push`、`keys`、`split` 等）
 - **泛型** - 泛型函数 monomorphization（turbofish `id::<int>` → `id$int`）；`Result<T,E>` / `Option<T>` 标注
 - **UTF-8 原生支持** - 完整 Unicode 支持
-- **栈式字节码 VM** - slot 局部变量、TCO、CallDirect，递归 fib 约为 0.1 的 4 倍；另有特性对齐的可选寄存器 VM
+- **栈式字节码 VM** - slot 局部变量、TCO、CallDirect，递归 fib 约为 0.1 的 4 倍；寄存器 VM 现为默认后端，特性对齐（用 `--vm=stack` 可切回栈式）
 - **GC** - Rc + `collect_cycles()` + mark-sweep 堆（`gc_stats()`）
 - **可嵌入** - C FFI 宿主函数、no_std 字节码 crate、`.mailangbc` 产物
 - **WebAssembly** - 浏览器与 Node
@@ -94,16 +94,16 @@ cargo build --no-default-features --target thumbv7em-none-eabihf
 
 ## 测试
 
-集成测试：栈式 VM（默认）与寄存器 VM（`MAILANG_VM=register` / `--vm=register`）均为 **135/135**；两个后端还在 `examples/` + `libs/` 的全部 64 个 `.mai` 程序上逐字节一致（`benchmark/compare_backends.ps1`）。
+集成测试：默认后端（寄存器 VM）与栈式 VM（`MAILANG_VM=stack` / `--vm=stack`）均为 **137/137**，整个工作区共 **261** 项测试；两个后端还在 `examples/` + `libs/` 的全部 64 个 `.mai` 程序上逐字节一致（`benchmark/compare_backends.ps1`）。
 
 ## 当前限制
 
 - **包注册表为本地/静态 HTTP** — 支持 `mailang publish/install/search/yank`（文件系统注册表或静态 HTTP 镜像）；无公共托管注册表服务。
 - **泛型函数可单态化；泛型类字段擦除** — turbofish `id::<int>(x)` 会特化（`id$int`）；`Result<T,E>` / `Option<T>` 标注可用。泛型类共用一份擦除布局（字段仍动态）。
 - **不支持 `async`** — 无 async/await 运行时或语法。
-- **GC 为 Rc + mark-sweep** — 引用计数、`collect_cycles()` 断环，以及接入栈式 VM 的 `MarkSweepHeap`（见 `gc_stats()`）。尚无增量/并发 GC。
+- **GC 为 Rc + mark-sweep** — 引用计数、`collect_cycles()` 断环，以及接入两个 VM 后端的 `MarkSweepHeap`（见 `gc_stats()`）。尚无增量/并发 GC。
 - **IoT HAL 默认为模拟实现** — `gpio_*` / `adc_read` / `delay_ms` 在未通过 FFI 注册真实 HAL 时使用宿主模拟；不声称真实硬件验证。
-- **寄存器 VM 为可选后端** — 默认仍为栈式 VM；`MAILANG_VM=register` / `--vm=register` 通过同一套 135 项集成测试，并在每个 shipped 程序上与栈式 VM 一致（`benchmark/compare_backends.ps1` 64/64）。
+- **栈式 VM 现为可选后端** — M5 起寄存器 VM 成为默认后端；`MAILANG_VM=stack` / `--vm=stack` 仍可选择栈式 VM，两者通过同一套 137 项集成测试，并在每个 shipped 程序上与对方一致（`benchmark/compare_backends.ps1` 64/64）。
 - **`mailang-macros` 仍为 passthrough 桩** — 尚无真实过程宏。
 - **crates.io 发布需要 `CARGO_REGISTRY_TOKEN`** — secret 未配置时 CI 跳过 crates.io（本地/HTTP 注册表可离线使用）。
 

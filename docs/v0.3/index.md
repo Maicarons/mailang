@@ -30,8 +30,8 @@ features:
     title: UTF-8 原生
     details: 标识符支持任何 Unicode 文字，中文变量名直接可用
   - icon: ⚡
-    title: 栈式字节码 VM
-    details: slot 局部变量的高性能执行，50+ 指令
+    title: 字节码 VM（默认寄存器后端）
+    details: 栈字节码降级为三地址寄存器 IR，50+ 指令；可切回栈式 VM
   - icon: 🔌
     title: 12 种语言 FFI
     details: C、Python、JavaScript、Java、Go、Lua 等

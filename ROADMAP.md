@@ -620,7 +620,7 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 | M2 | 文档站部署 | ✅ 已上线（`https://maicarons.github.io/mailang/`） |
 | M3 | 泛型类单态化 or 明确文档 | 待决（建议 v0.4 先写明「字段擦除」限制） |
 | M4 | async 决策 | 继续冻结（无 IoT 场景） |
-| M5 | 切换默认后端 | **前置条件已满足**（1.2x ≤ 2x + CI 双后端矩阵），但切换默认会影响 `.mailangbc` 兼容与 wasm/embedded 体积，建议单独做 v0.5 决策 |
+| M5 | 切换默认后端 | ✅ **已完成**（13.10）：默认后端改为寄存器 VM，退出口 `--vm=stack` / `MAILANG_VM=stack`；`.mailangbc` 与二进制体积不受影响 |
 | M6 | 修 13.3 的双后端不一致 | ✅ **Phase N 已修**：D1（N1）、D2（N2）、D3（N3）全部落地 + 索引对齐，`compare_backends.ps1` 64/64 一致、manifest 清空。旧"参数缺陷"归因见 13.5 更正 |
 | M7（新增） | 裸 `match`/`if` 作为块尾表达式返回 `null` | ✅ **已修**：`match` 尾值随 N2（值协议）；裸 `if`/`elif`/`else` 尾值随 13.7（值模式 + `Slide` 收尾），并顺带修掉 `elif` 分支落空死循环 |
 | M8a（新增） | 寄存器后端不接管 UI 宿主钩子 | ✅ **已修**（Phase N 之后）：`RegOp::TailCall` 命中 `host_fns` 时如 `Ret` 般交回结果，`host_tui` / `host_gui` 两后端 7/7，见 13.8 |
@@ -739,4 +739,34 @@ fn f(n) {
 **回归测试**（`crates/mailang-core/tests/integration.rs`，5 个）：`test_tail_call_from_direct_frame_keeps_caller_operands`、`test_builtin_tail_call_from_direct_frame_keeps_caller_operands`、`test_closure_tail_call_from_direct_frame_keeps_caller_operands`、`test_forwarded_parameter_survives_nested_tail_call`、`test_tail_call_from_direct_frame_does_not_corrupt_arithmetic`。它们都用「外层调用自己还占着一格」的形状（`len([f(1), 1, 2])`），使槽位被覆盖时当场报错或算错。集成套件栈式与寄存器各 **135/135**，`compare_backends.ps1` 仍 64/64。
 
 **顺带**：`cargo fmt --all -- --check` 此前有两处不过（`compiler.rs` 里 `compile_body` 的一处换行、`register_vm.rs` 里一行赋值），已一并格式化；CI 的 `fmt` 作业是硬门槛。
+
+### 13.10 M5：默认后端切到寄存器 VM（v0.4；已完成）
+
+前置条件在 Phase N 之后全部满足，因此直接切换，不再作为「评估项」挂着：
+
+| 前置条件 | 证据 |
+|----------|------|
+| 双后端行为一致 | `benchmark/compare_backends.ps1` 64/64 逐字节一致（`known_backend_mismatches.txt` 为空），M8a / M8b 修好 |
+| 双后端测试全绿 | 集成 **137/137**、全工作区 **261** 项，`MAILANG_VM` 未设与 `=stack` 两种跑法都绿 |
+| 性能达标（M1） | `bench_fib30`（`measure_fib.ps1` 两次实测）：栈式 119 / 188 ms、寄存器 116 / 176 ms、默认（无 flag）116 / 174 ms —— 默认始终跟随寄存器，比值 **0.94–0.97×**，门禁 ≤2.0× |
+| 内存达标（N4） | 分配循环 200 万/400 万次峰值 **5.1 MB**（默认=寄存器）、4.9–5.1 MB（`--vm=stack`） |
+
+**改了什么**：
+
+- `VmBackend::DEFAULT = Register`；`MailangInterpreter::new()` / `with_modules()` 以它初始化 `prefer_register`；新增 `MailangInterpreter::vm_backend()` 供测试与宿主读取当前选择。
+- CLI 解析顺序明确为 **`--vm` flag > `MAILANG_VM` 环境变量 > 默认（register）**：`Run` / `Eval` 的 `--vm` 去掉 clap 默认值改为 `Option<VmCli>`，`Repl`（以及无子命令的裸 `mailang`）也加上 `--vm`；`select_vm(flag, env)` 是纯函数，空值/未知值一律落到默认，避免环境变量意外破坏运行。`--vm=register` 因此等价于默认，退出口是 `--vm=stack` / `MAILANG_VM=stack`。
+- `mailang disasm` 的默认 IR 同步改为寄存器降级（否则「默认 VM 跑什么」就成了谎话），`--vm=stack` 仍打印编译器直接产出的栈字节码。
+- `MAILANG_VM` 由此**第一次真正被 CLI 读取**：v0.3.0 起的 changelog 一直声称它可用，实际只有集成测试工厂读它。
+
+**没被影响的**：
+
+- `.mailangbc`：编译器仍只产出栈字节码，两个后端读同一份；`mailang build` 的产物在两种后端下输出一致，CI 的 `bytecode-format` 作业现在直接把无 flag 与 `--vm=stack` 两次运行 `diff` 一遍。
+- 二进制体积：`RegisterVm` 本来就被无条件编入（无 feature gate），`wasm32-unknown-unknown` release 产物 975,305 → 975,309 字节（+4 B）。新增的运行时成本只有每次 `run` / `eval` 的一次性 `StackToRegister` 降级——以前每次 `--vm=register` 也要付。
+- 为什么不能靠计时在脚本里断言「默认 = 寄存器」：两个后端差距只有几个百分点，噪声会误判。默认值改由 Rust 测试钉住（`test_default_backend_is_register`、`mailang-cli` 的 `select_vm` / clap-default 单测），基准脚本只负责报数。
+
+**测试与 CI**：集成 135 → **137**（`test_default_backend_is_register`、`test_stack_backend_is_still_selectable`），全工作区 253 → **261**（`mailang-cli` 新增 6 个单测）。CI 的 `test` 作业矩阵改为 `default`（不设 `MAILANG_VM`，即寄存器默认）/ `stack`；`host-packs` 与 `bench` 各加一个 `default` 行，`host-packs` 不再用旧的 `vm: ""` 写法；`compare_backends.ps1` 从 `default` 行跑。
+
+> 13.7 / 13.8 / 13.9 里写的「各 135/135」是当时的数字；M5 起集成套件为 **137/137**。
+
+**仍未做**：`paper/main.tex` 仍停留在 Phase L（102/102、218 项测试、栈式默认），它需要连评测数据一起更新，属于独立的一次修订，本次未动。
 

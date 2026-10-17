@@ -18,7 +18,7 @@ A modern programming language designed for IoT and cross-platform development, w
 - **Collections** - Array/Map/str methods (`push`, `keys`, `split`, …)
 - **Generics** - Generic function monomorphization via turbofish (`id::<int>` → `id$int`); `Result<T,E>` / `Option<T>` annotations
 - **UTF-8 Native** - Full Unicode support for identifiers and strings
-- **Stack-based Bytecode VM** - Slot locals, TCO, CallDirect, ~4× faster recursive fib vs 0.1; optional register VM with feature parity
+- **Stack-based Bytecode VM** - Slot locals, TCO, CallDirect, ~4× faster recursive fib vs 0.1; the register VM is the default and matches it feature-for-feature (opt back to the stack VM with `--vm=stack`)
 - **GC** - Rc + `collect_cycles()` + mark-sweep heap (`gc_stats()`)
 - **Embeddable** - C FFI host functions, no_std bytecode crate, `.mailangbc` artifacts
 - **WebAssembly** - Run in browsers and Node
@@ -151,16 +151,16 @@ cargo build --no-default-features --target thumbv7em-none-eabihf
 
 ## Testing
 
-Integration suite: **135/135** on both the stack VM (default) and the register VM (`MAILANG_VM=register` / `--vm=register`). The two backends are also compared on every `.mai` program in `examples/` and `libs/` by `benchmark/compare_backends.ps1` (currently 64/64 identical).
+Integration suite: **137/137** on the default backend (the register VM) and on the stack VM (`MAILANG_VM=stack` / `--vm=stack`) — 261 workspace tests in total. The two backends are also compared on every `.mai` program in `examples/` and `libs/` by `benchmark/compare_backends.ps1` (currently 64/64 identical).
 
 ## Current limitations
 
 - **Package registry is local/HTTP-static** — `mailang publish/install/search/yank` against a filesystem registry (or static HTTP mirror); no public hosted registry service.
 - **Generic functions monomorphize; generic classes erase fields** — turbofish `id::<int>(x)` specializes (`id$int`); `Result<T,E>` / `Option<T>` annotations work. Generic classes use one erased layout (fields stay dynamic).
 - **`async` is not supported** — no async/await runtime or syntax.
-- **GC is Rc + mark-sweep** — reference counting, `collect_cycles()` edge-cut, and a `MarkSweepHeap` wired into the stack VM (see `gc_stats()`). Incremental/concurrent GC not implemented.
+- **GC is Rc + mark-sweep** — reference counting, `collect_cycles()` edge-cut, and a `MarkSweepHeap` wired into both VM backends (see `gc_stats()`). Incremental/concurrent GC not implemented.
 - **IoT HAL is simulated by default** — `gpio_*` / `adc_read` / `delay_ms` use a host simulation unless a real HAL is registered via FFI. No real-hardware validation claimed.
-- **Register VM is opt-in** — stack VM remains the default; `MAILANG_VM=register` / `--vm=register` passes the same 102 integration tests (feature parity).
+- **The stack VM is now the opt-in backend** — the register VM became the default in M5; `MAILANG_VM=stack` / `--vm=stack` still selects the stack VM, and both pass the same 137 integration tests.
 - **`mailang-macros` is a passthrough stub** — no real procedural macros yet.
 - **crates.io publish requires `CARGO_REGISTRY_TOKEN`** — CI skips crates.io when the secret is unset (local/HTTP registry works offline).
 
