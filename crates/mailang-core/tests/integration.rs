@@ -1255,4 +1255,20 @@ fn test_elif_branch_falls_through_to_the_end() {
     assert_eq!(eval(src), "b");
 }
 
-// ---
+// ===== Phase M M8a：宿主函数覆盖「尾调用」的同名函数 =====
+//
+// 一个 MaìLang 顶层函数与一个已注册宿主函数同名时，宿主必须接管。模块里的
+// `return hook(x)` 编译成 `LoadGlobal hook` + `TailCall`（栈式 VM 的 TailCall 先查
+// `host_fns`），而寄存器 VM 的 `RegOp::TailCall` 对 `Value::Function` 直接复用帧进入
+// 模块自己的桩 chunk，跳过了宿主检查——于是 `tui_write` / `gui_draw_rect` 等返回桩值
+// （`sim`）而非宿主值（`tty` / `win32`），`host_*` 套件在 `--vm=register` 下失败。
+// 这里在非模块路径下钉住同一形状。
+
+#[test]
+fn test_host_fn_overrides_a_tail_called_function() {
+    let mut interp = interp();
+    // 宿主原样返回第一个实参；同名桩返回 "stub"，据此区分是否接管。
+    interp.register_host_fn("hook", |args| Ok(args[0].clone()));
+    let src = "fn hook(x) { return \"stub\" }\nfn call_it(x) { return hook(x) }\ncall_it(42)";
+    assert_eq!(interp.eval(src).unwrap(), "42");
+}

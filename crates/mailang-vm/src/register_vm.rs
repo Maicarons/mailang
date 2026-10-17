@@ -490,6 +490,31 @@ impl RegisterVm {
                     };
                     match fval {
                         Value::Function(f) => {
+                            // A registered host function overrides a same-named
+                            // MaìLang function (module bodies run after the hooks
+                            // are installed). Reusing the frame would enter the
+                            // module's stub chunk, so hand the host's result to the
+                            // original caller exactly as `Ret` would — mirrors the
+                            // stack Vm's TailCall host branch.
+                            if let Some(host) = self.host_fns.get(f.name.as_ref()) {
+                                let out = host(&arg_vals)?;
+                                if let Some(frame) = self.frames.pop() {
+                                    match self.frames.last() {
+                                        Some(caller) => {
+                                            let caller_base = caller.base as usize;
+                                            self.regs[caller_base + frame.ret_dst as usize] =
+                                                out;
+                                            ip = caller.ip as usize;
+                                            chunk_idx = caller.chunk as usize;
+                                            base = caller_base;
+                                        }
+                                        None => return Ok(out),
+                                    }
+                                } else {
+                                    return Ok(out);
+                                }
+                                continue;
+                            }
                             self.check_arity(f.arity, f.required, argc_us)?;
                             flush_ip!();
                             self.reuse_frame_for_tail(
