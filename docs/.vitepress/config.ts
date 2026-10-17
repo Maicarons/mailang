@@ -1,8 +1,11 @@
 import { defineConfig } from 'vitepress'
 
 const versions = {
-  latest: '0.3',
-  versions: [{ label: '0.3', path: '/v0.3/', latest: true }],
+  latest: '0.4',
+  versions: [
+    { label: '0.4', path: '/v0.4/', latest: true },
+    { label: '0.3', path: '/v0.3/' },
+  ],
 }
 const latest = versions.latest
 const versionItems = versions.versions.map((v: { label: string; path: string; latest?: boolean }) => ({
@@ -96,7 +99,12 @@ function sidebarEn(prefix: string) {
   }
 }
 
-const vPrefix = '/' + latest
+// Every published version keeps its own sidebar keys, so /v0.3/ pages are
+// navigable too instead of silently falling back to the root sidebar.
+const sidebar: Record<string, ReturnType<typeof sidebarZh>> = {}
+for (const v of versions.versions as { label: string; path: string; latest?: boolean }[]) {
+  Object.assign(sidebar, sidebarZh(v.path), sidebarEn(v.path))
+}
 
 export default defineConfig({
   title: 'MaLang',
@@ -114,7 +122,7 @@ export default defineConfig({
       lang: 'zh-CN',
       themeConfig: {
         nav: nav({ guide: '\u6307\u5357', reference: '\u53c2\u8003', playground: 'Playground', github: 'GitHub', version: 'v' + latest }),
-        sidebar: { ...sidebarZh(vPrefix), ...sidebarEn(vPrefix) },
+        sidebar,
       },
     },
     en: {
@@ -122,7 +130,7 @@ export default defineConfig({
       lang: 'en',
       themeConfig: {
         nav: nav({ guide: 'Guide', reference: 'Reference', playground: 'Playground', github: 'GitHub', version: 'v' + latest }),
-        sidebar: { ...sidebarEn(vPrefix), ...sidebarZh(vPrefix) },
+        sidebar,
       },
     },
   },

@@ -20,8 +20,8 @@ MaìLang（麦语）是一门为 **IoT 和跨平台开发** 设计的现代编�
 | 默认参数 / 解构 | `fn f(a, b = 10)`；`let (x, y) = …` | ✅ 已实现 |
 | 泛型 | 函数 monomorphization（turbofish）；泛型类字段擦除 | ✅ 已实现 |
 | UTF-8 原生 | 标识符支持任何 Unicode 文字 | ✅ 已实现 |
-| 字节码 VM | 栈式字节码 + slot 局部变量，或降级为三地址寄存器 IR | ✅ 已实现 |
-| 默认后端（M5 起） | 寄存器 VM；`--vm=stack` / `MAILANG_VM=stack` 可切回栈式 | ✅ 已实现 |
+| 栈式字节码 VM | slot 局部变量的高性能执行 | ✅ 已实现 |
+| 寄存器 VM（可选） | `--vm=register`，与栈式 VM 特性对齐 | ✅ 已实现 |
 | GC | Rc + `collect_cycles()` + mark-sweep 堆 | ✅ 已实现 |
 | 包注册表 | 文件系统 / 静态 HTTP：`publish`/`install`/`search`/`yank` | ✅ 已实现 |
 | C FFI | 12 种语言绑定支持 | ✅ 已实现 |
@@ -46,7 +46,7 @@ MaìLang 采用混合式语法风格，借鉴了 Rust、Python、JavaScript 等�
 - 类 JavaScript 的对象操作
 
 ### 高性能
-默认使用 **寄存器虚拟机**（栈字节码在运行时降级为三地址 IR），栈式 VM 仍可用 `--vm=stack` 选择；比树遍历解释器（如 Rhai）更快：
+采用 **栈式字节码虚拟机 + slot 局部变量**，比树遍历解释器（如 Rhai）更快：
 - 字节码可序列化缓存，加速启动
 - 局部变量走 slot 索引，减少哈希查找，适合 IoT 场景
 - 热路径特化与 CallDirect 调用
@@ -77,7 +77,7 @@ let 🔥 = "支持emoji"
 
 | 特性 | MaìLang | Rhai | Rune | RustPython |
 |------|---------|------|------|------------|
-| 执行模型 | 寄存器 VM（默认）+ 栈式 VM | 树遍历 | 栈式 VM | 栈式 VM |
+| 执行模型 | 栈式 VM + slot 局部变量 | 树遍历 | 栈式 VM | 栈式 VM |
 | OOP 支持 | ✅ 完整 | ❌ 有限 | ❌ 有限 | ✅ 完整 |
 | 嵌入式支持 | ✅ 64KB+ | ✅ | ❌ | ❌ |
 | FFI | ✅ 12 语言 | ✅ Rust | ❌ | ✅ Python |

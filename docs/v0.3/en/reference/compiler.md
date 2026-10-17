@@ -153,9 +153,9 @@ Bytecode:
 
 ## VM
 
-### Stack-Based Execution (opt-in backend)
+### Stack-Based Execution
 
-The compiler always emits stack bytecode. Since M5 the **register VM is the default backend** — it lowers that same bytecode to three-address IR with `StackToRegister` on every run; `--vm=stack` / `MAILANG_VM=stack` selects the stack VM instead. The stack VM keeps its operands on a stack and indexes locals by slot inside the frame:
+The default VM is **stack-based** with slot-indexed locals (an opt-in register backend is available via `--vm=register`, feature-parity with the stack VM):
 
 ```rust
 pub struct Vm {
