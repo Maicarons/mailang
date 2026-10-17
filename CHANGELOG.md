@@ -6,6 +6,14 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 
 ## [Unreleased]
 
+Landed after the v0.4.0 tag, found while checking the released site.
+
+### Fixed
+- **The docs Playground actually runs now** — both defects dated from v0.3.0. Its wasm lived in `docs/.vitepress/public/wasm/`, but VitePress does not expose the public dir: it lets Vite resolve it from Vite's root (the `docs/` directory), so the default pointed at the non-existent `docs/public` and **every** build shipped a `dist/` with no wasm at all, making `/mailang/wasm/mailang_wasm.js` a 404. `vite.publicDir` now points at `.vitepress/public`, so the release workflow's WASM sync paths did not have to move. Second, all five interpolations in the four `playground.md` files were written as `&lbrace;&lbrace; … &rbrace;&rbrace;`, so the component mounted and ran (its `v-for` / `v-model` / `:disabled` all worked) but never rendered an example name, an output, or the engine state — which is also why the internal "WASM load failed" message was invisible. They are real `{{ … }}` again. Verified in a browser against a local build: `Hello, Mailang! / Sum = 15`, `Engine: Ready`.
+
+### Changed
+- **Dependency alerts cleared**: `docs` and `playground` `source-map-js` 1.2.1 → 1.2.2, `playground` `brace-expansion` 2.1.4 → 2.1.7. Lockfiles only, both within ranges that were already declared (`playground` already overrides `brace-expansion` to `^2.1.4`); the two lockfiles' top-level `version` also now matches `package.json`'s `0.2.6`.
+
 ## [0.4.0] - Register VM as the default backend, dual-backend parity, versioned docs
 
 ### Changed (M5 — the register VM is now the default backend)
