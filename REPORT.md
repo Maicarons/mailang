@@ -38,7 +38,7 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 ## 三、已知限制
 
 - ❌ **`async`** — 无 async/await 运行时或语法
-- ⚠️ **寄存器 VM**（`MAILANG_VM=register` / `--vm=register`）— 与栈式 VM 在每个 shipped 程序上一致（125/125 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.07x），但默认后端仍为栈式 VM
+- ⚠️ **寄存器 VM**（`MAILANG_VM=register` / `--vm=register`）— 与栈式 VM 在每个 shipped 程序上一致（125/125 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁），但默认后端仍为栈式 VM
 - ⚠️ **泛型类** — 字段擦除布局，无按类型 monomorphization
 - ⚠️ **IoT HAL** — 默认模拟实现；真实硬件需通过 FFI 注册 HAL（不声称真实硬件验证）
 - ⚠️ **公共托管注册表** — 仅本地目录 / 静态 HTTP 镜像
