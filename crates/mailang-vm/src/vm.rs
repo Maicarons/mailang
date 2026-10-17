@@ -21,6 +21,17 @@ struct CallFrame {
     argc: usize,
 }
 
+/// Where a frame's result lands when the frame exits. A `CallDirect` frame has
+/// no callee slot below its first argument, so the result replaces that first
+/// argument; a `Call` frame owns the callee slot one below it.
+fn frame_result_base(frame: &CallFrame) -> usize {
+    if frame.direct {
+        frame.stack_base
+    } else {
+        frame.stack_base.saturating_sub(1)
+    }
+}
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // class metadata kept for method resolution / debugging
 struct RegisteredClass {
@@ -987,11 +998,7 @@ impl Vm {
                             // Same as Return
                             let ret = self.pop()?;
                             if let Some(frame) = self.call_stack.pop() {
-                                let base = if frame.direct {
-                                    frame.stack_base
-                                } else {
-                                    frame.stack_base.saturating_sub(1)
-                                };
+                                let base = frame_result_base(&frame);
                                 self.stack.truncate(base);
                                 self.chunk_index = frame.chunk_index;
                                 self.ip = frame.ip;
@@ -1003,11 +1010,7 @@ impl Vm {
                         Value::Null => {
                             // None? early-returns null
                             if let Some(frame) = self.call_stack.pop() {
-                                let base = if frame.direct {
-                                    frame.stack_base
-                                } else {
-                                    frame.stack_base.saturating_sub(1)
-                                };
+                                let base = frame_result_base(&frame);
                                 self.stack.truncate(base);
                                 self.chunk_index = frame.chunk_index;
                                 self.ip = frame.ip;
@@ -1047,11 +1050,7 @@ impl Vm {
                             self.push(call_result)?;
                             let value = self.stack.pop().ok_or(VmError::StackUnderflow)?;
                             if let Some(frame) = self.call_stack.pop() {
-                                let base = if frame.direct {
-                                    frame.stack_base
-                                } else {
-                                    frame.stack_base.saturating_sub(1)
-                                };
+                                let base = frame_result_base(&frame);
                                 self.stack.truncate(base);
                                 self.chunk_index = frame.chunk_index;
                                 self.ip = frame.ip;
@@ -1071,24 +1070,13 @@ impl Vm {
                                     found: arg_count,
                                 });
                             }
-                            // Move the new callee+args over the current frame's slot
-                            // so the abandoned locals are discarded and Return goes
-                            // straight to the original caller.
-                            if let Some(frame) = self.call_stack.last() {
-                                let old_base = frame.stack_base.saturating_sub(1);
-                                let new_len = arg_count + 1;
-                                if old_base != func_index {
-                                    for i in 0..new_len {
-                                        self.stack[old_base + i] =
-                                            self.stack[func_index + i].clone();
-                                    }
-                                    self.stack.truncate(old_base + new_len);
-                                }
-                                if let Some(frame) = self.call_stack.last_mut() {
-                                    frame.stack_base = old_base + 1;
-                                    frame.upvalues.clear();
-                                    frame.argc = arg_count;
-                                }
+                            // Move the callee+args over the current frame so the
+                            // abandoned locals are discarded and `Return` lands the
+                            // result where this tail call's own result belongs.
+                            self.shuffle_tail_args(arg_count, func_index);
+                            if let Some(frame) = self.call_stack.last_mut() {
+                                frame.upvalues.clear();
+                                frame.argc = arg_count;
                             }
                             self.chunk_index = f.chunk_index;
                             self.ip = 0;
@@ -1100,21 +1088,10 @@ impl Vm {
                                     found: arg_count,
                                 });
                             }
-                            if let Some(frame) = self.call_stack.last() {
-                                let old_base = frame.stack_base.saturating_sub(1);
-                                let new_len = arg_count + 1;
-                                if old_base != func_index {
-                                    for i in 0..new_len {
-                                        self.stack[old_base + i] =
-                                            self.stack[func_index + i].clone();
-                                    }
-                                    self.stack.truncate(old_base + new_len);
-                                }
-                                if let Some(frame) = self.call_stack.last_mut() {
-                                    frame.stack_base = old_base + 1;
-                                    frame.upvalues = c.upvalues.clone();
-                                    frame.argc = arg_count;
-                                }
+                            self.shuffle_tail_args(arg_count, func_index);
+                            if let Some(frame) = self.call_stack.last_mut() {
+                                frame.upvalues = c.upvalues.clone();
+                                frame.argc = arg_count;
                             }
                             self.chunk_index = c.function_index;
                             self.ip = 0;
@@ -1133,7 +1110,7 @@ impl Vm {
                                 return Err(VmError::UndefinedFunction(name.to_string()));
                             };
                             if let Some(frame) = self.call_stack.pop() {
-                                let base = frame.stack_base.saturating_sub(1);
+                                let base = frame_result_base(&frame);
                                 self.stack.truncate(base);
                                 self.chunk_index = frame.chunk_index;
                                 self.ip = frame.ip;
@@ -1220,11 +1197,7 @@ impl Vm {
                 Opcode::Return => {
                     let value = self.stack.pop().ok_or(VmError::StackUnderflow)?;
                     if let Some(frame) = self.call_stack.pop() {
-                        let base = if frame.direct {
-                            frame.stack_base
-                        } else {
-                            frame.stack_base.saturating_sub(1)
-                        };
+                        let base = frame_result_base(&frame);
                         self.stack.truncate(base);
                         self.chunk_index = frame.chunk_index;
                         self.ip = frame.ip;
@@ -1686,6 +1659,41 @@ impl Vm {
             direct: false,
             argc: 0,
         })
+    }
+
+    /// Rearrange the pending tail call at `func_index` so the reused frame is
+    /// ready for its callee and `Return` lands the result where the original
+    /// `return f(...)` would have.
+    ///
+    /// The layout depends on how this frame was entered. A `Call` frame owns a
+    /// callee slot one below its first argument; a `CallDirect` frame has none,
+    /// so its arguments must be shifted down onto `stack_base` and the frame's
+    /// shape kept. Shifting a direct frame to `stack_base - 1` (the `Call`
+    /// layout) would clobber a live slot of the *caller's* operand stack.
+    fn shuffle_tail_args(&mut self, arg_count: usize, func_index: usize) {
+        let Some((direct, stack_base)) = self.call_stack.last().map(|f| (f.direct, f.stack_base))
+        else {
+            return;
+        };
+        if direct {
+            let dest = stack_base;
+            let src = func_index + 1;
+            if dest != src {
+                for i in 0..arg_count {
+                    self.stack[dest + i] = self.stack[src + i].clone();
+                }
+                self.stack.truncate(dest + arg_count);
+            }
+        } else {
+            let dest = stack_base.saturating_sub(1);
+            let count = arg_count + 1;
+            if dest != func_index {
+                for i in 0..count {
+                    self.stack[dest + i] = self.stack[func_index + i].clone();
+                }
+                self.stack.truncate(dest + count);
+            }
+        }
     }
 
     fn is_truthy(&self, value: &Value) -> bool {

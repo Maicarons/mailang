@@ -502,8 +502,7 @@ impl RegisterVm {
                                     match self.frames.last() {
                                         Some(caller) => {
                                             let caller_base = caller.base as usize;
-                                            self.regs[caller_base + frame.ret_dst as usize] =
-                                                out;
+                                            self.regs[caller_base + frame.ret_dst as usize] = out;
                                             ip = caller.ip as usize;
                                             chunk_idx = caller.chunk as usize;
                                             base = caller_base;

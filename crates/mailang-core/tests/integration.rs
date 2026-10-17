@@ -1230,7 +1230,8 @@ fn test_negative_int_immediate_inside_function() {
 #[test]
 fn test_tail_if_is_the_function_result() {
     // 尾 `if`（then/else 都到尾）就是函数的返回值：1 + 2。
-    let src = "fn f(n) {\n    if n > 0 {\n        1\n    } else {\n        2\n    }\n}\nf(1) + f(-1)";
+    let src =
+        "fn f(n) {\n    if n > 0 {\n        1\n    } else {\n        2\n    }\n}\nf(1) + f(-1)";
     assert_eq!(eval(src), "3");
 }
 
@@ -1271,4 +1272,53 @@ fn test_host_fn_overrides_a_tail_called_function() {
     interp.register_host_fn("hook", |args| Ok(args[0].clone()));
     let src = "fn hook(x) { return \"stub\" }\nfn call_it(x) { return hook(x) }\ncall_it(42)";
     assert_eq!(interp.eval(src).unwrap(), "42");
+}
+
+// ===== Phase M M8b：栈式后端「直接调用帧」里的尾调用 =====
+//
+// 编译器把「已知顶层函数、实参个数一致」的调用编译成 `CallDirect`，这种帧没有
+// callee 槽位——`stack_base` 本身就是第一个实参。栈式 VM 的 `TailCall` 却按 `Call`
+// 布局把 callee+实参搬到 `stack_base - 1`，于是覆盖了**调用者**操作数栈里的活槽位；
+// 尾调用目标是内建函数时走另一条收尾，直接 `truncate(stack_base - 1)`，多丢一格。
+// 表现出来就是：
+//   ① 5 参数函数里的 `y + h - 1` 抛 `Cannot add these types`；
+//   ② 把参数继续下传（`to_rgba(color)`）之后 `len(color)` 抛 `len expects …`；
+//   ③ `println(f(x))`（`f` 以尾调用收尾）抛 `Internal VM error: Stack underflow in Call`；
+//   ④ 同一形状下两个后端算出不同的值（栈式 3 / 寄存器 2）。
+// 四种都在 `a063f14`（Phase N 之前）复现，寄存器后端是对的。下面都用「外层调用
+// 自己还占着一格」的形状，使槽位被覆盖时当场报错或算错；两个后端必须给出同一个值。
+
+#[test]
+fn test_tail_call_from_direct_frame_keeps_caller_operands() {
+    // ③/④：`g` 从 `f` 的 `CallDirect` 帧里被尾调用，外层 `len` 的槽位不能被吃掉。
+    let src = "fn g(a) { return a + 1 }\nfn f(x) { return g(x) }\nlen([f(1), 1, 2])";
+    assert_eq!(eval(src), "3");
+}
+
+#[test]
+fn test_builtin_tail_call_from_direct_frame_keeps_caller_operands() {
+    // ③：尾调用目标是内建函数时走的是另一条收尾路径，同样会多丢一格。
+    let src = "fn f4(a) { return len(a) }\nlen([f4([1, 2, 3]), 7, 8])";
+    assert_eq!(eval(src), "3");
+}
+
+#[test]
+fn test_closure_tail_call_from_direct_frame_keeps_caller_operands() {
+    // 同一形状走闭包分支。
+    let src = "let g = fn(a) -> a + 1\nfn f(x) { return g(x) }\nlen([f(1), 1, 2])";
+    assert_eq!(eval(src), "3");
+}
+
+#[test]
+fn test_forwarded_parameter_survives_nested_tail_call() {
+    // ②：形参被下传后又被内层尾调用覆盖，`len(color)` 拿到的是函数值。
+    let src = "fn is_known_name(v) { return true }\nfn lookup_color(name) { return [0, 255, 0, 255] }\nfn to_rgba(color) {\n    if is_known_name(color) {\n        return lookup_color(color)\n    }\n    return [0, 0, 0, 255]\n}\nfn f(x, y, w, h, color) {\n    var c = to_rgba(color)\n    return len(color)\n}\nf(0, 1, 2, 3, [1, 2, 3])";
+    assert_eq!(eval(src), "3");
+}
+
+#[test]
+fn test_tail_call_from_direct_frame_does_not_corrupt_arithmetic() {
+    // ①：最后一个形参被内层尾调用覆盖，随后的 `y + h - 1` 抛类型错误。
+    let src = "fn lookup_color(name) { return [0, 255, 0, 255] }\nfn helper(a) { return lookup_color(a) }\nfn f(a, x, y, w, h) {\n    var n = helper([1, 2, 3])\n    return y + h - 1\n}\nf(0, 1, 2, 3, 4)";
+    assert_eq!(eval(src), "5");
 }

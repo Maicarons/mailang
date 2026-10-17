@@ -1473,7 +1473,8 @@ impl Compiler {
         let result = if want_value {
             self.compile_body_value(body)
         } else {
-            body.iter().try_for_each(|stmt| self.compile_statement(stmt))
+            body.iter()
+                .try_for_each(|stmt| self.compile_statement(stmt))
         };
         if want_value {
             self.end_scope_keeping_value();
