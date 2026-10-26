@@ -194,18 +194,25 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release -p mailang-cli
-      - name: Start dev MQTT broker
-        shell: pwsh
-        run: Start-Process -FilePath .\target\release\mailang.exe -ArgumentList 'mqtt-broker','--port','1883' -WindowStyle Hidden -RedirectStandardOutput broker.log
       - name: Host suites (real TCP transport / CSV sensor feed)
         shell: pwsh
         run: |
           $vmArgs = @()
           if ("${{ matrix.vm }}" -ne "default") { $vmArgs += "--vm=${{ matrix.vm }}" }
-          & .\target\release\mailang.exe run @vmArgs --mqtt libs\mqtt\test\host_mqtt.mai
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & .\target\release\mailang.exe run @vmArgs --bme280-feed=libs\bme280\test\feed.csv libs\bme280\test\host_bme280.mai
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $broker = Start-Process -FilePath ".\target\release\mailang.exe" -ArgumentList 'mqtt-broker','--port','1883' -PassThru -RedirectStandardOutput broker.log -RedirectStandardError broker.err
+          try {
+            $ok = $false
+            foreach ($i in 1..50) {
+              try { $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 1883); $c.Close(); $ok = $true; break } catch { Start-Sleep -Milliseconds 200 }
+            }
+            if (-not $ok) { Get-Content broker.log, broker.err -ErrorAction SilentlyContinue; throw 'mqtt dev broker did not start' }
+            & .\target\release\mailang.exe run @vmArgs --mqtt libs\mqtt\test\host_mqtt.mai
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & .\target\release\mailang.exe run @vmArgs --bme280-feed=libs\bme280\test\feed.csv libs\bme280\test\host_bme280.mai
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            if ($broker -and -not $broker.HasExited) { $broker.Kill() }
+          }
 
   bytecode-format:
     name: Bytecode format tests
