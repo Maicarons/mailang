@@ -2,7 +2,7 @@
 
 > **项目链接**：[GitHub](https://github.com/Maicarons/mailang) · [Releases](https://github.com/Maicarons/mailang/releases) · [Tags](https://github.com/Maicarons/mailang/tags)
 >
-> **状态：v0.4.0 — Phase N + M5（寄存器 VM 已成为默认后端；默认后端与 `--vm=stack` 均 137/137；`benchmark/compare_backends.ps1` 64/64 一致）**
+> **状态：v0.5.0 — Phase O（驱动包真实传输 + 多行字面量修复；寄存器 VM 仍为默认后端；双后端集成 138/138、全工作区 273 项全绿；`benchmark/compare_backends.ps1` 66/66 一致）**
 >
 > 本报告如实反映项目实际状态。阶段规划见 [ROADMAP.md](ROADMAP.md)，变更见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -33,12 +33,12 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 - ✅ C FFI / WASM / CLI(run/eval/build/fmt/deps/registry/lsp) / LSP / 格式化器；CLI 在 Windows 上内置 `--host=sim|tui|gui` 真实后端（`libs/tui`、`libs/gui` 两个 UI 包）
 - ✅ UTF-8 标识符；十六进制/八进制/二进制字面量；块注释
 
-**测试**：默认后端（寄存器 VM）与栈式 VM（`MAILANG_VM=stack` / `--vm=stack`）集成均为 **137/137**；全工作区 **261** 项测试全绿；`benchmark/compare_backends.ps1` 64/64 一致，`benchmark/known_backend_mismatches.txt` 为空。
+**测试**：默认后端（寄存器 VM）与栈式 VM（`MAILANG_VM=stack` / `--vm=stack`）集成均为 **138/138**；全工作区 **273** 项测试全绿；`benchmark/compare_backends.ps1` 66/66 一致，`benchmark/known_backend_mismatches.txt` 为空。
 
 ## 三、已知限制
 
 - ❌ **`async`** — 无 async/await 运行时或语法
-- ✅ **寄存器 VM 于 M5 成为默认后端** — 与栈式 VM 在每个 shipped 程序上一致（137/137 集成 + `compare_backends.ps1` 64/64）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁）；`--vm=stack` / `MAILANG_VM=stack` 可切回栈式 VM；`.mailangbc` 与二进制体积不受影响（寄存器后端本就一直编入）
+- ✅ **寄存器 VM 于 M5 成为默认后端** — 与栈式 VM 在每个 shipped 程序上一致（138/138 集成 + `compare_backends.ps1` 66/66）且 `bench_fib30` 与之接近（~1.0x，远低于 ≤2.0x 门禁）；`--vm=stack` / `MAILANG_VM=stack` 可切回栈式 VM；`.mailangbc` 与二进制体积不受影响（寄存器后端本就一直编入）
 - ⚠️ **泛型类** — 字段擦除布局，无按类型 monomorphization
 - ⚠️ **IoT HAL** — 默认模拟实现；真实硬件需通过 FFI 注册 HAL（不声称真实硬件验证）
 - ⚠️ **公共托管注册表** — 仅本地目录 / 静态 HTTP 镜像
@@ -56,7 +56,7 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 | mailang-parser | ✅ 完整 | 递归下降 + Pratt；**含错误恢复**（`parse_program_recovering`） |
 | mailang-bytecode | ✅ 完整 | 栈 IR + 寄存器 IR |
 | mailang-compiler | ✅ 完整 | 含泛型 monomorphization |
-| mailang-vm | ✅ 完整 | 寄存器（默认）+ 栈式后端，均 137/137 |
+| mailang-vm | ✅ 完整 | 寄存器（默认）+ 栈式后端，均 138/138 |
 | mailang-stdlib | ✅ 可用 | io/math/string/collections/json/time/HAL/sys |
 | mailang-core | ✅ 管道集成 | Parser → Compiler → VM |
 | mailang-cli | ✅ 完整 | run/eval/build/fmt/deps/registry/lsp |
@@ -91,8 +91,8 @@ MaìLang 是一门为 IoT 和跨平台开发设计的现代编程语言，使用
 
 ## 七、下一步
 
-见 [ROADMAP.md](ROADMAP.md) **Phase N / M5**：双后端一致基线已落地（D1–D4 全修，`compare_backends.ps1` 64/64），默认后端已于 M5 切到寄存器 VM；后续为 IoT 真实路径与足迹数据。
+见 [ROADMAP.md](ROADMAP.md) **Phase N / M5**：双后端一致基线已落地（D1–D4 全修，`compare_backends.ps1` 66/66），默认后端已于 M5 切到寄存器 VM；Phase O 已交付驱动包真实传输（`--mqtt` / `--bme280-feed`）与多行字面量修复。
 
 ---
 
-**当前状态：寄存器 VM（默认）与栈式 VM 均通过 137/137 集成测试，且在 `examples/`+`libs/` 的全部 64 个 `.mai` 程序上逐字节一致；IoT 默认模拟 HAL。**
+**当前状态：寄存器 VM（默认）与栈式 VM 均通过 138/138 集成测试，且在 `examples/`+`libs/` 的全部 66 个 `.mai` 程序上逐字节一致；MQTT 传输与 bme280 喂源有真实（非模拟）后端，GPIO/HAL 仍默认模拟（ESP32-C3 QEMU 路径见 esp32-blink 文档）。**

@@ -124,16 +124,20 @@ impl Parser {
 
     fn parse_array_literal(&mut self) -> Result<Expr, ParseError> {
         self.expect(&Token::LeftBracket)?;
+        self.skip_newlines();
         let mut elements = Vec::new();
 
         if self.peek() != &Token::RightBracket {
             elements.push(self.parse_expression()?);
+            self.skip_newlines();
             while self.peek() == &Token::Comma {
                 self.advance();
+                self.skip_newlines();
                 if self.peek() == &Token::RightBracket {
                     break;
                 }
                 elements.push(self.parse_expression()?);
+                self.skip_newlines();
             }
         }
 
@@ -143,6 +147,7 @@ impl Parser {
 
     fn parse_map_literal(&mut self) -> Result<Expr, ParseError> {
         self.expect(&Token::LeftBrace)?;
+        self.skip_newlines();
         let mut entries = Vec::new();
 
         if self.peek() != &Token::RightBrace {
@@ -150,9 +155,11 @@ impl Parser {
             self.expect(&Token::Colon)?;
             let value = self.parse_expression()?;
             entries.push((key, value));
+            self.skip_newlines();
 
             while self.peek() == &Token::Comma {
                 self.advance();
+                self.skip_newlines();
                 if self.peek() == &Token::RightBrace {
                     break;
                 }
@@ -160,6 +167,7 @@ impl Parser {
                 self.expect(&Token::Colon)?;
                 let value = self.parse_expression()?;
                 entries.push((key, value));
+                self.skip_newlines();
             }
         }
 

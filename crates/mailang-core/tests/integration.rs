@@ -508,6 +508,23 @@ fn test_adc_read_default() {
 // ===== Phase E: analyzer =====
 
 #[test]
+fn test_forward_function_reference_is_allowed() {
+    // A module-level helper may call a function defined later in the file
+    // (the VM resolves globals at call time); the analyzer must not flag it.
+    let result = eval(
+        "fn init() {
+  helper(1)
+}
+fn helper(x) {
+  return x
+}
+init()
+",
+    );
+    assert_eq!(result, "1");
+}
+
+#[test]
 fn test_analyzer_undefined_variable() {
     let mut interp = interp();
     let err = interp.eval("not_defined_xyz").unwrap_err();

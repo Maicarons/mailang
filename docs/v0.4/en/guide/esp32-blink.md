@@ -4,6 +4,56 @@
 
 This page is a **copy-pasteable** ESP-IDF-style C host that registers real `gpio_write` / `delay_ms` via `mailang_register_host_fn`, then runs `iot_blink.mai` (or a precompiled `.mailangbc`).
 
+## Option B: Rust firmware + QEMU (in-repo project, verified)
+
+The repo ships a **complete ESP32-C3 firmware project** [`examples/esp32c3/`](https://github.com/Maicarons/mailang/tree/master/examples/esp32c3):
+the whole interpreter (lexer → parser → compiler → register VM) runs on the MCU,
+with `gpio_write` / `delay_ms` as host functions backed by real ESP-IDF calls
+(`gpio_set_level` / `vTaskDelay`). One script builds inside the container,
+merges the flash image and boots QEMU:
+
+```bash
+./scripts/esp32-qemu.sh
+```
+
+**Measured QEMU serial output** (espressif QEMU fork `esp-develop-9.2.2`,
+ESP-IDF v5.2.3, esp rust toolchain 1.95.0.0, recorded 2026-10-27; boot log
+elided — the script prints the full flow):
+
+```text
+mailang-esp32c3: booting interpreter on the MCU
+iot_blink: LED pin 2
+ON  #0
+OFF #0
+ON  #1
+OFF #1
+ON  #2
+OFF #2
+ON  #3
+OFF #3
+ON  #4
+OFF #4
+iot_blink: done after 5 cycles
+```
+
+Notes (including two pitfalls, recorded honestly):
+
+- The interpreter's recursion (parser/compiler/VM) blows the ~8 KiB default
+  ESP-IDF main-task stack and corrupts the heap on the way
+  (`tlsf.c:358 free list cannot have a null entry`) — the project runs
+  evaluation on a dedicated **64 KiB worker thread**. Do the same for any
+  on-device MaìLang host.
+- `espidf` is a tier-3 target: you need the **esp rust fork toolchain**
+  (`rust-build` release + `rustup toolchain link`) with `-Z build-std`; upstream
+  nightly's std sources do not match the vendored libc / newlib headers
+  (missing `st_atim` field).
+- The project is a standalone Cargo crate (workspace-excluded); host
+  `cargo test` is unaffected.
+- Real hardware: flash the merged `esp32c3-flash.bin` with
+  `esptool.py write_flash 0x0 ...` or `cargo espflash flash`. Passing in QEMU
+  does not validate LED timing on a real board (vTaskDelay math is identical,
+  but the GPIO peripheral is not hardware-verified).
+
 ## 1. Script: `examples/iot_blink.mai`
 
 ```mai

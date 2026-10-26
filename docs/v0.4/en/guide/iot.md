@@ -61,6 +61,39 @@ strip = "symbols"
 | WASM | `wasm32-unknown-unknown` | N/A |
 | Linux ARM | `aarch64-unknown-linux-gnu` | 16MB |
 
+## Real transports for the driver packs (mqtt / bme280)
+
+The standard-library driver packs (`libs/mqtt`, `libs/bme280`) share one
+contract: the pure-Mai simulation is the default, and the host overrides it by
+registering the hook names (`mqtt_connect` / `bme280_temp_c` / ...). The
+`mailang` CLI ships two real backends so the real-data path can be exercised
+end to end without embedded hardware:
+
+**MQTT real transport (standard MQTT 3.1.1, QoS 0)**
+
+```bash
+# terminal 1: the built-in dev broker (QoS 0, not a production broker)
+mailang mqtt-broker --port 1883
+
+# terminal 2: the script talks real TCP — mosquitto / hivemq work too
+mailang run --mqtt app.mai
+```
+
+`mqtt.poll(timeout_ms)` returns `Ok({topic, payload})` or `Err(...)` — a
+timeout is a MaìLang value, not a host error, so the script just `match`es it.
+The real-transport suite `libs/mqtt/test/host_mqtt.mai` runs against the dev
+broker in CI.
+
+**bme280 feed backend (CSV replay)**
+
+```bash
+mailang run --bme280-feed=libs/bme280/test/feed.csv libs/bme280/test/host_bme280.mai
+```
+
+`--bme280-feed` overrides the three cooked hooks with rows recorded in a CSV
+file — a **replay**, not a live sensor. Real readings still need an ESP-IDF /
+MCU host implementing the same hook names over I2C.
+
 ## Real Hardware (GPIO / ADC / delay)
 
 `SimulatedHal` is host-only. To bind scripts to real ESP32-C3 / Cortex-M4 peripherals, see:

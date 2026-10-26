@@ -67,23 +67,26 @@ fn _bme280_set_raw_hum(regs, raw) {
     regs[254] = r % 256
 }
 
-fn _bme280_nibble(n) {
-    if n == 0 { return "0" }
-    if n == 1 { return "1" }
-    if n == 2 { return "2" }
-    if n == 3 { return "3" }
-    if n == 4 { return "4" }
-    if n == 5 { return "5" }
-    if n == 6 { return "6" }
-    if n == 7 { return "7" }
-    if n == 8 { return "8" }
-    if n == 9 { return "9" }
-    if n == 10 { return "a" }
-    if n == 11 { return "b" }
-    if n == 12 { return "c" }
-    if n == 13 { return "d" }
-    if n == 14 { return "e" }
-    return "f"
+fn _bme280_hex_val(ch) {
+    // `Char == Str` does not coerce, and string indexing yields Char.
+    let c = to_string(ch)
+    if c == "0" { return 0 }
+    if c == "1" { return 1 }
+    if c == "2" { return 2 }
+    if c == "3" { return 3 }
+    if c == "4" { return 4 }
+    if c == "5" { return 5 }
+    if c == "6" { return 6 }
+    if c == "7" { return 7 }
+    if c == "8" { return 8 }
+    if c == "9" { return 9 }
+    if c == "a" || c == "A" { return 10 }
+    if c == "b" || c == "B" { return 11 }
+    if c == "c" || c == "C" { return 12 }
+    if c == "d" || c == "D" { return 13 }
+    if c == "e" || c == "E" { return 14 }
+    if c == "f" || c == "F" { return 15 }
+    return 0
 }
 
 fn _bme280_to_hex(b) {
@@ -91,24 +94,11 @@ fn _bme280_to_hex(b) {
     return _bme280_nibble(n / 16) + _bme280_nibble(n % 16)
 }
 
-fn _bme280_hex_val(ch) {
-    if ch == "0" { return 0 }
-    if ch == "1" { return 1 }
-    if ch == "2" { return 2 }
-    if ch == "3" { return 3 }
-    if ch == "4" { return 4 }
-    if ch == "5" { return 5 }
-    if ch == "6" { return 6 }
-    if ch == "7" { return 7 }
-    if ch == "8" { return 8 }
-    if ch == "9" { return 9 }
-    if ch == "a" || ch == "A" { return 10 }
-    if ch == "b" || ch == "B" { return 11 }
-    if ch == "c" || ch == "C" { return 12 }
-    if ch == "d" || ch == "D" { return 13 }
-    if ch == "e" || ch == "E" { return 14 }
-    if ch == "f" || ch == "F" { return 15 }
-    return 0
+// value 0..15 -> one hex character (inverse of _bme280_hex_val)
+fn _bme280_nibble(n) {
+    let v = floor(n) % 16
+    let digits = "0123456789abcdef"
+    return to_string(digits[v])
 }
 
 fn _bme280_from_hex2(s) {
@@ -116,17 +106,17 @@ fn _bme280_from_hex2(s) {
 }
 
 fn _bme280_hex_bytes(s) {
-    let out = []
+    var out = []
     var i = 0
     while i + 1 < len(s) {
-        out.push(_bme280_from_hex2(s[i] + s[i + 1]))
+        out.push(_bme280_from_hex2(to_string(s[i]) + to_string(s[i + 1])))
         i = i + 2
     }
     return out
 }
 
 fn _bme280_bytes_hex(bytes) {
-    let out = ""
+    var out = ""
     var i = 0
     while i < len(bytes) {
         out = out + _bme280_to_hex(bytes[i])

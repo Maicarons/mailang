@@ -6,6 +6,26 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 
 ## [Unreleased]
 
+## [0.5.0] - Real transports for the driver packs, multi-line literals fixed
+
+### Added
+- **Real MQTT transport in the CLI** (`mailang run --mqtt`): a standard MQTT 3.1.1 client (QoS 0, clean session, keepalive 60 s) implemented on `std::net` — zero new dependencies — registered over the `mqtt` pack's hook names. It works against any 3.1.1 broker, not just the bundled one. Alongside it, `mailang mqtt-broker --port 1883` runs a built-in **dev broker** (CONNECT / SUBSCRIBE / PUBLISH QoS 0 / PINGREQ / DISCONNECT, topic filters with `+`/`#`) for local and CI smoke tests; it is a dev tool, honestly not a production broker. An in-process Rust test runs the full client roundtrip (connect → subscribe → publish from a second connection → poll receives) over real sockets, and `libs/mqtt/test/host_mqtt.mai` (11/11) does the same end-to-end through the CLI and the pack's public API.
+- **`mqtt_poll(timeout_ms)` pack hook** (mqtt 0.2.0 → 0.3.0): returns `Ok({topic, payload})` for one delivered QoS 0 message, or a MaìLang `Err` on timeout — "nothing available" is a value, not a host failure, matching `tui_read_key`. The sim gains `mqtt_test_inject(topic, payload)` to feed the inbox `poll` drains.
+- **bme280 CSV feed backend** (`mailang run --bme280-feed=<file>`): implements the pack's three cooked sensor hooks (`bme280_temp_c` / `bme280_humidity_pct` / `bme280_pressure_pa`) from a CSV replay file (`temp_c,humidity_pct,pressure_pa` rows, `#` comments), wrapping at the end. It exercises the host-override path end to end with **real recorded readings** instead of the pack's synthetic sim constants — honestly labelled a replay, not a live sensor. Suite: `libs/bme280/test/host_bme280.mai` (7/7) against `libs/bme280/test/feed.csv`.
+- **`examples/esp32c3/` — the interpreter runs on an ESP32-C3, with measured QEMU evidence.** A standalone ESP-IDF firmware project (esp-idf-sys + `mailang-core`; workspace-excluded, esp toolchain only) where the full pipeline (parser → compiler → register VM) runs on the MCU with `gpio_write` / `delay_ms` bound to real peripheral calls. `scripts/esp32-qemu.sh` reproduces the whole chain (esp rust fork 1.95.0.0 toolchain → ESP-IDF v5.2.3 → build → flash merge → espressif QEMU fork) and the serial output was captured on 2026-10-27: `iot_blink: LED pin 2`, five ON/OFF cycles, `iot_blink: done after 5 cycles`. Two real findings recorded in the docs: the interpreter's recursion blows the ~8 KiB default ESP-IDF main-task stack and corrupts the heap (evaluation now runs on a 64 KiB worker thread — required for any on-device host), and the espidf target needs the esp fork toolchain (upstream nightly's std mismatches the vendored libc/newlib headers; fork 1.99.0.0's vendored libc also lacks the espidf `fchmodat` binding its own std calls — 1.95.0.0 is the tested pairing).
+- **CI `driver-host-packs` job**: starts the dev broker and runs both host suites (`--mqtt`, `--bme280-feed`) across the three VM backends; the `host-packs` sim rows now also run `test_mqtt.mai` / `test_bme280.mai`.
+
+### Fixed
+- **Multi-line map/array literals and call arguments now parse.** The lexer emitted `Newline` tokens inside `[...]` and `(...)`, so any collection or argument list broken across lines — anywhere, including in expression position — failed with `Expected expression, found Newline` (`var m = {
+  "a": 1
+}` did not parse; only single-line literals worked). The lexer is now bracket-depth aware for `(`/`[` (newlines inside them are layout, not separators; `{` is deliberately excluded so block bodies keep their newlines), and the map/array literal parsers skip newlines after the opening bracket, after each comma and before the closing bracket. Regression tests in `mailang-parser`; this defect is also why **both driver packs had never loaded** (their state maps are multi-line literals).
+- **The analyzer no longer rejects forward references to top-level functions.** Function bodies were analyzed in source order against a `functions` table filled incrementally, so a helper defined before another helper it calls (both at top level) was reported as `Undefined variable` — even though the VM resolves module globals at call time and the code always ran fine when it parsed. `analyze()` now pre-registers all top-level `fn` names (with `declared: false`, so arity/type checking of forward calls stays dynamic) before analyzing bodies. Regression test: `test_forward_function_reference_is_allowed`.
+- **`libs/bme280` actually runs now** (it had never parsed or executed): `let out` reassigned in two helpers → `var`; `str(...)` in `libs/mqtt` → `to_string(...)`; the BME280 hex decoder compared `Char == Str`, which never matches (string indexing yields `Char`, no coercion) → the value→hex-character helper is now a proper 0–15 lookup table; a `Char + Char` concat in the hex parser → `to_string` both sides. `test_mqtt.mai` 24/24 and `test_bme280.mai` 25/25 pass on both backends.
+
+### Changed
+- **Dependency alerts cleared**: `docs` and `playground` bump `vite` 6.4.3 → 6.4.5 (launch-editor / `fs.allow` advisories).
+
+
 ## [0.4.1] - 2026-10-26
 
 Landed after the v0.4.0 tag, found while checking the released site.

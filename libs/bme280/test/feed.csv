@@ -1,0 +1,4 @@
+# temp_c,humidity_pct,pressure_pa — recorded bench readings (replay feed)
+21.4,48.2,101325.0
+22.5,49.0,101300.0
+18.25,33.0,99000.0

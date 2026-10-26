@@ -463,6 +463,30 @@ impl Analyzer {
     }
 
     pub fn analyze(&mut self, program: &Program) -> Result<(), Vec<AnalyzerError>> {
+        // Pre-register top-level functions so a body can reference a function
+        // defined later in the file — the VM resolves module globals at call
+        // time, so forward references are valid. Without this pass, a driver
+        // pack whose init helper calls a helper defined below it was rejected
+        // with "Undefined variable". `declared: false` keeps arity/type
+        // checking of forward calls dynamic (same as before this pass).
+        for stmt in &program.statements {
+            if let Stmt::FunctionDef { name, .. } = stmt {
+                if !self.functions.contains_key(name) {
+                    self.functions.insert(
+                        name.clone(),
+                        FunctionInfo {
+                            name: name.clone(),
+                            type_params: Vec::new(),
+                            params: Vec::new(),
+                            required: 0,
+                            return_type: Type::Any,
+                            declared: false,
+                        },
+                    );
+                }
+            }
+        }
+
         for stmt in &program.statements {
             self.analyze_statement(stmt);
         }

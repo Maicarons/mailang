@@ -1,0 +1,26 @@
+[package]
+name = "mailang-esp32c3-blink"
+version = "0.1.0"
+edition = "2021"
+
+# ESP32-C3 end-to-end demo: the full MaìLang interpreter (parser → compiler →
+# register VM) runs on the MCU; GPIO and delays are host functions backed by
+# real ESP-IDF calls. Blink logic lives in MaìLang source, embedded below and
+# identical in spirit to examples/iot_blink.mai.
+#
+# Build inside the espressif/idf-rust:esp32c3_latest container (see
+# docs/v0.4/guide/esp32-blink.md). Not part of the workspace: ESP-IDF targets
+# need the esp rust toolchain and build-std, which host `cargo test` must not
+# touch.
+
+[build-dependencies]
+embuild = "0.33"
+
+[dependencies]
+mailang-core = { path = "../../crates/mailang-core" }
+esp-idf-sys = { version = "0.36", features = ["binstart"] }
+
+[profile.release]
+opt-level = "s"
+lto = "off"
+codegen-units = 1

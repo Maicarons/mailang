@@ -33,6 +33,13 @@ fn is_err_nonempty(r) {
     }
 }
 
+fn is_msg(r, topic, payload) {
+    return match r {
+        Ok(m) => m["topic"] == topic && m["payload"] == payload
+        Err(e) => false
+    }
+}
+
 println("=== mqtt driver tests ===")
 
 mqtt.reset()
@@ -80,6 +87,23 @@ assert(is_err_nonempty(after), "publish after disconnect returns Err")
 // clear_outbox
 mqtt.clear_outbox()
 assert(mqtt.outbox_len() == 0, "clear_outbox() empties outbox")
+
+// poll/inbox: empty inbox → Err (same shape the real transport times out with)
+mqtt.reset()
+mqtt.set_mode("sim")
+let empty = mqtt.poll(10)
+assert(is_err_nonempty(empty), "poll on empty inbox returns Err")
+
+mqtt_test_inject("devices/1/temp", "25.0")
+mqtt_test_inject("devices/1/hum", "48.0")
+let got = mqtt.poll(10)
+assert(is_msg(got, "devices/1/hum", "48.0"), "poll returns the injected topic/payload map (sim inbox is LIFO)")
+let got2 = mqtt.poll(10)
+assert(is_msg(got2, "devices/1/temp", "25.0"), "second poll drains the remaining message")
+assert(is_err_nonempty(mqtt.poll(10)), "poll after draining returns Err again")
+
+mqtt.reset()
+assert(is_err_nonempty(mqtt.poll(10)), "reset() clears the inbox")
 
 println("")
 println("通过: {passed}")

@@ -17,6 +17,59 @@ mod tests {
     }
 
     #[test]
+    fn multi_line_map_and_array_literals_parse() {
+        // Newlines inside [ ... ] and { ... } are layout, not separators —
+        // before the lexer's bracket-depth fix these were parse errors, which
+        // is why the mqtt/bme280 pack sources (multi-line state maps) could
+        // never load.
+        let prog = parse(
+            "var m = {
+  \"a\": 1,
+  \"b\": [
+    1,
+    2,
+  ],
+}
+",
+        );
+        match &prog.statements[0] {
+            Stmt::Let {
+                value: Some(Expr::Map(entries)),
+                ..
+            } => {
+                assert_eq!(entries.len(), 2);
+                assert!(matches!(&entries[1].1, Expr::Array(items) if items.len() == 2));
+            }
+            other => panic!("expected let with map literal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn multi_line_call_arguments_parse() {
+        let prog = parse(
+            "println(
+  \"hi\",
+  42
+)
+",
+        );
+        match &prog.statements[0] {
+            Stmt::Expression(Expr::Call { args, .. }) => assert_eq!(args.len(), 2),
+            other => panic!("expected call, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn newlines_still_separate_statements_outside_brackets() {
+        let prog = parse(
+            "let a = 1
+let b = 2
+",
+        );
+        assert_eq!(prog.statements.len(), 2);
+    }
+
+    #[test]
     fn postfix_match_expression() {
         let prog = parse("x match {\n1 => 2\n_ => 3\n}\n");
         assert_eq!(prog.statements.len(), 1);

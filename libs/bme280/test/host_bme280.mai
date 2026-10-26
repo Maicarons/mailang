@@ -1,0 +1,46 @@
+// bme280 host suite — the cooked sensor hooks are overridden by the CLI's
+// `--bme280-feed` backend (CSV replay, NOT a live sensor):
+//   cargo run -p mailang-cli --release -- run --bme280-feed=libs/bme280/test/feed.csv libs/bme280/test/host_bme280.mai
+// The values below are the recorded rows in feed.csv, in file order.
+
+var passed = 0
+var failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+import "bme280"
+
+println("=== bme280 host feed tests (--bme280-feed) ===")
+
+// The pack's read_* in sim mode dispatch to the cooked hooks, which the host
+// feed backend overrides — so these reads are the recorded CSV rows.
+assert(bme280.read_temp() == 21.4, "read_temp() row 1 (host feed overrides stub)")
+assert(bme280.read_humidity() == 48.2, "read_humidity() row 1")
+assert(bme280.read_pressure() == 101325.0, "read_pressure() row 1")
+
+assert(bme280.read_temp() == 22.5, "read_temp() row 2")
+assert(bme280.read_temp() == 18.25, "read_temp() row 3")
+
+// The feed wraps around at the end.
+assert(bme280.read_temp() == 21.4, "read_temp() wraps to row 1")
+
+let all = bme280.read_all()
+assert(all["temp"] == 22.5 && all["humidity"] == 49.0 && all["pressure"] == 101300.0, "read_all() row 2 via host feed")
+
+println("")
+println("通过: {passed}")
+println("失败: {failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+    process_exit(1)
+}
+process_exit(0)

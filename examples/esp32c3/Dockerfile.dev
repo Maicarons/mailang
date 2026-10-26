@@ -1,0 +1,14 @@
+# Derived build image for examples/esp32c3.
+#
+# The base espressif/idf-rust image ships espup/ldproxy/espflash but no
+# rust-src, which `-Z build-std` needs (riscv32imc-esp-espidf is a tier-3
+# target: std is always compiled from source, there is no rustup std package).
+# ESP-IDF itself is fetched by esp-idf-sys on first build and cached in HOME,
+# which the run command mounts as a named volume.
+#
+#   docker build -t mailang-esp32c3-dev -f Dockerfile.dev .
+#   docker run --rm -v "....:/project" -v mailang_esp_home:/home/esp-build \
+#       -w /project/examples/esp32c3 mailang-esp32c3-dev cargo build --release
+
+FROM espressif/idf-rust:esp32c3_latest
+RUN rustup component add rust-src --toolchain nightly

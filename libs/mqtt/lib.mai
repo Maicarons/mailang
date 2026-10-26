@@ -1,21 +1,30 @@
 // mqtt — MQTT client pack (host transport contract + pure-Mai sim)
-// Version: 0.2.0
+// Version: 0.3.0
 //
 // Host-function contract (real network):
 //   mqtt_connect(broker:str, port:int, client_id:str) -> Ok(any) | Err(str)
-//   mqtt_publish(topic:str, payload:str)             -> Ok(any) | Err(str)
-//   mqtt_subscribe(topic:str)                        -> Ok(any) | Err(str)
-//   mqtt_disconnect()                                -> Ok(any) | Err(str)
-//   mqtt_is_connected()                              -> bool
+//   mqtt_publish(topic:str, payload:str)              -> Ok(any) | Err(str)
+//   mqtt_subscribe(topic:str)                         -> Ok(any) | Err(str)
+//   mqtt_poll(timeout_ms:int)                         -> Ok({topic,payload}) | Err(str)
+//   mqtt_disconnect()                                 -> Ok(any) | Err(str)
+//   mqtt_is_connected()                               -> bool
 //
 // Register via mailang_register_host_fn (C FFI) or Vm::register_host_fn (Rust).
 // Host registration OVERRIDES the stub implementations below at call time.
 //
+// The mailang CLI bundles a real transport: `mailang run --mqtt app.mai` speaks
+// standard MQTT 3.1.1 over TCP (QoS 0), and `mailang mqtt-broker --port 1883`
+// starts a local dev broker for smoke tests. It also works against mosquitto /
+// hivemq — the wire protocol is the standard one.
+//
 // Default mode is pure-Mai simulation: no sockets, no broker, no MQTT handshake.
-// Publishes are recorded in an in-memory outbox so tests can assert on them.
+// Publishes are recorded in an in-memory outbox so tests can assert on them,
+// and `mqtt_test_inject(topic, payload)` feeds the sim inbox that `mqtt_poll`
+// drains — same shape the real transport delivers.
 //
 // Honest limit: Ok("sim") is NOT a broker ACK. Real delivery requires host
-// transport registration (platform MQTT client / lwIP / esp-mqtt / …).
+// transport registration (or the CLI's --mqtt) — platform MQTT client /
+// lwIP / esp-mqtt / ….
 
 var _mqtt_state = {
     "mode": "sim",
@@ -24,7 +33,8 @@ var _mqtt_state = {
     "port": 1883,
     "client_id": "",
     "outbox": [],
-    "subs": []
+    "subs": [],
+    "inbox": []
 }
 
 // ---------- transport hooks (host-overridable by name) ----------
@@ -63,6 +73,20 @@ fn mqtt_subscribe(topic) {
     return Ok("sim")
 }
 
+// Sim inbox is LIFO (arrays only pop from the end); the real transport
+// delivers in arrival order. Order is not part of the contract.
+fn mqtt_poll(timeout_ms) {
+    if len(_mqtt_state["inbox"]) == 0 {
+        return Err("mqtt.poll: no message within " + to_string(timeout_ms) + " ms")
+    }
+    return Ok(_mqtt_state["inbox"].pop())
+}
+
+fn mqtt_test_inject(topic, payload) {
+    _mqtt_state["inbox"].push({"topic": topic, "payload": payload})
+    return Ok("injected")
+}
+
 fn mqtt_disconnect() {
     _mqtt_state["connected"] = false
     return Ok("sim")
@@ -92,6 +116,10 @@ fn publish(topic, payload) {
 
 fn subscribe(topic) {
     return mqtt_subscribe(topic)
+}
+
+fn poll(timeout_ms) {
+    return mqtt_poll(timeout_ms)
 }
 
 fn disconnect() {
@@ -134,4 +162,5 @@ fn reset() {
     _mqtt_state["client_id"] = ""
     _mqtt_state["outbox"] = []
     _mqtt_state["subs"] = []
+    _mqtt_state["inbox"] = []
 }

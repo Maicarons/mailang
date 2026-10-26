@@ -1,7 +1,9 @@
 # bme280 — BME280 driver pack
 
-**Status: host-fn contract + pure-Mai simulation.** No real I2C until the host
-registers transport. Desktop tests run without hardware.
+**Status: host-fn contract + CSV-feed backend + pure-Mai simulation.** No real
+I2C until the host registers transport; desktop tests run without hardware.
+The `mailang` CLI can override the cooked hooks from a recorded CSV file
+(`--bme280-feed`, see below) — a **replay**, honestly not a live sensor.
 
 ## Host-function contract
 
@@ -18,6 +20,19 @@ Host registration **overrides** the stub hooks in `lib.mai` at call time.
 | `bme280_pressure_pa()` | float | pressure Pa |
 
 Use default mode `"sim"` (the public API calls these hook names).
+
+**CLI feed backend (`--bme280-feed=<file>`)** — implements the three cooked
+hooks from a CSV file of recorded readings (`temp_c,humidity_pct,pressure_pa`
+per row, `#` comments allowed). Values are served in file order and wrap
+around. This exercises the host-override path end to end and lets a run
+consume *real recorded* data instead of the pack's synthetic sim constants:
+
+```bash
+mailang run --bme280-feed=libs/bme280/test/feed.csv libs/bme280/test/host_bme280.mai
+```
+
+A real sensor needs an ESP-IDF / MCU host implementing the same three hook
+names over I2C (see `docs/v0.4/guide/hardware`).
 
 ### Option B — raw I2C (matches `SimulatedHal` shape)
 

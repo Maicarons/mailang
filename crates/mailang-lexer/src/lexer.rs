@@ -7,6 +7,10 @@ pub struct Lexer {
     pos: usize,
     line: usize,
     column: usize,
+    /// Depth of `(` / `[` nesting. A newline inside brackets is layout noise,
+    /// not a statement separator, so no `Token::Newline` is emitted. `{` is
+    /// deliberately excluded: block bodies still need their newlines.
+    bracket_depth: usize,
 }
 
 impl Lexer {
@@ -16,6 +20,7 @@ impl Lexer {
             pos: 0,
             line: 1,
             column: 1,
+            bracket_depth: 0,
         }
     }
 
@@ -432,7 +437,9 @@ impl Lexer {
                 }
                 Some('\n') => {
                     self.advance();
-                    tokens.push(Token::Newline);
+                    if self.bracket_depth == 0 {
+                        tokens.push(Token::Newline);
+                    }
                 }
                 Some('/') if self.peek_at(1) == Some('/') => {
                     self.skip_line_comment();
@@ -609,10 +616,12 @@ impl Lexer {
                 }
                 Some('(') => {
                     self.advance();
+                    self.bracket_depth += 1;
                     tokens.push(Token::LeftParen);
                 }
                 Some(')') => {
                     self.advance();
+                    self.bracket_depth = self.bracket_depth.saturating_sub(1);
                     tokens.push(Token::RightParen);
                 }
                 Some('{') => {
@@ -625,10 +634,12 @@ impl Lexer {
                 }
                 Some('[') => {
                     self.advance();
+                    self.bracket_depth += 1;
                     tokens.push(Token::LeftBracket);
                 }
                 Some(']') => {
                     self.advance();
+                    self.bracket_depth = self.bracket_depth.saturating_sub(1);
                     tokens.push(Token::RightBracket);
                 }
                 Some(',') => {

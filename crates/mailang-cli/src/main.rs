@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 
 mod repl;
 
+mod netmqtt;
+mod sensorfeed;
+
 #[cfg(windows)]
 mod hostwin;
 
@@ -116,6 +119,15 @@ enum Commands {
         /// Host backend for the tui/gui packs: sim (default), tui, gui
         #[arg(long, value_enum, default_value_t = HostCli::Sim)]
         host: HostCli,
+        /// Real MQTT transport for the `mqtt` pack (standard MQTT 3.1.1 over
+        /// TCP; pair with `mailang mqtt-broker` for a local smoke broker)
+        #[arg(long)]
+        mqtt: bool,
+        /// Feed file for the `bme280` pack's cooked sensor hooks:
+        /// CSV rows of `temp_c,humidity_pct,pressure_pa` (a replay, not a
+        /// live sensor)
+        #[arg(long)]
+        bme280_feed: Option<PathBuf>,
     },
     /// Evaluate a code snippet
     Eval {
@@ -235,6 +247,16 @@ enum Commands {
     },
     /// Run the language server on stdin/stdout
     Lsp,
+    /// Run the built-in MQTT 3.1.1 dev broker (QoS 0) for `--mqtt` smoke
+    /// tests against localhost. A dev tool, not a production broker.
+    MqttBroker {
+        /// TCP port to listen on
+        #[arg(long, default_value_t = 1883)]
+        port: u16,
+        /// Bind address (default: loopback only)
+        #[arg(long, default_value_t = String::from("127.0.0.1"))]
+        bind: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -567,6 +589,8 @@ fn main() {
             bytecode: use_bytecode,
             vm,
             host,
+            mqtt,
+            bme280_feed,
         }) => {
             let base_dir = Path::new(&file).parent().unwrap_or(Path::new("."));
             let mut interp = MailangInterpreter::with_modules(base_dir);
@@ -587,7 +611,7 @@ fn main() {
                 match bytes {
                     Ok(bytes) => match mailang_core::bytecode::decode(&bytes) {
                         Ok(bc) => {
-                            install_host(&mut interp, host);
+                            install_host(&mut interp, host, mqtt, &bme280_feed);
                             interp.run_bytecode(bc)
                         }
                         Err(e) => Err(format!("Invalid bytecode file '{}': {:?}", file, e)),
@@ -598,7 +622,7 @@ fn main() {
                 match interp.compile_file(&file) {
                     Err(e) => Err(e),
                     Ok(bc) => {
-                        install_host(&mut interp, host);
+                        install_host(&mut interp, host, mqtt, &bme280_feed);
                         interp.run_bytecode(bc)
                     }
                 }
@@ -688,6 +712,17 @@ fn main() {
             }
         }
         Some(Commands::Repl { vm }) => run_repl_with(vm),
+        Some(Commands::MqttBroker { port, bind }) => {
+            let listener = std::net::TcpListener::bind((bind.as_str(), port)).unwrap_or_else(|e| {
+                eprintln!("Error: cannot bind {}:{}: {}", bind, port, e);
+                std::process::exit(1);
+            });
+            println!(
+                "mqtt-broker: listening on {}:{} (QoS 0 dev broker)",
+                bind, port
+            );
+            netmqtt::serve(listener);
+        }
         // Bare `mailang` (no subcommand) is the REPL too.
         None => run_repl_with(None),
     }
@@ -700,11 +735,26 @@ fn run_repl_with(vm: Option<VmCli>) {
     run_repl(&mut interp);
 }
 
-/// Installs the requested host backend, or explains why it is unavailable.
+/// Installs the requested host backends, or explains why one is unavailable.
 ///
 /// Simulation is the default and needs no host functions: the packs already
-/// carry pure-Mai fallbacks.
-fn install_host(interp: &mut MailangInterpreter, host: HostCli) {
+/// carry pure-Mai fallbacks. `--mqtt` and `--bme280-feed` layer the real
+/// transports on top and compose with any `--host` choice.
+fn install_host(
+    interp: &mut MailangInterpreter,
+    host: HostCli,
+    mqtt: bool,
+    bme280_feed: &Option<PathBuf>,
+) {
+    if mqtt {
+        netmqtt::install(interp);
+    }
+    if let Some(feed) = bme280_feed {
+        if let Err(e) = sensorfeed::install(interp, feed) {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    }
     #[cfg(windows)]
     {
         if let Err(e) = hostwin::install(interp, host.as_str()) {

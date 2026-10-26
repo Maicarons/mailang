@@ -28,3 +28,8 @@ crates/mailang-wasm/pkg/
 
 # Self-media articles
 article/
+
+# ESP32 demo build artifacts (examples/esp32c3)
+examples/esp32c3/target/
+examples/esp32c3/.embuild/
+esp32c3-flash*.bin

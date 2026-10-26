@@ -1,0 +1,90 @@
+// mqtt host suite — REAL transport over TCP (standard MQTT 3.1.1, QoS 0).
+// Requires a broker on 127.0.0.1:1883. The repo's dev broker works:
+//   cargo run -p mailang-cli --release -- mqtt-broker --port 1883 &
+//   cargo run -p mailang-cli --release -- run --mqtt libs/mqtt/test/host_mqtt.mai
+// Against mosquitto / hivemq the same suite must pass unchanged.
+
+var passed = 0
+var failed = 0
+
+fn assert(condition, msg) {
+    if condition {
+        passed = passed + 1
+        println("  PASS: {msg}")
+    } else {
+        failed = failed + 1
+        println("  FAIL: {msg}")
+    }
+}
+
+fn is_msg(r, topic, payload) {
+    return match r {
+        Ok(m) => m["topic"] == topic && m["payload"] == payload
+        Err(e) => false
+    }
+}
+
+fn is_err_nonempty(r) {
+    return match r {
+        Ok(v) => false
+        Err(e) => len(e) > 0
+    }
+}
+
+import "mqtt"
+
+println("=== mqtt host transport tests (--mqtt) ===")
+
+assert(mqtt.is_connected() == false, "starts disconnected (host hook active)")
+
+let c = mqtt.connect("127.0.0.1", 1883, "mailang-host-suite")
+assert(match c {
+    Ok(v) => len(to_string(v)) > 0
+    Err(e) => false
+}, "connect to 127.0.0.1:1883 returns Ok")
+assert(mqtt.is_connected() == true, "is_connected() after real connect")
+
+let s = mqtt.subscribe("suite/#")
+assert(match s {
+    Ok(v) => len(to_string(v)) > 0
+    Err(e) => false
+}, "subscribe suite/# gets broker ack (SUBACK)")
+
+// QoS 0 publish; the broker loops it back to our own subscription.
+let p1 = mqtt.publish("suite/temp", "21.5")
+assert(match p1 {
+    Ok(v) => len(to_string(v)) > 0
+    Err(e) => false
+}, "publish returns Ok")
+
+let got = mqtt.poll(5000)
+assert(is_msg(got, "suite/temp", "21.5"), "poll receives the published message")
+
+let p2 = mqtt.publish("suite/hum", "48.0")
+assert(match p2 {
+    Ok(v) => len(to_string(v)) > 0
+    Err(e) => false
+}, "second publish Ok")
+let got2 = mqtt.poll(5000)
+assert(is_msg(got2, "suite/hum", "48.0"), "second poll receives in arrival order")
+
+// Nothing pending: a short poll is an Err value, not a host failure.
+let empty = mqtt.poll(300)
+assert(is_err_nonempty(empty), "poll with nothing pending returns Err (timeout)")
+
+let d = mqtt.disconnect()
+assert(match d {
+    Ok(v) => len(to_string(v)) > 0
+    Err(e) => false
+}, "disconnect Ok")
+assert(mqtt.is_connected() == false, "is_connected() false after disconnect")
+
+println("")
+println("通过: {passed}")
+println("失败: {failed}")
+
+if failed > 0 {
+    println("ERROR: 有测试失败!")
+    process_exit(1)
+}
+process_exit(0)

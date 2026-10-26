@@ -522,6 +522,65 @@ Week 6+:    L8/L10 视需要；L9 async 仅在有场景时立项
 
 ---
 
+## 十四、Phase O 计划与执行（v0.4.1 → v0.5）
+
+> 立项背景：Phase L/M/N 的主线债（双后端一致、默认后端、发布、paper）已闭环。2026-10-26 复核后确认：剩下最大的战略缺口是 **IoT 真实路径（L3）**——驱动包的 host 契约与模拟已就绪，但没有"真数据/真传输"的端到端证据。Phase O 主攻这一缺口，顺带还清过程中暴露的语言债。
+
+### 14.1 计划项与结果
+
+| ID | 项 | 结果 |
+|----|----|------|
+| O1 | 发布 v0.4.1（Playground 修复 + 依赖升级 + ROADMAP 陈述更正） | ✅ 已发布 |
+| O2 | MQTT 真传输：CLI 实现标准 MQTT 3.1.1 客户端（`--mqtt`，QoS 0，仅 std，零新依赖）+ `mailang mqtt-broker` 开发代理 + `mqtt_poll` 钩子（mqtt pack 0.3.0） | ✅ 完成 |
+| O3 | bme280 真数据源：`--bme280-feed` CSV 回放后端（诚实标注"回放非传感器"） | ✅ 完成 |
+| O4 | 驱动包测试进 CI：sim 套件并入 `host-packs` sim 行；新增 `driver-host-packs` 作业（真 TCP + 真喂源 × 3 VM 后端） | ✅ 完成 |
+| O5 | ESP32-C3 端到端：`examples/esp32c3/`（esp-idf-sys + mailang-core）+ QEMU 串口证据 + 可复现脚本/文档 | ✅ 完成（QEMU 实跑 5 轮点灯，见 14.5） |
+| O6 | L8 收尾：泛型类字段擦除写进 oop.md（中英）正式限制说明 | ✅ 完成 |
+| O7 | 依赖告警清零（vite 6.4.3 → 6.4.5） | ✅ 完成 |
+| O8 | 语言债（过程中暴露，见 14.2） | ✅ 完成 |
+
+### 14.2 过程中暴露的语言缺陷（全部有回归测试）
+
+1. **多行 map/array 字面量与跨行调用参数解析失败**（P0）。lexer 在 `[...]`/`(...)` 内也发射 `Newline`，任何跨行集合/实参表都报 `Expected expression, found Newline`——**这正是两个驱动包从未加载过的原因**（状态 map 都是多行字面量）。修复：lexer 记录括号深度（仅 `(` 与 `[`；`{` 排除以保证块体换行语义），map/array 字面量解析在开括号后、逗号后、闭括号前跳过换行。
+2. **analyzer 拒绝顶层函数前向引用**。函数体按源码顺序分析、`functions` 表增量填充，先定义的函数调用后定义的函数被误报 `Undefined variable`——而 VM 的模块全局在调用时解析，运行时本就合法。修复：`analyze()` 先预注册全部顶层 `fn`（`declared: false`，前向调用的 arity/类型检查保持动态）。
+3. **`Char == Str` 恒为 false**（无隐式转换）+ `str()` 内置不存在（正确名称 `to_string`）+ bme280 的 hex 解码用 `Int == Str` 比较——三个包内部 bug 一并修复。`Char == Str` 的不转换语义**保留不改**（改为隐式转换风险大于收益），已写进包内注释。
+
+### 14.3 验收
+
+- [x] `test_mqtt.mai` 24/24、`test_bme280.mai` 25/25（此前：解析都过不了）
+- [x] `host_mqtt.mai` 11/11（真 TCP）、`host_bme280.mai` 7/7（真 CSV 回放）
+- [x] `compare_backends.ps1` 66/66 逐字节一致（比 v0.4 多了两个真正跑起来的驱动包 example）
+- [x] 双后端集成 **138/138**、全工作区 **273** 项全绿
+- [x] ESP32-C3 QEMU 串口证据（O5，`scripts/esp32-qemu.sh` 可复现；真机 GPIO 未验证，文档如实标注）
+
+### 14.5 O5 执行记录（2026-10-26/27）
+
+构建链（全部在 espressif/idf-rust 容器内，脚本化于 `scripts/esp32-qemu.sh`）：
+esp rust fork 1.95.0.0（rustup toolchain link + `-Z build-std`）→ ESP-IDF v5.2.3
+（embuild 托管克隆，工具包以 dist 缓存预种避开 GitHub 直连）→ `cargo build --release`
+（mailang-core 等 16 crate + build-std 的 std 全部编过）→ `esptool elf2image/merge_bin`
+→ espressif QEMU fork `esp-develop-9.2.2`。
+
+串口证据：`iot_blink: LED pin 2` → 5 轮 ON/OFF → `iot_blink: done after 5 cycles`。
+
+过程中发现并记录的两个真实问题：
+1. 解释器递归打穿 ESP-IDF 默认 ~8 KiB 主任务栈并损坏堆（tlsf 断言）→ 求值移入
+   64 KiB 工作线程；对任何在板跑 MaìLang 的宿主都是必要配置。
+2. espidf 目标必须用 esp fork 工具链：上游 nightly 的 std 源与 vendored libc/newlib
+   头不匹配（`st_atim`）；esp fork 1.99.0.0 自身的 vendored libc 又缺 `fchmodat`
+   espidf 绑定，与 std 源不自洽 → 用与 esp-idf-sys 0.36 同期的 **1.95.0.0**。
+
+### 14.4 明确不做（Phase O）
+
+- async / 协程（维持 11.8 冻结）
+- MQTT QoS 1/2、TLS（契约与场景未要求）
+- bme280 真实 I2C 宿主实现（无硬件；QEMU 的 ESP32-C3 机型不模拟 BME280 外设，诚实标注待真机）
+- 泛型类字段单态化（文档化擦除限制即可，见 O6）
+
+---
+
+---
+
 ---
 
 ## 十二、Phase M 下一步（v0.3.x → v0.4）

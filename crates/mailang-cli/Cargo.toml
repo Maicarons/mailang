@@ -10,9 +10,9 @@ name = "mailang"
 path = "src/main.rs"
 
 [dependencies]
-mailang-core = { path = "../mailang-core", version = "0.4.1" }
-mailang-module = { path = "../mailang-module", version = "0.4.1" }
-mailang-lsp = { path = "../mailang-lsp", version = "0.4.1" }
+mailang-core = { path = "../mailang-core", version = "0.5.0" }
+mailang-module = { path = "../mailang-module", version = "0.5.0" }
+mailang-lsp = { path = "../mailang-lsp", version = "0.5.0" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 

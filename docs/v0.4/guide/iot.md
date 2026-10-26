@@ -318,6 +318,35 @@ VM 不提供 `memory_stats()`。嵌入式侧请用链接器 map / 平台 heap �
 5. **错误处理**: 嵌入式环境下避免 panic
 6. **测试**: 在目标设备上充分测试
 
+## 驱动包的真实传输（mqtt / bme280）
+
+标准库驱动包（`libs/mqtt`、`libs/bme280`）遵循同一套契约：纯 Mai 模拟为默认，
+宿主按**钩子函数名**注册即可覆盖（`mqtt_connect` / `bme280_temp_c` …）。
+`mailang` CLI 自带两个真实后端，让"真数据路径"无需嵌入式硬件即可端到端验证：
+
+**MQTT 真传输（标准 MQTT 3.1.1，QoS 0）**
+
+```bash
+# 终端 1：内置开发代理（QoS 0 dev broker，不是生产 broker）
+mailang mqtt-broker --port 1883
+
+# 终端 2：脚本通过真实 TCP 与 broker 通话（mosquitto/hivemq 同样可用）
+mailang run --mqtt app.mai
+```
+
+`mqtt.poll(timeout_ms)` 返回 `Ok({topic, payload})` 或 `Err(...)`（超时是
+MaìLang 值而非宿主错误，脚本直接 `match`）。真传输测试套件
+`libs/mqtt/test/host_mqtt.mai` 在 CI 中对 dev broker 实跑。
+
+**bme280 喂源后端（CSV 回放）**
+
+```bash
+mailang run --bme280-feed=libs/bme280/test/feed.csv libs/bme280/test/host_bme280.mai
+```
+
+`--bme280-feed` 用 CSV 记录值覆盖三个 cooked 钩子（`bme280_temp_c` 等）——
+这是**回放**而非实时传感器；真实读数仍需 ESP-IDF/MCU 宿主按同名钩子实现 I2C。
+
 ## 真实硬件（GPIO / ADC / 延时）
 
 `SimulatedHal` 仅用于主机仿真。要把脚本接到真实 ESP32-C3 / Cortex-M4 的 GPIO、延时与 ADC，请阅读：

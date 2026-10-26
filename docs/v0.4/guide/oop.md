@@ -334,6 +334,31 @@ class EventManager {
 }
 ```
 
+## 泛型类（当前限制：字段擦除）
+
+泛型函数支持完整的 monomorphization（`id::<int>` 会生成专门的 `id$int`），
+但**泛型类目前是字段擦除布局**：`class Box<T>` 的字段在运行时按统一的
+`Value` 布局存储，不会为每个 `T` 生成专门的类。这意味着：
+
+```mai
+class Box<T> {
+    let value
+    fn init(v) { self.value = v }
+    fn get() { return self.value }
+}
+
+let b: Box<int> = Box(42)      // 可用：编译为擦除布局
+println(b.get())                 // 42
+```
+
+**不做的事**（当前版本）：
+- 不为每个 `T` 生成独立的字段布局（无 per-type layout monomorphization）
+- 不做跨字段的完整泛型类型检查（字段读写按 `Value` 处理）
+- 泛型类型参数主要起**标注与文档**作用
+
+这一限制在 ROADMAP（M3/L8）与论文中都有如实记录；把字段单态化提上日程前，
+文档以"擦除布局"为准。
+
 ## 最佳实践
 
 1. **单一职责**：每个类应该只有一个职责

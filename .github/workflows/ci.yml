@@ -33,13 +33,13 @@ jobs:
         include:
           - host: sim
             vm: default
-            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
+            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai libs\mqtt\test\test_mqtt.mai libs\bme280\test\test_bme280.mai
           - host: sim
             vm: stack
-            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
+            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai libs\mqtt\test\test_mqtt.mai libs\bme280\test\test_bme280.mai
           - host: sim
             vm: register
-            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai
+            tests: libs\tui\test\test_tui.mai libs\gui\test\test_gui.mai libs\mqtt\test\test_mqtt.mai libs\bme280\test\test_bme280.mai
           - host: tui
             vm: default
             tests: libs\tui\test\host_tui.mai
@@ -179,6 +179,33 @@ jobs:
         run: |
           cargo build --release -p mailang-bytecode --no-default-features --target ${{ matrix.target }}
           ls -la target/${{ matrix.target }}/release/libmailang_bytecode.rlib
+
+  driver-host-packs:
+    name: Driver packs (real transport, vm=${{ matrix.vm }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vm: default
+          - vm: stack
+          - vm: register
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p mailang-cli
+      - name: Start dev MQTT broker
+        shell: pwsh
+        run: Start-Process -FilePath .\target\release\mailang.exe -ArgumentList 'mqtt-broker','--port','1883' -WindowStyle Hidden -RedirectStandardOutput broker.log
+      - name: Host suites (real TCP transport / CSV sensor feed)
+        shell: pwsh
+        run: |
+          $vmArgs = @()
+          if ("${{ matrix.vm }}" -ne "default") { $vmArgs += "--vm=${{ matrix.vm }}" }
+          & .\target\release\mailang.exe run @vmArgs --mqtt libs\mqtt\test\host_mqtt.mai
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\target\release\mailang.exe run @vmArgs --bme280-feed=libs\bme280\test\feed.csv libs\bme280\test\host_bme280.mai
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   bytecode-format:
     name: Bytecode format tests

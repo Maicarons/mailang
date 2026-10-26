@@ -169,6 +169,49 @@ interp.run_bytecode(bc)?;
 
 C 固件常见做法：嵌入源码用 `mailang_eval`，或用 Rust 入口跑 `.mailangbc`、C 只做板级初始化（详见 [真实硬件部署](/v0.4/guide/hardware)）。
 
+## 方式 B：Rust 固件 + QEMU（本仓库自带工程，已验证）
+
+仓库自带一个**完整的 ESP32-C3 固件工程** [`examples/esp32c3/`](https://github.com/Maicarons/mailang/tree/master/examples/esp32c3)：
+整个解释器（lexer → parser → compiler → 寄存器 VM）跑在 MCU 上，`gpio_write` / `delay_ms`
+是宿主函数，背后是真实 ESP-IDF 调用（`gpio_set_level` / `vTaskDelay`）。一条脚本完成
+容器内构建、flash 镜像合并与 QEMU 启动：
+
+```bash
+./scripts/esp32-qemu.sh
+```
+
+**QEMU 实测串口输出**（espressif QEMU fork `esp-develop-9.2.2`，ESP-IDF v5.2.3，
+esp rust 工具链 1.95.0.0，2026-10-27 实跑记录；启动日志略，完整流程见脚本）：
+
+```text
+mailang-esp32c3: booting interpreter on the MCU
+iot_blink: LED pin 2
+ON  #0
+OFF #0
+ON  #1
+OFF #1
+ON  #2
+OFF #2
+ON  #3
+OFF #3
+ON  #4
+OFF #4
+iot_blink: done after 5 cycles
+```
+
+要点（也是两处踩过的坑，如实记录）：
+
+- 解释器递归（parser/compiler/VM）会打穿 ESP-IDF 默认 ~8 KiB 主任务栈并把堆写坏
+  （`tlsf.c:358 free list cannot have a null entry`）——工程把求值放进 **64 KiB
+  专用工作线程**。在真板上跑 MaìLang 的项目也请照做。
+- espidf 是 tier-3 目标：必须用 **esp rust fork 工具链**（`rust-build` release +
+  `rustup toolchain link`）+ `-Z build-std`；上游 nightly 的 std 源与 vendored libc
+  / newlib 头不匹配（`st_atim` 缺字段），不能直接用。
+- 工程是独立 Cargo 项目（`workspace exclude`），宿主的 `cargo test` 不受影响。
+- 真机烧录：合并好的 `esp32c3-flash.bin` 直接 `esptool.py write_flash 0x0 ...`，
+  或用 `cargo espflash flash`；QEMU 通过不代表 LED 时序在真板上精确（vTaskDelay
+  换算一致，但 GPIO 外设未经真板验证）。
+
 ## 4. 预期串口输出
 
 接好 LED（GPIO2）后，`idf.py flash monitor` 应看到类似：
