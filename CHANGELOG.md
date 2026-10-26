@@ -6,6 +6,8 @@ Project links: [GitHub](https://github.com/Maicarons/mailang) · [Releases](http
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-26
+
 Landed after the v0.4.0 tag, found while checking the released site.
 
 ### Fixed
